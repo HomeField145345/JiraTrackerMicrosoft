@@ -266,7 +266,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
     var lastCheckedDisplay = row.dataset.checkedIso ? formatDateTimeLocal(row.dataset.checkedIso) : (item['Last Checked'] ? formatSheetDateToLocal(item['Last Checked']) : 'Never');
 
     row.innerHTML = '<td class="col-sync-status">' + (item['Sync Status'] || '') + '</td>' +
-  '<td>' + jiraCellHtml + '</td>' +
+  '<td class="col-jira">' + jiraCellHtml + '</td>' +
       (function(){
           var type = (item['Issue Type'] || '').toLowerCase();
           var cfg = APP_STATE.allData.config || {};

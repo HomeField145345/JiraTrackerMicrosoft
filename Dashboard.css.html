@@ -572,7 +572,7 @@
     .expander:hover { background-color: #e5e7eb; }
     .expanded > td:first-child .expander { transform: rotate(90deg); }
     
-    .status-pill { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.25rem 0.75rem; font-size: 0.8rem; font-weight: 500; }
+    .status-pill { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.25rem 0.75rem; font-size: 0.8rem; font-weight: 500; white-space: nowrap; }
     .status-ok { background: var(--status-ok-bg); color: var(--status-ok-ink); }
     .status-stale { background: var(--status-stale-bg); color: var(--status-stale-ink); }
     .status-review { background: var(--status-review-bg); color: var(--status-review-ink); }
@@ -801,7 +801,9 @@
     .kanban-card-meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem; }
     .validation-pill-container {
         position: relative;
-        display: inline-block;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
     }
 
     .validation-badge {
@@ -856,7 +858,7 @@
     .col-jira { min-width: 160px; }
     .col-project-stage { min-width: 160px; }
     .col-title { max-width: 450px; min-width: 250px; white-space: normal; word-break: break-word; }
-    .col-validation { min-width: 120px; }
+    .col-validation { min-width: 150px; }
     .col-status { min-width: 120px; }
     .col-type { min-width: 80px; }
     .col-priority { min-width: 120px; }

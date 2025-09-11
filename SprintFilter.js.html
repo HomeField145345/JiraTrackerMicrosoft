@@ -1,0 +1,91 @@
+<script>
+/**
+ * @file SprintFilter.js
+ * @description Provides filtering functionality for the Current Sprint KPI card
+ */
+
+/**
+ * Filters the table to show only items in the current sprint
+ * Clears previous filters first, then expands epics that contain sprint items
+ */
+function filterCurrentSprintItems() {
+  // Clear any existing filters first
+  clearAllFilters();
+  
+  // Get the current sprint name from the KPI data
+  const sprintStats = app.data.sprintStats || {};
+  const currentSprintName = sprintStats.currentSprintName;
+  
+  if (!currentSprintName || currentSprintName === 'None') {
+    showToast('No current sprint found');
+    return;
+  }
+  
+  // Build a list of IDs for items in the current sprint
+  const itemsInCurrentSprint = [];
+  const epicParents = new Set();
+  
+  // Check all projects and independent tasks
+  const allItems = [...(app.data.projects || []), ...(app.data.independentTasks || [])];
+  
+  allItems.forEach(item => {
+    if (item.sprintNames && item.sprintNames.includes(currentSprintName)) {
+      itemsInCurrentSprint.push(item.id);
+      
+      // If this is a task under an epic, record the epic ID for expansion
+      if (item.epicId) {
+        epicParents.add(item.epicId);
+      }
+    }
+  });
+  
+  if (itemsInCurrentSprint.length === 0) {
+    showToast('No items found in the current sprint');
+    return;
+  }
+  
+  // Apply filter
+  APP_STATE.itemFilter = function(item) {
+    return itemsInCurrentSprint.includes(item.id);
+  };
+  
+  // Refresh the table with the new filter
+  refreshTableData();
+  
+  // Expand any epics that contain sprint items
+  epicParents.forEach(epicId => {
+    const epicRow = document.querySelector(`.row-epic[data-id="${epicId}"]`);
+    if (epicRow && !epicRow.classList.contains('expanded')) {
+      toggleEpicExpansion(epicId);
+    }
+  });
+  
+  // Show filter indicator
+  const filterIndicator = document.getElementById('filter-indicator');
+  if (filterIndicator) {
+    filterIndicator.classList.remove('hidden');
+    filterIndicator.textContent = `Current Sprint: ${currentSprintName}`;
+  }
+  
+  // Update filter button state
+  updateFilterButtonState(true);
+  
+  // Show success message
+  showToast(`Filtered to show ${itemsInCurrentSprint.length} items in current sprint`);
+}
+
+/**
+ * Updates the filter button state to show whether filters are active
+ * @param {boolean} isActive - Whether any filter is currently active
+ */
+function updateFilterButtonState(isActive) {
+  const filterBtn = document.getElementById('filter-btn');
+  if (filterBtn) {
+    if (isActive) {
+      filterBtn.classList.add('active');
+    } else {
+      filterBtn.classList.remove('active');
+    }
+  }
+}
+</script>

@@ -1,0 +1,39 @@
+<script>
+/**
+ * @file state.js
+ * @description Manages the global application state.
+ */
+
+var APP_STATE = {
+  // Holds all data fetched from the backend: projects, tasks, config, and sprint stats.
+  allData: { 
+    projects: [], 
+    independentTasks: [], 
+    config: {}, 
+    sprintStats: {} 
+  },
+  
+  // Tracks the ID of the task currently being edited in the modal. Null if creating a new task.
+  currentEditId: null,
+  
+  // Using an object as a shim for a Set to remember expanded epics
+  expandedEpicIds: {}, 
+  
+  // Track epics manually collapsed by the user while filters are active
+  manuallyCollapsedEpics: {},
+  
+  // The current active view, either 'table' or 'board'.
+  currentView: 'table',
+  
+  // Multi-select filter state
+  multiSelectFilters: {
+    status: [],
+    sprint: [],
+    planningStage: [],
+    validation: [],
+    projectStage: [],
+    assignedPM: [],
+    assignedDev: []
+  }
+};
+</script>

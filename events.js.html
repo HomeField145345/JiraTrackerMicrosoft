@@ -1,0 +1,2156 @@
+<script>
+/**
+ * @file events.js
+ * @description Sets up event listeners and defines handler functions for user interactions.
+ */
+
+// --- HELPER FUNCTIONS ---
+function setupDropdown(toggleBtnId, popupId, containerId) {
+    var toggleBtn = $('#' + toggleBtnId, true); // Use caching
+    var popup = $('#' + popupId, true); // Use caching
+    var container = $('#' + containerId, true); // Use caching
+
+    if (!toggleBtn || !popup || !container) return;
+
+    // Use EventManager instead of direct addEventListener
+    EventManager.addEventListener(toggleBtn, 'click', function(e) {
+        e.stopPropagation();
+        
+        // Handle different dropdown types
+        if (popupId === 'filter-popup') {
+            // Filter popup uses 'hidden' class
+            popup.classList.toggle('hidden');
+        } else {
+            // Other dropdowns use 'show' class
+            popup.classList.toggle('show');
+        }
+        
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+            if (menu.id !== popupId) {
+                menu.classList.remove('show');
+            }
+        });
+        
+        // Also close filter popup if it's open and we're opening something else
+        if (popupId !== 'filter-popup') {
+            var filterPopup = $('#filter-popup', true);
+            if (filterPopup && !filterPopup.classList.contains('hidden')) {
+                filterPopup.classList.add('hidden');
+            }
+        }
+    }, false, toggleBtnId + '_click');
+
+    // Document click handler to close dropdown when clicking outside
+    EventManager.addEventListener(document, 'click', function(e) {
+        if (!container.contains(e.target)) {
+            if (popupId === 'filter-popup') {
+                popup.classList.add('hidden');
+            } else {
+                popup.classList.remove('show');
+            }
+        }
+    }, false, 'document_click_' + toggleBtnId);
+}
+
+// Filter state management functions
+function saveFilterState() {
+    try {
+        const filterState = {
+            multiSelectFilters: APP_STATE.multiSelectFilters || {},
+            closedToggle: hasClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE),
+            storiesToggle: hasClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
+            bugsToggle: hasClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
+            searchQuery: inputValue('#q') || ''
+        };
+        
+        localStorage.setItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE, JSON.stringify(filterState));
+        console.log("Filter state saved to localStorage");
+        return true;
+    } catch (e) {
+        console.error("Error saving filter state:", e);
+        return false;
+    }
+}
+
+function loadFilterState() {
+    try {
+        const savedState = localStorage.getItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE);
+        if (!savedState) return false;
+        
+        const state = JSON.parse(savedState);
+        console.log("Loaded filter state:", state);
+        
+        // Initialize multiSelectFilters if needed
+        if (!APP_STATE.multiSelectFilters) {
+            APP_STATE.multiSelectFilters = {};
+        }
+        
+        // Restore multi-select filters
+        if (state.multiSelectFilters) {
+            APP_STATE.multiSelectFilters = state.multiSelectFilters;
+            
+            // Update checkboxes in the UI
+            Object.keys(state.multiSelectFilters).forEach(function(filterType) {
+                const selectedValues = state.multiSelectFilters[filterType] || [];
+                const dropdown = $('[data-filter="' + filterType + '"]');
+                if (!dropdown) return;
+                
+                // Update checkboxes
+                const checkboxes = dropdown.querySelectorAll('.filter-checkbox');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = selectedValues.includes(checkbox.value);
+                });
+                
+                // Update "Select All" checkbox
+                updateSelectAllCheckbox(filterType);
+                
+                // Update the dropdown label
+                updateFilterLabel(filterType);
+            });
+        }
+        
+        // Restore toggle states
+        if (state.closedToggle !== undefined) {
+            toggleClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE, state.closedToggle);
+        }
+        
+        if (state.storiesToggle !== undefined) {
+            toggleClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE, state.storiesToggle);
+        }
+        
+        if (state.bugsToggle !== undefined) {
+            toggleClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE, state.bugsToggle);
+        }
+        
+        // Restore search query
+        if (state.searchQuery !== undefined) {
+            inputValue('#q', state.searchQuery);
+        }
+        
+        return true;
+    } catch (e) {
+        console.error("Error loading filter state:", e);
+        return false;
+    }
+}
+
+function matchesSearch(row, searchTerm) {
+    if (!searchTerm) return true;
+    
+    // Convert search term to lowercase for case-insensitive search
+    var lowerSearchTerm = searchTerm.toLowerCase();
+    
+    // Search in title (case-insensitive)
+    if (row.dataset.title && row.dataset.title.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    // Search in Jira ID (case-insensitive)
+    if (row.dataset.jiraId && row.dataset.jiraId.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    // Also check the ID field for epics (legacy support, case-insensitive)
+    if (row.dataset.id && row.dataset.id.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    return false;
+}function isItemClosed(row) {
+    // Only check Project Stage now, using configurable mappings
+    var projectStage = (row.dataset.projectStage || '').toLowerCase();
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var closedStages = Array.isArray(cfg.closedProjectStages) && cfg.closedProjectStages.length
+        ? cfg.closedProjectStages.map(function(s){ return (s||'').toLowerCase().trim(); })
+        : ['in production','production','prod','fixed','done','canceled'];
+    return closedStages.indexOf(projectStage) !== -1;
+}
+
+function updateEpicFooters() {
+    $$('tr.row-epic').forEach(function(epicRow) {
+        var epicId = epicRow.dataset.id;
+        var footerRow = $('tr.row-epic-footer[data-parent-epic="' + epicId + '"]');
+        if (!footerRow) return;
+
+        // If epic is hidden or not expanded, hide the footer
+        if (epicRow.style.display === 'none' || !epicRow.classList.contains('expanded')) {
+            footerRow.style.display = 'none';
+            return;
+        }
+
+        var allChildRows = $$('tr.row-story[data-parent-epic="' + epicId + '"]');
+        var isShowingAll = epicRow.dataset.showingAll === 'true';
+        
+        var visibleChildRows, totalCount, visibleCount, hiddenCount;
+        
+        if (isShowingAll) {
+            // When showing all, all children should be visible
+            visibleChildRows = allChildRows;
+            totalCount = allChildRows.length;
+            visibleCount = totalCount;
+            hiddenCount = 0;
+        } else {
+            // Normal filtering mode
+            visibleChildRows = Array.from(allChildRows).filter(function(row) {
+                return row.style.display !== 'none';
+            });
+            totalCount = allChildRows.length;
+            visibleCount = visibleChildRows.length;
+            hiddenCount = totalCount - visibleCount;
+        }
+
+        var footerCell = footerRow.querySelector('td');
+        if (totalCount === 0) {
+            footerCell.innerHTML = 'This epic has no stories.';
+            // Still show the footer to convey the message only if epic itself is visible and expanded
+            footerRow.style.display = 'table-row';
+            return;
+        }
+
+        var message = 'Showing ' + visibleCount + ' of ' + totalCount + ' stories.';
+        var buttonHtml = '';
+
+        if (isShowingAll) {
+            message += ' (Showing all stories)';
+            buttonHtml = '<button class="btn re-hide-stories-btn" data-epic-id="' + epicId + '">Re-hide</button>';
+        } else if (hiddenCount > 0) {
+            message += ' (' + hiddenCount + ' hidden by filters)';
+            buttonHtml = '<button class="btn show-all-stories-btn" data-epic-id="' + epicId + '">Show All</button>';
+        }
+        // Always show footer for expanded epics, even if no children are visible
+        // This gives users access to the "Show All" functionality
+        footerCell.innerHTML = message + buttonHtml;
+        footerRow.style.display = 'table-row';
+    });
+}
+
+
+// --- EVENT HANDLER FUNCTIONS ---
+function updateActiveFiltersIndicator() {
+    var activeFilterCount = 0;
+    var filterLabels = [];
+    
+    // Check each filter type
+    var searchTerm = $('#q') ? $('#q').value.trim() : '';
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Get the closed button state - showing closed when active is now considered a filter
+    var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
+    var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
+    var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
+    
+    if (searchTerm) {
+        activeFilterCount++;
+        filterLabels.push('Search');
+    }
+    if (statusFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Status');
+    }
+    if (sprintFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Sprint');
+    }
+    if (planningStageFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Planning Stage');
+    }
+    if (validationFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Validation');
+    }
+    if (projectStageFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Project Stage');
+    }
+    if (assignedPMFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Assigned PM');
+    }
+    if (assignedDevFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Assigned Dev');
+    }
+    
+    // REVERSED: When the button is ON (showing closed), it's considered a filter
+    if (showClosed) {
+        activeFilterCount++;
+        filterLabels.push('Show Closed');
+    }
+    
+    if (!includeStories) {
+        activeFilterCount++;
+        filterLabels.push('Exclude Stories');
+    }
+    if (!includeBugs) {
+        activeFilterCount++;
+        filterLabels.push('Exclude Bugs');
+    }
+    
+    var activeFiltersIndicator = $('#activeFiltersIndicator');
+    var clearFiltersBtn = $('#clearFiltersBtn');
+    
+    if (activeFiltersIndicator && clearFiltersBtn) {
+        if (activeFilterCount > 0) {
+            activeFiltersIndicator.style.display = 'flex';
+            clearFiltersBtn.style.display = 'inline-block';
+            var filterBadge = activeFiltersIndicator.querySelector('.filter-badge');
+            if (filterBadge) {
+                filterBadge.textContent = `${activeFilterCount} Filter${activeFilterCount > 1 ? 's' : ''} Active`;
+            }
+            // Active filters detected
+        } else {
+            activeFiltersIndicator.style.display = 'none';
+            clearFiltersBtn.style.display = 'none';
+            // No active filters
+        }
+    }
+}
+
+function handleClearFilters() {
+  $('#q').value = '';
+  
+    // Reset any per-epic "show all" overrides so filters apply strictly
+    $$('.row-epic').forEach(function(epicRow){
+        epicRow.dataset.showingAll = 'false';
+    });
+  
+  // Reset all multiselect dropdowns
+  var filterDropdowns = $$('.filter-dropdown');
+  filterDropdowns.forEach(function(dropdown) {
+    var checkboxes = dropdown.querySelectorAll('.filter-checkbox');
+    checkboxes.forEach(function(checkbox) {
+      checkbox.checked = false;
+    });
+    
+    var label = dropdown.querySelector('.filter-label');
+    var filterType = dropdown.getAttribute('data-filter');
+    var toggleButton = dropdown.querySelector('.filter-dropdown-toggle');
+    
+    if (label) {
+      // Reset to default label text
+      switch(filterType) {
+        case 'status': label.textContent = 'All Statuses'; break;
+        case 'sprint': label.textContent = 'All Sprints'; break;
+        case 'planningStage': label.textContent = 'All Planning Stages'; break;
+        case 'validation': label.textContent = 'All Validations'; break;
+        case 'projectStage': label.textContent = 'All Project Stages'; break;
+        case 'assignedPM': label.textContent = 'All PMs'; break;
+        case 'assignedDev': label.textContent = 'All Devs'; break;
+      }
+      
+      // Remove any filter badges
+      var badge = label.querySelector('.filter-badge');
+      if (badge) badge.remove();
+    }
+    
+    // Remove active filters styling
+    if (toggleButton) {
+      toggleButton.classList.remove('has-active-filters');
+    }
+    
+    // Clear the filter state in APP_STATE
+    if (filterType) {
+      APP_STATE.multiSelectFilters[filterType] = [];
+    }
+  });
+  
+  // Reset toggle buttons to their default states
+  // Default state: closed filter OFF (hide closed items), stories ON, bugs ON
+  if ($('#filter-toggle-closed')) $('#filter-toggle-closed').classList.remove('active');
+  if ($('#filter-toggle-stories')) $('#filter-toggle-stories').classList.add('active');
+  if ($('#filter-toggle-bugs')) $('#filter-toggle-bugs').classList.add('active');
+  
+  // Clear the manually collapsed epics tracking
+  APP_STATE.manuallyCollapsedEpics = {};
+  
+  applyFilters();
+}
+
+function handleQuickFilter(filterType) {
+  // Clear all filters first
+  $('#q').value = '';
+  $('#f-status').selectedIndex = 0;
+  var sprintFilter = $('#f-sprint');
+  if (sprintFilter) sprintFilter.selectedIndex = 0;
+  var planningFilter = $('#f-planning-stage');
+  if (planningFilter) planningFilter.selectedIndex = 0;
+  var validationFilter = $('#f-validation');
+  if (validationFilter) validationFilter.selectedIndex = 0;
+  
+  // Apply specific filter based on type
+  switch(filterType) {
+    case 'validation-issues':
+      if (validationFilter) {
+        for (let i = 0; i < validationFilter.options.length; i++) {
+          if (validationFilter.options[i].value === '❌ Invalid') {
+            validationFilter.selectedIndex = i;
+            break;
+          }
+        }
+      }
+      break;
+    case 'missing-acceptance':
+      $('#q').value = 'missing:acceptance';
+      break;
+    case 'missing-story-points':
+      $('#q').value = 'missing:story-points';
+      break;
+    case 'missing-project-stage':
+      $('#q').value = 'missing:project-stage';
+      break;
+  }
+  
+  applyFilters();
+}
+
+function handleExpandCollapseAll(shouldExpand) {
+  $$('.row-epic').forEach(function(epicRow) {
+    epicRow.classList.toggle('expanded', shouldExpand);
+  });
+  applyFilters();
+}
+
+function handleKPICardClick(card) {
+    var kpiType = card.getAttribute('data-kpi');
+    
+    // Switch to table view if not already there
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    
+    // Clear existing filters
+    handleClearFilters();
+    
+    // Apply specific filter based on KPI type
+    switch(kpiType) {
+        case 'current-sprint':
+            handleCurrentSprintFilter();
+            break;
+        case 'past-sprint':
+            handlePastSprintClick();
+            break;
+        case 'needs-review':
+            handleNeedsReviewFilter();
+            break;
+        case 'total-tasks':
+            // Show all tasks by just clearing filters
+            // We've already cleared filters above
+            break;
+    }
+}
+
+function handleCurrentSprintFilter() {
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+    // Reset manual collapse tracking so KPI can expand epics as needed
+    APP_STATE.manuallyCollapsedEpics = {};
+
+        // Ensure closed items are included when viewing the current sprint
+        var closedToggle = $('#filter-toggle-closed');
+        if (closedToggle && !closedToggle.classList.contains('active')) {
+            closedToggle.classList.add('active');
+        }
+        // Normalize current sprint label to match dropdown values (e.g., "Sprint 123")
+        var normalizedCurrent = (typeof formatSprint === 'function') ? formatSprint(currentSprintName) : currentSprintName;
+        var sprintNumberMatch = (currentSprintName || '').match(/(\d+)/);
+        var currentNumber = sprintNumberMatch ? sprintNumberMatch[1] : null;
+
+        // Find the sprint filter dropdown and set it
+        var sprintDropdown = $('[data-filter="sprint"]');
+        if (sprintDropdown) {
+            var checkbox = null;
+            // Try exact normalized label first
+            if (normalizedCurrent) {
+                checkbox = sprintDropdown.querySelector('input[value="' + normalizedCurrent.replace(/"/g, '\\"') + '"]');
+            }
+            // Fallback: match by sprint number within any label if exact not found
+            if (!checkbox && currentNumber) {
+                var allCbs = sprintDropdown.querySelectorAll('.filter-checkbox');
+                for (var i = 0; i < allCbs.length; i++) {
+                    if (new RegExp('\\b' + currentNumber + '\\b').test(allCbs[i].value)) { checkbox = allCbs[i]; break; }
+                }
+            }
+            if (checkbox) {
+                // Clear any previous checks in sprint list
+                sprintDropdown.querySelectorAll('.filter-checkbox').forEach(function(cb){ cb.checked = false; });
+                checkbox.checked = true;
+                updateFilterSelection('sprint');
+                updateActiveFiltersIndicator(); // Update filter indicator
+            } else {
+                // As a last resort, set state directly so filtering still works
+                var val = normalizedCurrent || currentSprintName;
+                APP_STATE.multiSelectFilters.sprint = val ? [val] : [];
+                applyFilters();
+                updateActiveFiltersIndicator();
+            }
+        }
+
+        // Expand epics that have items in the current sprint so items are visible immediately
+        try {
+            var projects = APP_STATE.allData.projects || [];
+            var epicsWithCurrentSprintItems = new Set();
+            projects.forEach(function(item){
+                if ((item['Issue Type'] || '').toLowerCase() === 'epic') return;
+                var sprints = (item.sprint && typeof item.sprint === 'string') ? item.sprint.split(',').map(function(s){ return s.trim(); }) : [];
+                var isInCurrent = sprints.some(function(s){
+                    var lbl = (typeof formatSprint === 'function') ? formatSprint(s) : s;
+                    return (normalizedCurrent && lbl === normalizedCurrent) || (currentNumber && /\b\d+\b/.test(currentNumber) && new RegExp('\\b' + currentNumber + '\\b').test(lbl || ''));
+                });
+                if (isInCurrent && item['Epic Link']) {
+                    epicsWithCurrentSprintItems.add(normalizeString(item['Epic Link']));
+                }
+            });
+
+            setTimeout(function(){
+                $$('.row-epic').forEach(function(epicRow){
+                    var epicTitleCell = epicRow.querySelector('td:nth-child(4)');
+                    var epicSummary = epicTitleCell && epicTitleCell.textContent ? normalizeString(epicTitleCell.textContent.trim()) : '';
+                    if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
+                        epicRow.classList.add('expanded');
+                    }
+                });
+                applyFilters();
+            }, 0);
+    } catch (e) { }
+    }
+}
+
+function handlePastSprintFilter() {
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    var today = new Date();
+    var sprints = {}; // Cache for parsed sprint dates
+    
+    var parseSprintDates = function(sprintString) {
+        try {
+            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
+            var normalized = sprintString.replace(/[–—]/g, '-');
+            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
+            var m = normalized.match(re);
+            if (!m) return { start: null, end: null };
+            var currentYear = today.getFullYear();
+            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
+            var sy = m[3] ? parseInt(m[3],10) : currentYear;
+            if (sy < 100) sy += 2000;
+            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
+            var ey = m[6] ? parseInt(m[6],10) : sy;
+            if (ey < 100) ey += 2000;
+            var start = new Date(sy, sm - 1, sd);
+            var end = new Date(ey, em - 1, ed);
+            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
+            end.setHours(23,59,59,999);
+            return { start: start, end: end };
+        } catch(e) { return { start: null, end: null }; }
+    };
+
+    // First, parse all sprint dates to determine which ones are past sprints
+    var allProjects = APP_STATE.allData.projects || [];
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        if (sprintString && typeof sprintString === 'string') {
+            sprintString.split(',').forEach(function(sprintStr) {
+                var trimmedSprint = sprintStr.trim();
+                if (trimmedSprint && !sprints[trimmedSprint]) {
+                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
+                }
+            });
+        }
+    });
+
+    // Determine current sprint end date for comparison
+    var currentSprintEndDate = null;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        for (var sprintFullName in sprints) {
+            if (sprints.hasOwnProperty(sprintFullName)) {
+                var dates = sprints[sprintFullName];
+                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
+                    currentSprintEndDate = dates.end;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Now select sprint filters for sprints that ended before current sprint/today
+    var sprintDropdown = $('[data-filter="sprint"]');
+    if (sprintDropdown) {
+        var checkboxes = sprintDropdown.querySelectorAll('.filter-checkbox');
+        checkboxes.forEach(function(checkbox) {
+            var sprintValue = checkbox.value;
+            if (sprintValue === 'Select All') {
+                checkbox.checked = false;
+                return;
+            }
+            
+            // Check if this sprint value corresponds to a past sprint
+            var isPastSprint = false;
+            for (var sprintFullName in sprints) {
+                if (sprints.hasOwnProperty(sprintFullName)) {
+                    var dates = sprints[sprintFullName];
+                    // Check if the checkbox value matches this sprint (by name or contains sprint number)
+                    var sprintMatches = sprintValue.indexOf(sprintFullName) !== -1 || 
+                                       sprintFullName.indexOf(sprintValue) !== -1;
+                    
+                    if (sprintMatches && dates.end) {
+                        var compareDate = currentSprintEndDate || today;
+                        if (dates.end < compareDate) {
+                            isPastSprint = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            checkbox.checked = isPastSprint;
+        });
+        updateFilterSelection('sprint');
+        updateActiveFiltersIndicator(); // Update filter indicator
+    }
+}
+
+function handleNeedsReviewFilter() {
+    var validationDropdown = $('[data-filter="validation"]');
+    if (validationDropdown) {
+        var needsReviewCheckbox = validationDropdown.querySelector('input[value="Needs Review"]');
+        var staleCheckbox = validationDropdown.querySelector('input[value="Stale"]');
+        
+        if (needsReviewCheckbox) needsReviewCheckbox.checked = true;
+        if (staleCheckbox) staleCheckbox.checked = true;
+        
+        updateFilterSelection('validation');
+        updateActiveFiltersIndicator(); // Update filter indicator
+    }
+}
+
+function handleKpiCardClick(filter, value) {
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    handleClearFilters();
+
+    if (filter === 'validation') {
+        $('#f-validation').value = value;
+    }
+    if (filter === 'sprint') {
+        $('#f-sprint').value = value;
+    }
+    
+    applyFilters();
+}
+
+function handleCurrentSprintClick() {
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    handleClearFilters();
+    
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    
+    if (currentSprintName && currentSprintName !== '—' && currentSprintName !== 'None') {
+        // Set sprint filter
+        $('#f-sprint').value = currentSprintName;
+        
+        // Find all epics that have stories in current sprint and expand them
+        var allItems = APP_STATE.allData.projects;
+        var epicsWithCurrentSprintItems = new Set();
+        
+        // Find stories in current sprint and their parent epics
+        for (var i = 0; i < allItems.length; i++) {
+            var item = allItems[i];
+            var itemSprints = (item.sprint || '').split(',').map(function(s) { return s.trim(); });
+            var isInCurrentSprint = itemSprints.some(function(sprint) {
+                return sprint.includes(currentSprintName);
+            });
+            
+            if (isInCurrentSprint && item['Issue Type'] !== 'Epic') {
+                // This is a story/task in current sprint, find its epic
+                var epicLink = item['Epic Link'];
+                if (epicLink) {
+                    epicsWithCurrentSprintItems.add(epicLink);
+                }
+            }
+        }
+        
+        // Expand epics that have current sprint items
+        setTimeout(function() {
+            $$('.row-epic').forEach(function(epicRow) {
+                var cell = epicRow.querySelector('td:nth-child(4)');
+                var epicSummary = cell && cell.textContent ? cell.textContent.trim() : '';
+                if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
+                    epicRow.classList.add('expanded');
+                }
+            });
+            applyFilters();
+        }, 0);
+    }
+    
+    applyFilters();
+}
+
+function handleCurrentSprintStatusClick(statusValue) {
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    handleClearFilters();
+    
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    
+    if (currentSprintName && currentSprintName !== '—' && currentSprintName !== 'None') {
+        // Set both sprint and status filters
+        $('#f-sprint').value = currentSprintName;
+        $('#f-status').value = statusValue;
+        
+        // Find all epics that have stories in current sprint with this status and expand them
+        var allItems = APP_STATE.allData.projects;
+        var epicsWithCurrentSprintItems = new Set();
+        
+        // Find stories in current sprint with the specific status and their parent epics
+        for (var i = 0; i < allItems.length; i++) {
+            var item = allItems[i];
+            var itemSprints = (item.sprint || '').split(',').map(function(s) { return s.trim(); });
+            var isInCurrentSprint = itemSprints.some(function(sprint) {
+                return sprint.includes(currentSprintName);
+            });
+            var itemStatus = (item.Status || '').toLowerCase().trim();
+            
+            if (isInCurrentSprint && itemStatus === statusValue.toLowerCase() && item['Issue Type'] !== 'Epic') {
+                // This is a story/task in current sprint with matching status, find its epic
+                var epicLink = item['Epic Link'];
+                if (epicLink) {
+                    epicsWithCurrentSprintItems.add(epicLink);
+                }
+            }
+        }
+        
+        // Expand epics that have current sprint items with this status
+        setTimeout(function() {
+            $$('.row-epic').forEach(function(epicRow) {
+                var cell = epicRow.querySelector('td:nth-child(4)');
+                var epicSummary = cell && cell.textContent ? cell.textContent.trim() : '';
+                if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
+                    epicRow.classList.add('expanded');
+                }
+            });
+            applyFilters();
+        }, 0);
+    }
+    
+    applyFilters();
+}
+
+function handlePastSprintClick() {
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    handleClearFilters();
+
+    // Use date-based past sprint logic: count items that are in any sprint that ended before today/current sprint
+    var today = new Date();
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var pastClosedList = Array.isArray(cfg.pastSprintClosedStages) ? cfg.pastSprintClosedStages : [];
+    var pastClosedSet = new Set(pastClosedList.map(function(s){ return String(s).trim().toLowerCase(); }));
+    var sprints = {}; // Cache for parsed sprint dates
+    
+    var parseSprintDates = function(sprintString) {
+        try {
+            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
+            var normalized = sprintString.replace(/[–—]/g, '-');
+            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
+            var m = normalized.match(re);
+            if (!m) return { start: null, end: null };
+            var currentYear = today.getFullYear();
+            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
+            var sy = m[3] ? parseInt(m[3],10) : currentYear;
+            if (sy < 100) sy += 2000;
+            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
+            var ey = m[6] ? parseInt(m[6],10) : sy;
+            if (ey < 100) ey += 2000;
+            var start = new Date(sy, sm - 1, sd);
+            var end = new Date(ey, em - 1, ed);
+            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
+            end.setHours(23,59,59,999);
+            return { start: start, end: end };
+        } catch(e) { return { start: null, end: null }; }
+    };
+
+    // First pass: Parse all unique sprints and cache their dates
+    var allProjects = APP_STATE.allData.projects || [];
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        if (sprintString && typeof sprintString === 'string') {
+            sprintString.split(',').forEach(function(sprintStr) {
+                var trimmedSprint = sprintStr.trim();
+                if (trimmedSprint && !sprints[trimmedSprint]) {
+                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
+                }
+            });
+        }
+    });
+
+    // Determine current sprint end date for comparison
+    var currentSprintEndDate = null;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        for (var sprintFullName in sprints) {
+            if (sprints.hasOwnProperty(sprintFullName)) {
+                var dates = sprints[sprintFullName];
+                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
+                    currentSprintEndDate = dates.end;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Function to check if an item is in a past sprint
+    var isItemInPastSprint = function(sprintString) {
+        if (!sprintString || typeof sprintString !== 'string') return false;
+        var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
+        
+        for (var i = 0; i < itemSprints.length; i++) {
+            var sprintInfo = sprints[itemSprints[i]];
+            if (sprintInfo && sprintInfo.end) {
+                var compareDate = currentSprintEndDate || today;
+                if (sprintInfo.end < compareDate) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    var allRows = $$('#list-body tr');
+    var visibleEpicIds = new Set();
+    var count = 0;
+
+    allRows.forEach(function(row) { row.style.display = 'none'; });
+    
+    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
+        var projectStage = (itemRow.dataset.projectStage || '').trim().toLowerCase();
+        var itemSprints = itemRow.dataset.sprint || '';
+        var isPastSprint = isItemInPastSprint(itemSprints);
+        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
+        var jiraId = itemRow.dataset.jiraId || itemRow.dataset.id || 'Unknown';
+
+        if (isPastSprint && !isClosedForPast) {
+            itemRow.style.display = 'table-row';
+            if (itemRow.dataset.parentEpic) {
+                visibleEpicIds.add(itemRow.dataset.parentEpic);
+            }
+            count++;
+        }
+    });
+
+    $$('tr.row-epic').forEach(function(epicRow) {
+        if (visibleEpicIds.has(epicRow.dataset.id)) {
+            epicRow.style.display = 'table-row';
+            epicRow.classList.add('expanded');
+        }
+    });
+    
+    // Count all past sprint items (including hidden children)
+    var totalPastSprintCount = 0;
+    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
+        var projectStage = (itemRow.dataset.projectStage || '').trim().toLowerCase();
+        var itemSprints = itemRow.dataset.sprint || '';
+        var isPastSprint = isItemInPastSprint(itemSprints);
+        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
+        if (isPastSprint && !isClosedForPast) {
+            totalPastSprintCount++;
+        }
+    });
+    
+    // Count visible past sprint items
+    var visiblePastSprintCount = 0;
+    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
+        if (itemRow.style.display === 'table-row') {
+            visiblePastSprintCount++;
+        }
+    });
+    
+    // Add visible epics to the count
+    $$('tr.row-epic').forEach(function(epicRow) {
+        if (epicRow.style.display === 'table-row') {
+            visiblePastSprintCount++;
+        }
+    });
+    
+    if ($('#count')) {
+        if (visiblePastSprintCount === totalPastSprintCount) {
+            $('#count').textContent = totalPastSprintCount + ' items';
+        } else {
+            $('#count').textContent = visiblePastSprintCount + ' of ' + totalPastSprintCount + ' items shown';
+        }
+    }
+    updateEpicFooters();
+}
+
+function handleSaveTask() {
+  var taskData = {
+    ID: APP_STATE.currentEditId,
+    Title: $('#t-title').value,
+    Assignee: $('#t-assignee').value,
+    Status: $('#t-status').value,
+    Priority: $('#t-priority').value,
+    Due: $('#t-due').value,
+    Project: $('#t-project').value,
+    Tags: $('#t-tags').value,
+    Description: $('#t-desc').value
+  };
+  saveTask(taskData);
+}
+
+function handleEpicExpand(expander) {
+    var epicRow = expander.closest('tr');
+    if (!epicRow) {
+        return;
+    }
+    
+    // Check current state and determine new state
+    var wasExpanded = epicRow.classList.contains('expanded');
+    var shouldExpand = !wasExpanded;
+    var epicId = epicRow.dataset.id;
+    
+    // Force the class to the new state
+    if (shouldExpand) {
+        epicRow.classList.add('expanded');
+        // Remove from manually collapsed list if it was there
+        if (APP_STATE.manuallyCollapsedEpics[epicId]) {
+            delete APP_STATE.manuallyCollapsedEpics[epicId];
+        }
+    } else {
+        epicRow.classList.remove('expanded');
+        // If filters are active, track that this epic was manually collapsed
+        if (hasActiveFilters()) {
+            APP_STATE.manuallyCollapsedEpics[epicId] = true;
+        }
+    }
+    
+    // Apply filters - this maintains visibility settings based on the new expanded state
+    applyFilters();
+    
+    // Ensure the class state wasn't changed by applyFilters
+    if (shouldExpand && !epicRow.classList.contains('expanded')) {
+        epicRow.classList.add('expanded');
+    }
+}
+
+function handleCheck(button) {
+  var jiraId = button.dataset.jiraId;
+  updateLastChecked(jiraId, button);
+}
+
+// Local helper: format server UTC date string to yyyy-mm-dd in user's local timezone
+function formatDateInputYYYYMMDDLocal(val) {
+  try {
+    var d = (typeof parseServerDate === 'function') ? parseServerDate(val) : new Date(val);
+    if (!d || isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  } catch (e) { return ''; }
+}
+
+function handleEditTask(button) {
+  var taskId = button.dataset.id;
+  var task = APP_STATE.allData.independentTasks.find(function(t) { return t.ID === taskId; });
+  if (task) {
+    APP_STATE.currentEditId = task.ID;
+    $('#t-title').value = task.Title || '';
+    $('#t-assignee').value = task.Assignee || '';
+    $('#t-status').value = task.Status || '';
+    $('#t-priority').value = task.Priority || 'Medium';
+    // Use local yyyy-mm-dd to avoid timezone shift
+    $('#t-due').value = task.Due ? formatDateInputYYYYMMDDLocal(task.Due) : '';
+    $('#t-project').value = task.Project || '';
+    $('#t-tags').value = task.Tags || '';
+    $('#t-desc').value = task.Description || '';
+    openModal('Edit Independent Task');
+  }
+}
+
+function handleFileUpload() {
+    var file = $('#csvFile').files[0];
+    if (!file) {
+        alert('Please select a file to upload.');
+        return;
+    }
+    
+    // Validate file type
+    var fileName = file.name.toLowerCase();
+    var validExtensions = ['.csv', '.xls', '.xlsx'];
+    var isValidFile = validExtensions.some(function(ext) {
+        return fileName.endsWith(ext);
+    });
+    
+    if (!isValidFile) {
+        alert('Please select a valid file (.csv, .xls, .xlsx).');
+        return;
+    }
+    
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        alert('File size too large. Please select a file smaller than 10MB.');
+        return;
+    }
+    
+    showUploadProgress();
+    updateProgress(10, 'Reading file...');
+    
+    var isExcelFile = fileName.endsWith('.xls') || fileName.endsWith('.xlsx');
+    
+    if (isExcelFile) {
+        // Handle Excel files - convert to CSV first
+        convertExcelToCsv(file);
+    } else {
+        // Handle CSV files directly
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            updateProgress(30, 'Preparing data...');
+            processFileData(e.target.result, file.name, 'text/csv');
+        };
+        reader.onerror = function() {
+            hideUploadProgress();
+            alert('Error reading file. Please try again.');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function convertExcelToCsv(file) {
+    updateProgress(20, 'Converting Excel to CSV...');
+    
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            updateProgress(25, 'Parsing Excel file...');
+            
+            var data = new Uint8Array(e.target.result);
+            var workbook;
+            
+            try {
+                // Try to read as binary Excel first
+                workbook = XLSX.read(data, { type: 'array' });
+            } catch (binaryError) {
+                // If binary parsing fails, try reading as HTML/text (for HTML-based .xls files)
+                updateProgress(26, 'Trying HTML parsing...');
+                var textData = new TextDecoder('utf-8').decode(data);
+                try {
+                    workbook = XLSX.read(textData, { type: 'string' });
+                } catch (htmlError) {
+                    throw new Error('Unable to parse Excel file. This may be an HTML-based export. Original errors: Binary: ' + binaryError.message + ', HTML: ' + htmlError.message);
+                }
+            }
+            
+            // --- NEW: Auto-detect sheet and header row that contains a Jira key column ---
+            var selectedSheetName = null;
+            var detectedHeaderRowIndex = -1;
+            var detectionLog = [];
+            var KEY_MATCH = function(v){
+                if (v === undefined || v === null) return false;
+                var s = String(v).replace(/^[\uFEFF\u00A0]+/, '').trim().toLowerCase();
+                return s === 'key' || s === 'issue key' || s === 'issuekey' || s === 'jira key' || s.indexOf('key') !== -1;
+            };
+
+            for (var si = 0; si < workbook.SheetNames.length; si++) {
+                var sheetName = workbook.SheetNames[si];
+                var ws = workbook.Sheets[sheetName];
+                if (!ws) continue;
+                var rows;
+                try {
+                    rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false });
+                } catch (eConv) {
+                    detectionLog.push('Skip sheet ' + sheetName + ': ' + eConv.message);
+                    continue;
+                }
+                var maxSearch = Math.min(200, rows.length);
+                for (var i = 0; i < maxSearch; i++) {
+                    var row = Array.isArray(rows[i]) ? rows[i] : [];
+                    for (var j = 0; j < row.length; j++) {
+                        if (KEY_MATCH(row[j])) {
+                            selectedSheetName = sheetName;
+                            detectedHeaderRowIndex = i;
+                            detectionLog.push('Selected sheet "' + sheetName + '" with header at row ' + (i + 1));
+                            break;
+                        }
+                    }
+                    if (selectedSheetName) break;
+                }
+                if (selectedSheetName) break;
+                detectionLog.push('No key header found in first ' + maxSearch + ' rows of sheet ' + sheetName);
+            }
+
+            // Fallback: use first sheet if none matched; header assumed at first row
+            if (!selectedSheetName) {
+                selectedSheetName = workbook.SheetNames[0];
+                detectedHeaderRowIndex = 0;
+                detectionLog.push('Fallback to first sheet: ' + selectedSheetName + ' (no key header detected)');
+            }
+            
+            var worksheet = workbook.Sheets[selectedSheetName];
+            if (!worksheet) {
+                throw new Error('No worksheet found in the Excel file.');
+            }
+            
+            // Build trimmed rows from detected header to end and convert to CSV
+            updateProgress(28, 'Converting to CSV format...');
+            var allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false });
+            var trimmedRows = allRows.slice(Math.max(0, detectedHeaderRowIndex));
+            if (trimmedRows.length < 2) {
+                throw new Error('Detected header but no data rows found. Check the export.');
+            }
+            var newWs = XLSX.utils.aoa_to_sheet(trimmedRows);
+            var csv = XLSX.utils.sheet_to_csv(newWs, {
+                dateNF: 'yyyy-mm-dd hh:mm:ss',
+                rawNumbers: false,
+                blankrows: false
+            });
+            
+            // Basic validation of CSV content
+            var lines = csv.split('\n').filter(function(line) { return line.trim().length > 0; });
+            if (lines.length < 2) {
+                throw new Error('Converted CSV appears to be empty or has no data rows.');
+            }
+            
+            // Log first few lines for debugging
+            console.log('Excel detection log:', detectionLog.join(' | '));
+            console.log('Converted CSV preview (first 3 lines):');
+            lines.slice(0, 3).forEach(function(line, idx) {
+                console.log('Line ' + (idx + 1) + ':', line.substring(0, 200) + (line.length > 200 ? '...' : ''));
+            });
+            
+            // Convert CSV string to data URL format
+            var csvBlob = new Blob([csv], { type: 'text/csv' });
+            var reader2 = new FileReader();
+            reader2.onload = function(e2) {
+                updateProgress(30, 'Preparing data...');
+                processFileData(e2.target.result, file.name.replace(/\.(xls|xlsx)$/i, '.csv'), 'text/csv');
+            };
+            reader2.readAsDataURL(csvBlob);
+            
+        } catch (error) {
+            hideUploadProgress();
+            alert('Error converting Excel file: ' + error.message + '. Please try saving as CSV format instead.');
+        }
+    };
+    
+    reader.onerror = function() {
+        hideUploadProgress();
+        alert('Error reading Excel file. Please try again.');
+    };
+    
+    reader.readAsArrayBuffer(file);
+}
+
+function processFileData(dataUrl, fileName, mimeType) {
+    var archiveMissing = $('#archiveMissing').checked;
+    var base64Data = dataUrl.split(',')[1]; 
+    var fileData = {
+        fileName: fileName,
+        mimeType: mimeType,
+        base64Data: base64Data,
+        archiveMissing: archiveMissing
+    };
+    
+    updateProgress(50, 'Uploading to server...');
+    uploadCsvData(fileData);
+}
+
+function showUploadProgress() {
+    $('#uploadProgress').style.display = 'block';
+    $('#uploadResults').style.display = 'none';
+    $('#uploadBtn').disabled = true;
+    $('#uploadBtn').textContent = 'Uploading...';
+    $('#cancelUploadBtn').style.display = 'inline-block';
+    $('#csvFile').disabled = true;
+}
+
+function hideUploadProgress() {
+    $('#uploadProgress').style.display = 'none';
+    $('#uploadBtn').disabled = false;
+    $('#uploadBtn').textContent = 'Upload and Replace Data';
+    $('#cancelUploadBtn').style.display = 'none';
+    $('#csvFile').disabled = false;
+}
+
+function updateProgress(percentage, message) {
+    $('#progressBarFill').style.width = percentage + '%';
+    $('#progressText').textContent = message;
+}
+
+function showUploadResults(response) {
+    $('#uploadResults').style.display = 'block';
+    
+    if (response.status === 'success' && response.results) {
+        var results = response.results;
+        var summaryHtml = `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.added}</div>
+                <div class="result-stat-label">Added</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number">${results.updated}</div>
+                <div class="result-stat-label">Updated</div>
+            </div>`;
+        
+        // Add unarchived section if there are any
+        if (results.unarchived > 0) {
+            summaryHtml += `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.unarchived}</div>
+                <div class="result-stat-label">Unarchived</div>
+            </div>`;
+        }
+        
+        summaryHtml += `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.archived}</div>
+                <div class="result-stat-label">Archived</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number">${results.total}</div>
+                <div class="result-stat-label">Total</div>
+            </div>
+        `;
+        $('#resultsSummary').innerHTML = summaryHtml;
+        
+        var detailsHtml = '';
+        if (results.details.addedItems.length > 0) {
+            detailsHtml += '<strong>Added Items:</strong><br>';
+            results.details.addedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">+ ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        if (results.details.updatedItems.length > 0) {
+            detailsHtml += '<strong>Updated Items:</strong><br>';
+            results.details.updatedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">↻ ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        // Add unarchived items section
+        if (results.details.unarchivedItems && results.details.unarchivedItems.length > 0) {
+            detailsHtml += '<strong>Unarchived Items:</strong><br>';
+            results.details.unarchivedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">📂 ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        if (results.details.archivedItems.length > 0) {
+            detailsHtml += '<strong>Archived Items:</strong><br>';
+            results.details.archivedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">📁 ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        $('#resultsDetails').innerHTML = detailsHtml;
+    } else {
+        // Check if we have custom HTML content for enhanced error display
+        if (response.html) {
+            $('#resultsSummary').innerHTML = response.html;
+            $('#resultsDetails').innerHTML = '';
+        } else {
+            $('#resultsSummary').innerHTML = '<div class="text-red-600">Upload failed: ' + (response.message || 'Unknown error') + '</div>';
+            $('#resultsDetails').innerHTML = '';
+        }
+    }
+}
+
+
+// --- FILTERING AND VIEW SWITCHING ---
+function applyFilters() {
+    var searchTerm = ($('#q') ? $('#q').value : '').toLowerCase();
+    
+    // Get multi-select filter values
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Build closed mappings from config for project stage checks (status does not determine closed)
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var mappedClosedStages = Array.isArray(cfg.closedProjectStages) && cfg.closedProjectStages.length
+        ? cfg.closedProjectStages.map(function(s){ return (s||'').toLowerCase().trim(); })
+        : ['in production','production','prod','fixed','done','canceled'];
+
+    // Closed visibility is controlled only by the explicit toggle now
+    var toggleClosedBtn = $('#filter-toggle-closed');
+    var includeClosed = (toggleClosedBtn ? toggleClosedBtn.classList.contains('active') : false);
+    
+    // Get story/bug toggle states
+    var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
+    var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
+    
+    // Save filter state whenever filters are applied
+    saveFilterState();
+
+    // Consider dropdowns/search and type toggles as user-selected filters for auto-expansion
+    var anySelectionFilterActive = !!(
+        searchTerm ||
+        statusFilters.length ||
+        sprintFilters.length ||
+        planningStageFilters.length ||
+        validationFilters.length ||
+        projectStageFilters.length ||
+        assignedPMFilters.length ||
+        assignedDevFilters.length ||
+        (includeStories === false) ||
+        (includeBugs === false)
+    );
+
+    // Update active filters indicator
+    updateActiveFiltersIndicator();
+
+    var getLatestSprint = function(sprintString) {
+        if (!sprintString || typeof sprintString !== 'string') return null;
+        var sprintNumbers = (sprintString.match(/Sprint\s?(\d+)/ig) || [])
+            .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, '')); });
+        if (sprintNumbers.length === 0) return null;
+        var latestSprintNumber = Math.max.apply(null, sprintNumbers);
+        return 'Sprint ' + latestSprintNumber;
+    };
+
+    // Parse all sprint entries to normalized labels (e.g., "Sprint 123") for multi-sprint membership checks
+    var getSprintLabels = function(sprintString) {
+        if (!sprintString || typeof sprintString !== 'string') return [];
+        var labels = [];
+        sprintString.split(',').forEach(function(part){
+            var lbl = formatSprint((part || '').trim());
+            if (lbl) labels.push(lbl);
+        });
+        // Deduplicate
+        return Array.from(new Set(labels));
+    };
+
+    var isClosedByProjectStage = function(row) {
+        // Check for project stage in dropdown
+        var projectStageSelect = row.querySelector('select[data-field="Project Stage"]');
+        var stage = projectStageSelect ? projectStageSelect.value : row.dataset.projectStage || '';
+        var val = (stage || '').toLowerCase().trim();
+        return mappedClosedStages.indexOf(val) !== -1;
+    };
+
+    var matchesMultiSelectFilter = function(value, filterArray) {
+        return filterArray.length === 0 || filterArray.includes(value);
+    };
+
+    if (APP_STATE.currentView === 'table') {
+        var rowVisibility = new Map();
+        var allRows = $$('#list-body tr');
+        var epicChildrenMap = new Map(); // Track which epics have open children
+        var epicsWithMatchingChildren = new Set(); // Track epics that should be shown because they have matching children
+
+        // First pass: identify open children for each epic
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            
+            if (row.classList.contains('row-story') || row.classList.contains('row-task')) {
+                var parentEpic = row.dataset.parentEpic;
+                if (parentEpic) {
+                    if (!epicChildrenMap.has(parentEpic)) {
+                        epicChildrenMap.set(parentEpic, { total: 0, closed: 0 });
+                    }
+                    var epicData = epicChildrenMap.get(parentEpic);
+                    epicData.total++;
+                    
+                    if (isClosedByProjectStage(row)) {
+                        epicData.closed++;
+                    }
+                }
+            }
+        });
+
+        // Second pass: determine which stories/tasks match filters
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            if (row.classList.contains('row-epic')) return; // Skip epics for now
+
+            // Multi-sprint aware check: a row matches if any of its sprint labels is selected
+            var rowSprintLabels = getSprintLabels(row.dataset.sprint);
+            
+            // Apply issue type filters
+            var issueType = (row.dataset.issueType || '').toLowerCase();
+            var isStory = issueType.includes('story');
+            var isBug = issueType === 'bug';
+            var shouldShowBasedOnType = (isStory && includeStories) || (isBug && includeBugs) || (!isStory && !isBug);
+            var _matchesSearch = matchesSearch(row, searchTerm);
+            var _matchStatus = matchesMultiSelectFilter(row.dataset.status, statusFilters);
+            var _matchSprint = (sprintFilters.length === 0) || rowSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); });
+            var _matchPlanning = matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters);
+            var _matchValidation = matchesMultiSelectFilter(row.dataset.validation, validationFilters);
+            var _matchProjectStage = matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters);
+            var _matchPM = matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters);
+            var _matchDev = matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
+
+            var isVisible = _matchesSearch &&
+                            _matchStatus &&
+                            _matchSprint &&
+                            _matchPlanning &&
+                            _matchValidation &&
+                            _matchProjectStage &&
+                            _matchPM &&
+                            _matchDev &&
+                            shouldShowBasedOnType;
+            
+            // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
+            // EXCEPT if the item specifically matches the search term
+            if (!includeClosed && isVisible) {
+                var matchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
+                if (isClosedByProjectStage(row) && !matchesSpecificSearch) {
+                    isVisible = false;
+                }
+            }
+            
+            rowVisibility.set(row, isVisible);
+            
+            // If this story/task is visible and has a parent epic, mark that epic as having matching children
+            if (isVisible && row.dataset.parentEpic) {
+                epicsWithMatchingChildren.add(row.dataset.parentEpic);
+            }
+        });
+
+        // Third pass: determine epic visibility
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            if (!row.classList.contains('row-epic')) return; // Only process epics
+
+            var epicId = row.dataset.id;
+            var latestSprintForRow = getLatestSprint(row.dataset.sprint);
+            // For consistency, also gather all sprint labels on the epic row
+            var epicSprintLabels = getSprintLabels(row.dataset.sprint);
+            
+            // Epic matches basic filters
+            var epicMatchesFilters = matchesSearch(row, searchTerm) &&
+                                   // Sprint filter passes if epic itself has a selected sprint OR any child matched earlier
+                                   (sprintFilters.length === 0 || epicSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); })) &&
+                                   matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.validation, validationFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
+            
+            // Note: We don't apply status filter to epics directly since they usually don't have UAT/Retest status
+            
+            var childMatches = epicsWithMatchingChildren.has(epicId);
+            
+            // If status filters are active, only show epics with matching children
+            var isVisible;
+            if (statusFilters.length > 0) {
+                isVisible = childMatches; // Status filters are active, so only show epics with matching children
+            } else {
+                isVisible = epicMatchesFilters || childMatches; // No status filters, show if epic matches other filters
+            }
+
+                // Auto-expand epics when any selection filter is active and the epic is relevant (matches or has matching children)
+                // But respect manually collapsed epics and NEVER collapse already expanded epics
+                if (anySelectionFilterActive && isVisible && !row.classList.contains('expanded')) {
+                    // Only auto-expand if the epic has not been manually collapsed by the user
+                    if (!APP_STATE.manuallyCollapsedEpics[epicId]) {
+                        row.classList.add('expanded');
+                    }
+                }
+
+                // Apply closed filter logic for epics - if includeClosed is false, hide closed epics
+                // EXCEPT if the epic specifically matches the search term
+                if (!includeClosed && isVisible) {
+                    var epicChildren = epicChildrenMap.get(epicId);
+                    var epicIsClosed = isClosedByProjectStage(row);
+                    var epicMatchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
+                    
+                    if (epicIsClosed && (!epicChildren || epicChildren.total === epicChildren.closed) && !epicMatchesSpecificSearch) {
+                        isVisible = false;
+                    }
+                }            rowVisibility.set(row, isVisible);
+        });
+
+        allRows.forEach(function(row) {
+            var isVisible = rowVisibility.get(row);
+            var isEpic = row.classList.contains('row-epic');
+            var isEpicFooter = row.classList.contains('row-epic-footer');
+            var parentEpicId = row.dataset.parentEpic;
+            var parentEpic = parentEpicId ? $('tr.row-epic[data-id="' + parentEpicId + '"]') : null;
+            var hasValidParentEpic = !!parentEpic;
+            // Only treat as a child row if it has a valid, existing parent epic row
+            var isChildRow = (row.classList.contains('row-story') || row.classList.contains('row-task')) && hasValidParentEpic;
+            
+            if (isChildRow) {
+                var visibilityReason = 'visible';
+                if (!parentEpic || !parentEpic.classList.contains('expanded')) {
+                    isVisible = false;
+                    visibilityReason = 'hidden: epic collapsed or missing';
+                } else {
+                    // Check if parent epic is showing all - if so, show all children regardless of filters
+                    var isShowingAll = parentEpic.dataset.showingAll === 'true';
+                    if (!isShowingAll && !rowVisibility.get(parentEpic)) {
+                        isVisible = false;
+                        visibilityReason = 'hidden: parent epic not visible under filters';
+                    } else if (isShowingAll) {
+                        // When showing all, only apply basic visibility checks (not filters)
+                        isVisible = true;
+                        visibilityReason = 'visible: parent epic showing all children';
+                    }
+                }
+            } else if ((row.classList.contains('row-story') || row.classList.contains('row-task')) && !hasValidParentEpic) {
+                // Top-level items (no valid epic) should not be gated by epic expansion
+                // Keep isVisible as determined by filters
+            } else if (isEpicFooter) {
+                // Epic footers should be visible if their parent epic is visible and expanded
+                var parentEpicId = row.dataset.parentEpic;
+                var parentEpic = parentEpicId ? $('tr.row-epic[data-id="' + parentEpicId + '"]') : null;
+                if (!parentEpic || !rowVisibility.get(parentEpic) || !parentEpic.classList.contains('expanded')) {
+                    isVisible = false;
+                } else {
+                    // Always show footer when epic is expanded - this gives users the "Show All" option
+                    // even when no children are currently visible due to filters
+                    isVisible = true;
+                }
+            }
+            
+            row.style.display = isVisible ? 'table-row' : 'none';
+        });
+    }
+    
+    // Count all items (including hidden children of collapsed epics)
+    var totalCount = 0;
+    $$('tr.row-epic, tr.row-story, tr.row-task').forEach(function(row) {
+        if (!row.classList.contains('row-epic-footer')) {
+            totalCount++;
+        }
+    });
+    
+    // Count visible items for display info
+    var visibleCount = 0;
+    $$('tr.row-epic, tr.row-story, tr.row-task').forEach(function(row) {
+        if (!row.classList.contains('row-epic-footer') && row.style.display === 'table-row') {
+            visibleCount++;
+        }
+    });
+    
+    if ($('#count')) {
+        if (visibleCount === totalCount) {
+            $('#count').textContent = totalCount + ' items';
+        } else {
+            $('#count').textContent = visibleCount + ' of ' + totalCount + ' items shown';
+        }
+    }
+    
+    // Show/hide no-matches indicator
+    var noMatchesIndicator = $('#no-matches-indicator');
+    var hasActiveFilters = anySelectionFilterActive || !includeClosed || !includeStories || !includeBugs;
+    
+    if (noMatchesIndicator) {
+        if (hasActiveFilters && visibleCount === 0) {
+            noMatchesIndicator.classList.remove('hidden');
+            // Hide the table if it exists
+            var tableContainer = $('.table-container');
+            if (tableContainer) {
+                tableContainer.style.display = 'none';
+            }
+        } else {
+            noMatchesIndicator.classList.add('hidden');
+            // Show the table if it exists
+            var tableContainer = $('.table-container');
+            if (tableContainer) {
+                tableContainer.style.display = 'block';
+            }
+        }
+    }
+    
+    updateEpicFooters();
+    updateKPICards();
+}
+
+// Update KPI card values
+function updateKPICards() {
+    updateCurrentSprintKPI();
+    updatePastSprintKPI();
+    updateNeedsReviewKPI();
+    updateTotalTasksKPI();
+}
+
+function updateCurrentSprintKPI() {
+    var currentSprintItems = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        allProjects.forEach(function(project) {
+            // Count any non-epic work item in the current sprint, regardless of status
+            var issueType = (project['Issue Type'] || '').toLowerCase();
+            if (issueType === 'epic') return;
+
+            var sprints = project.sprint || project.Sprint || '';
+            if (typeof sprints === 'string' && sprints.indexOf(currentSprintName) !== -1) {
+                currentSprintItems++;
+            }
+        });
+    }
+    
+    var countCard = $('#current-sprint-count');
+    var numberSpan = $('#current-sprint-number');
+    
+    if (countCard) {
+        countCard.textContent = currentSprintItems;
+    }
+    
+    if (numberSpan) {
+        if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+            var match = currentSprintName.match(/Sprint\s?(\d+)/i);
+            numberSpan.textContent = match ? '(' + match[1] + ')' : '(' + currentSprintName + ')';
+        } else {
+            numberSpan.textContent = '';
+        }
+    }
+}
+
+function updatePastSprintKPI() {
+    var pastSprintItems = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var pastClosedList = Array.isArray(cfg.pastSprintClosedStages) ? cfg.pastSprintClosedStages : [];
+    var pastClosedSet = new Set(pastClosedList.map(function(s){ return String(s).trim().toLowerCase(); }));
+    var today = new Date();
+    var sprints = {}; // Cache for parsed sprint dates
+    
+    var parseSprintDates = function(sprintString) {
+        try {
+            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
+            var normalized = sprintString.replace(/[–—]/g, '-');
+            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
+            var m = normalized.match(re);
+            if (!m) return { start: null, end: null };
+            var currentYear = today.getFullYear();
+            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
+            var sy = m[3] ? parseInt(m[3],10) : currentYear;
+            if (sy < 100) sy += 2000;
+            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
+            var ey = m[6] ? parseInt(m[6],10) : sy;
+            if (ey < 100) ey += 2000;
+            var start = new Date(sy, sm - 1, sd);
+            var end = new Date(ey, em - 1, ed);
+            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
+            end.setHours(23,59,59,999);
+            return { start: start, end: end };
+        } catch(e) { return { start: null, end: null }; }
+    };
+
+    // First pass: Parse all unique sprints and cache their dates
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        if (sprintString && typeof sprintString === 'string') {
+            sprintString.split(',').forEach(function(sprintStr) {
+                var trimmedSprint = sprintStr.trim();
+                if (trimmedSprint && !sprints[trimmedSprint]) {
+                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
+                }
+            });
+        }
+    });
+
+    // Determine current sprint end date for comparison
+    var currentSprintEndDate = null;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        // Find the current sprint in our parsed sprints
+        for (var sprintFullName in sprints) {
+            if (sprints.hasOwnProperty(sprintFullName)) {
+                var dates = sprints[sprintFullName];
+                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
+                    currentSprintEndDate = dates.end;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Count items in past sprints (sprints that ended before the current sprint)
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        var rawProjectStage = project['Project Stage'] || '';
+        var projectStage = rawProjectStage.trim().toLowerCase();
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        var jiraId = project['Jira #'] || project.ID || 'Unknown';
+
+        if (issueType === 'epic') return; // exclude epics
+
+        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
+
+        if (sprintString && typeof sprintString === 'string') {
+            var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
+            var isInPastSprint = false;
+
+            // Check if item is in any sprint that ended before today
+            // (or before current sprint if we have a current sprint)
+            for (var i = 0; i < itemSprints.length; i++) {
+                var sprintInfo = sprints[itemSprints[i]];
+                if (sprintInfo && sprintInfo.end) {
+                    // If we have a current sprint, compare to its end date
+                    // Otherwise, just check if sprint ended before today
+                    var compareDate = currentSprintEndDate || today;
+                    if (sprintInfo.end < compareDate) {
+                        isInPastSprint = true;
+                        break;
+                    }
+                }
+            }
+
+            if (isInPastSprint) {
+                if (!isClosedForPast) {
+                    pastSprintItems++;
+                }
+            }
+        }
+    });
+    
+    var card = $('#past-sprint-count');
+    if (card) {
+        card.textContent = pastSprintItems;
+    }
+}
+
+/**
+ * Updates the Needs Review KPI card with current counts
+ * Counts items that need review, stale items, and breaks down by issue type
+ */
+function updateNeedsReviewKPI() {
+    const counts = {
+        needsReview: 0,
+        bugs: 0,
+        stories: 0,
+        stale: 0
+    };
+    
+    const allProjects = APP_STATE.allData.projects || [];
+    
+    // Count all items by validation status
+    allProjects.forEach(function(project) {
+        const validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage']
+        );
+        
+        const issueType = (project['Issue Type'] || '').toLowerCase();
+        
+        // Count by validation status
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
+            counts.needsReview++;
+            
+            // Count by issue type
+            if (issueType === 'bug') {
+                counts.bugs++;
+            } else if (issueType === 'story') {
+                counts.stories++;
+            }
+        } else if (validationStatus.text === APP_CONSTANTS.VALIDATION.STALE) {
+            counts.stale++;
+        }
+    });
+    
+    // Update UI elements
+    updateKpiCounters('needs-review', counts);
+}
+
+/**
+ * Helper function to update KPI counters
+ * @param {string} kpiId - Base ID of the KPI element
+ * @param {Object} counts - Object containing count values
+ */
+function updateKpiCounters(kpiId, counts) {
+    setText(`#${kpiId}-count`, counts.needsReview);
+    
+    if ('bugs' in counts) {
+        setText(`#${kpiId}-bugs`, counts.bugs);
+    }
+    
+    if ('stories' in counts) {
+        setText(`#${kpiId}-stories`, counts.stories);
+    }
+    
+    if ('stale' in counts) {
+        setText(`#${kpiId}-stale`, counts.stale);
+    }
+}
+
+function updateTotalTasksKPI() {
+    var totalTasks = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    
+    // Count all non-epic items
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType !== 'epic') {
+            totalTasks++;
+        }
+    });
+    
+    var card = $('#total-tasks-count');
+    if (card) {
+        card.textContent = totalTasks;
+    }
+}
+
+function getCurrentSprintNumber() {
+    var allProjects = APP_STATE.allData.projects || [];
+    var maxSprintNumber = 0;
+    
+    allProjects.forEach(function(project) {
+    var sprints = project.sprint || project.Sprint || '';
+        var sprintNumbers = (sprints.match(/Sprint\s?(\d+)/ig) || [])
+            .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, '')); });
+        
+        sprintNumbers.forEach(function(num) {
+            if (num > maxSprintNumber) {
+                maxSprintNumber = num;
+            }
+        });
+    });
+    
+    return maxSprintNumber > 0 ? maxSprintNumber : null;
+}
+
+// Helper function to check if any filters are currently active
+function hasActiveFilters() {
+    var searchTerm = $('#q').value.trim().toLowerCase();
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Check closed filter - "Show Closed" is a filter when ON
+    var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
+    var hideStories = $('#filter-toggle-stories') ? !$('#filter-toggle-stories').classList.contains('active') : false;
+    var hideBugs = $('#filter-toggle-bugs') ? !$('#filter-toggle-bugs').classList.contains('active') : false;
+    
+    return !!(searchTerm || statusFilters.length || sprintFilters.length || 
+              planningStageFilters.length || validationFilters.length || 
+              projectStageFilters.length || assignedPMFilters.length || 
+              assignedDevFilters.length || showClosed || hideStories || hideBugs);
+}
+
+
+function switchView(viewName) {
+  // If we're not changing views, just return
+  if (APP_STATE.currentView === viewName) return;
+
+  // Clean up the previous view to prevent memory leaks
+  if (typeof AppCleanup !== 'undefined' && AppCleanup.cleanupView) {
+    AppCleanup.cleanupView(APP_STATE.currentView);
+  }
+
+  // Update UI for new view
+  $$('.view-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  $('[data-view="' + viewName + '"]').classList.add('active');
+
+  // Update state with current view
+  APP_STATE.currentView = viewName;
+  
+  // Show/hide table controls based on view
+  var tableControls = $('#table-controls');
+  if (tableControls) {
+    tableControls.style.display = viewName === 'table' ? 'flex' : 'none';
+  }
+  
+  // For Gantt view, we can release some data we don't need
+  if (viewName === 'gantt' && typeof AppCleanup !== 'undefined') {
+    // Only keep the active tasks data, release other large objects
+    if (APP_STATE.allData && APP_STATE.allData.fullHistory) {
+      AppCleanup.releaseData('allData.fullHistory');
+    }
+  }
+  
+  // Render the application with the new view
+  renderApp();
+}
+
+// Import functions from ui.js
+function updateFilterSelection(filterType) {
+    // This function is a placeholder for the actual implementation in ui.js.html
+    // DO NOT call window.updateFilterSelection to avoid recursive loop
+    
+    // Simple implementation just to update state
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var checkboxes = dropdown.querySelectorAll('.filter-checkbox:checked');
+    var selectedValues = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    
+    // Update the state
+    APP_STATE.multiSelectFilters[filterType] = selectedValues;
+    
+    // Apply filters directly without calling ui.js's function
+    applyFilters();
+}
+
+function setupMultiSelectDropdowns() {
+  console.log("Setting up filter dropdowns");
+  
+  // Get all filter dropdowns
+  var filterDropdowns = $$('.filter-dropdown');
+  console.log("Found filter dropdowns:", filterDropdowns.length);
+  
+  // Remove any existing event listeners by cloning
+  filterDropdowns.forEach(function(dropdown) {
+    var toggle = dropdown.querySelector('.filter-dropdown-toggle');
+    if (toggle) {
+      var newToggle = toggle.cloneNode(true);
+      toggle.parentNode.replaceChild(newToggle, toggle);
+    }
+  });
+  
+  // Get fresh references after cloning
+  filterDropdowns = $$('.filter-dropdown');
+  
+  // Set up fresh event listeners
+  filterDropdowns.forEach(function(dropdown) {
+    var toggle = dropdown.querySelector('.filter-dropdown-toggle');
+    var content = dropdown.querySelector('.filter-dropdown-content');
+    
+    if (!toggle || !content) {
+      console.log("Missing toggle or content for dropdown", dropdown);
+      return;
+    }
+    
+    console.log("Setting up event listener for", dropdown.dataset.filter);
+    
+    // Toggle dropdown on click
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      console.log("Dropdown clicked:", dropdown.dataset.filter);
+      
+      // Close other dropdowns
+      filterDropdowns.forEach(function(otherDropdown) {
+        if (otherDropdown !== dropdown) {
+          otherDropdown.classList.remove('open');
+          var otherContent = otherDropdown.querySelector('.filter-dropdown-content');
+          if (otherContent) {
+            otherContent.classList.add('hidden');
+            console.log("Hiding other dropdown:", otherDropdown.dataset.filter);
+          }
+        }
+      });
+      
+      // Toggle this dropdown
+      var isOpen = dropdown.classList.toggle('open');
+      content.classList.toggle('hidden');
+      
+      console.log("Dropdown state:", dropdown.dataset.filter, 
+                 "open:", isOpen, 
+                 "hidden:", content.classList.contains('hidden'));
+    });
+  });
+  
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.filter-dropdown')) {
+      console.log("Click outside dropdowns, closing all");
+      filterDropdowns.forEach(function(dropdown) {
+        dropdown.classList.remove('open');
+        var content = dropdown.querySelector('.filter-dropdown-content');
+        if (content) content.classList.add('hidden');
+      });
+    }
+  });
+  
+  // Prevent dropdown from closing when clicking inside content
+  filterDropdowns.forEach(function(dropdown) {
+    var content = dropdown.querySelector('.filter-dropdown-content');
+    if (content) {
+      content.addEventListener('click', function(e) {
+        e.stopPropagation();
+        console.log("Click inside dropdown content:", dropdown.dataset.filter);
+      });
+    }
+  });
+}
+
+function setupEventListeners() {
+  setupDropdown('filter-toggle-btn', 'filter-popup', 'filter-container');
+  setupDropdown('actions-toggle-btn', 'actions-popup', 'actions-container');
+  setupDropdown('links-toggle-btn', 'links-popup', 'links-container');
+  
+  // Note: setupMultiSelectDropdowns() is now called after data is loaded in handleDataLoaded()
+  
+  document.getElementById('forceRefreshBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      forceRefreshData();
+  });
+  document.getElementById('importBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      // Reset modal state
+      $('#csvFile').value = '';
+      $('#csvFile').disabled = false;
+      $('#uploadProgress').style.display = 'none';
+      $('#uploadResults').style.display = 'none';
+      $('#uploadBtn').disabled = false;
+      $('#uploadBtn').textContent = 'Upload and Replace Data';
+      $('#cancelUploadBtn').style.display = 'none';
+      openModal(null, 'import');
+  });
+  document.getElementById('clearFiltersBtn').addEventListener('click', handleClearFilters);
+  // Quick filters dropdown event listener removed
+  document.getElementById('expandAllBtn').addEventListener('click', function() {
+    handleExpandCollapseAll(true);
+  });
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    handleExpandCollapseAll(false);
+  });
+  
+  // KPI card click handlers
+  document.addEventListener('click', function(e) {
+    var kpiCard = e.target.closest('.kpi-card');
+    if (kpiCard) {
+      handleKPICardClick(kpiCard);
+    }
+  });
+  
+  $('#quick-links').addEventListener('click', function(e) {
+      var toggleBtn = e.target.closest('.filter-toggle');
+      if (toggleBtn) {
+          var wasActive = toggleBtn.classList.contains('active');
+          toggleBtn.classList.toggle('active');
+          
+          // Special handling for the closed toggle - now controls whether to include closed items in the view
+          if (toggleBtn.id === 'filter-toggle-closed') {
+              // When active, we're including closed items in the view (not filtering to just closed)
+              var isNowActive = toggleBtn.classList.contains('active');
+              
+              // Define our closed project stages and production status
+              var closedProjectStages = ['Fixed', 'Done', 'Canceled'];
+              var productionStatus = 'In Production';
+              var allClosedStatuses = closedProjectStages.concat([productionStatus]);
+              
+              // Instead of checking statuses when toggle is active, we'll just apply filters
+              // The applyFilters function now checks toggleBtn.classList.contains('active')
+              // to determine whether to include closed items
+              applyFilters();
+          } else {
+              applyFilters();
+          }
+      }
+  });
+
+  $('#content-wrapper').addEventListener('click', function(e) {
+    var expander = e.target.closest('.expander');
+    if (expander) { handleEpicExpand(expander); return; }
+    
+    var checkButton = e.target.closest('.check-btn');
+    if (checkButton) { handleCheck(checkButton); return; }
+    
+    var editButton = e.target.closest('.edit-task-btn');
+    if (editButton) { handleEditTask(editButton); return; }
+
+    var showAllBtn = e.target.closest('.show-all-stories-btn');
+    if (showAllBtn) {
+        var epicId = showAllBtn.dataset.epicId;
+        var epicRow = $('.row-epic[data-id="' + epicId + '"]');
+        if (epicRow) {
+            epicRow.dataset.showingAll = 'true';
+            applyFilters();
+        }
+    }
+    
+    var reHideBtn = e.target.closest('.re-hide-stories-btn');
+    if (reHideBtn) {
+        var epicId = reHideBtn.dataset.epicId;
+        var epicRow = $('.row-epic[data-id="' + epicId + '"]');
+        if (epicRow) {
+            epicRow.dataset.showingAll = 'false';
+            applyFilters();
+        }
+    }
+  });
+
+  $('.kpi-header').addEventListener('click', function(e) {
+      var kpiCard = e.target.closest('.kpi-card');
+      if (kpiCard) {
+          handleKPICardClick(kpiCard);
+      }
+  });
+  
+  document.body.addEventListener('change', function(e) {
+    if (e.target.matches('select[id^="f-"]')) {
+      applyFilters();
+    }
+    
+    // Handle manual field dropdown changes
+    if (e.target.matches('select.manual-field-dropdown')) {
+      var jiraId = e.target.dataset.jiraId;
+      var field = e.target.dataset.field;
+      var value = e.target.value;
+      
+      if (jiraId && field) {
+        saveManualField(jiraId, field, value);
+      }
+
+            // Re-apply filters immediately to respect the closed toggle when Project Stage becomes Production
+            if (field === 'Project Stage') {
+                applyFilters();
+                // Immediately update the row's sync indicator (status dot) based on new stage
+                try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) { }
+                // Also update the validation pill to reflect potential rule changes
+                try { if (typeof updateRowValidation === 'function') updateRowValidation(jiraId); } catch (e) { }
+            }
+    }
+    
+    // Handle manual text input changes  
+    if (e.target.matches('input.manual-text-input')) {
+      var jiraId = e.target.dataset.jiraId;
+      var field = e.target.dataset.field;
+      var value = e.target.value;
+      
+      if (jiraId && field) {
+        saveManualField(jiraId, field, value);
+      }
+    }
+  });
+  
+  $('#q').addEventListener('input', applyFilters);
+  
+  $('#newBtn').addEventListener('click', function() {
+    APP_STATE.currentEditId = null;
+    closeModal();
+    $('#t-priority').value = 'Medium';
+    openModal('New Independent Task');
+  });
+    
+  $('#modalClose').addEventListener('click', function() { closeModal('task'); });
+  $('#modalSave').addEventListener('click', handleSaveTask);
+  $('#importModalClose').addEventListener('click', function() { closeModal('import'); });
+  $('#uploadBtn').addEventListener('click', handleFileUpload);
+  $('#cancelUploadBtn').addEventListener('click', function() {
+    if (confirm('Are you sure you want to cancel the upload?')) {
+      hideUploadProgress();
+      $('#csvFile').value = '';
+      $('#uploadResults').style.display = 'none';
+    }
+  });
+}
+</script>

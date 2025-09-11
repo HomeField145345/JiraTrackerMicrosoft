@@ -1,0 +1,738 @@
+<script>
+    // --- Place this function near the top of the <script> tag ---
+    function renderLinks(links) {
+        var listEl = document.getElementById('linksList');
+        listEl.innerHTML = '';
+        if (!links || links.length === 0) {
+            listEl.innerHTML = '<p class="text-sm text-gray-500">No links configured yet.</p>';
+            return;
+        }
+
+        links.forEach(function(link, index) {
+            var linkEl = document.createElement('div');
+            linkEl.className = 'flex items-center justify-between bg-gray-50 p-2 rounded-md';
+            // Store the full URL in a data attribute
+            linkEl.setAttribute('data-url', link.url); 
+            
+            linkEl.innerHTML =
+                '<div style="overflow: hidden;">' + // Add a wrapper to prevent long text from breaking layout
+                    '<span class="font-medium text-sm">' + link.title + '</span>' +
+                    // Use a p tag for display, but it won't be used for saving
+                    '<p class="text-xs text-gray-500 truncate">' + link.url + '</p>' + 
+                '</div>' +
+                '<button data-index="' + index + '" class="remove-link-btn text-sm text-red-500 hover:text-red-700 ml-4 flex-shrink-0">Remove</button>';
+            listEl.appendChild(linkEl);
+        });
+    }
+
+    function handleFailure(error) {
+        var statusEl = document.getElementById('configStatus');
+        statusEl.textContent = 'Error: ' + error.message;
+        statusEl.className = 'mt-4 text-sm text-red-600 text-right';
+        
+    }
+
+    var currentMappings = {
+        epic: {}, // {status: [stage1, stage2, ...]}
+        story: {},
+        bug: {}
+    };
+    var selectedStatus = null;
+    var selectedType = 'epic'; // current tab
+    var availableStages = {
+        epic: [],
+        story: [],
+        bug: []
+    };
+    var availableStatuses = [];
+
+    function onConfigDataLoaded(data) {
+        try {
+            
+            var statusEl = document.getElementById('configStatus');
+            if (statusEl) {
+                statusEl.textContent = 'Loaded configuration payload.';
+                statusEl.className = 'text-sm text-gray-500';
+            }
+        } catch (e) { /* no-op */ }
+        if (!data || !data.config) {
+            handleFailure({ message: "Could not load config data." });
+            return;
+        }
+        document.getElementById('actPctOptions').value = data.config.actPctOptions.join('\n');
+        document.getElementById('planningStageOptions').value = data.config.planningStageOptions.join('\n');
+        document.getElementById('projectStageOptions').value = data.config.projectStageOptions.join('\n');
+        // Per-type Project Stage options (Epic/Story/Bug)
+        if (data.config.epicProjectStageOptions) {
+            document.getElementById('epicProjectStageOptions').value = data.config.epicProjectStageOptions.join('\n');
+        }
+        if (data.config.storyProjectStageOptions) {
+            document.getElementById('storyProjectStageOptions').value = data.config.storyProjectStageOptions.join('\n');
+        }
+        if (data.config.bugProjectStageOptions) {
+            document.getElementById('bugProjectStageOptions').value = data.config.bugProjectStageOptions.join('\n');
+        }
+        // Priority options
+        if (data.config.priorityOptions) {
+            document.getElementById('priorityOptions').value = data.config.priorityOptions.join('\n');
+        }
+        // Closed mappings
+        if (data.config.closedProjectStages) {
+            document.getElementById('closedProjectStages').value = data.config.closedProjectStages.join('\n');
+        }
+        // Past sprint closed mappings (optional)
+        if (data.config.pastSprintClosedStages) {
+            var ta = document.getElementById('pastSprintClosedStages');
+            if (ta) ta.value = data.config.pastSprintClosedStages.join('\n');
+        }
+       
+        // Load stage status mappings into visual interface
+        try {
+            var mappings = Array.isArray(data.config.stageStatusMappings) ? data.config.stageStatusMappings : [];
+            loadMappingsData(mappings);
+    } catch (e) { }
+        renderLinks(data.config.helpfulLinks);
+        
+        // Initialize available stages from configuration options
+        availableStages.epic = getConfigOptionsList('epicProjectStageOptions');
+        availableStages.story = getConfigOptionsList('storyProjectStageOptions');
+        availableStages.bug = getConfigOptionsList('bugProjectStageOptions');
+        
+        
+        // Load project data for mapping interface (will get statuses)
+        extractDataFromProjects();
+    }
+    
+    function switchMappingTab(type) {
+        selectedType = type;
+        selectedStatus = null;
+        
+        
+        
+        // Update tab buttons
+        document.querySelectorAll('.mapping-tab-btn').forEach(function(btn) {
+            btn.classList.remove('border-blue-500', 'text-blue-600');
+            btn.classList.add('border-transparent');
+            if (btn.getAttribute('data-type') === type) {
+                btn.classList.add('border-blue-500', 'text-blue-600');
+                btn.classList.remove('border-transparent');
+            }
+        });
+        
+        // Show/hide panels
+        document.querySelectorAll('.mapping-panel').forEach(function(panel) {
+            panel.classList.add('hidden');
+        });
+        var activePanel = document.getElementById(type + 'MappingPanel');
+        
+        if (activePanel) {
+            activePanel.classList.remove('hidden');
+        }
+        
+        // Re-render for new type
+        
+        try {
+            
+            renderStatusValuesList();
+            
+            renderProjectStagesList();
+            
+            renderCurrentMappings();
+            
+            
+            // Check if containers were actually populated
+            var statusContainer = document.getElementById(selectedType + 'StatusValuesList');
+            var stageContainer = document.getElementById(selectedType + 'ProjectStagesList');
+            var mappingContainer = document.getElementById(selectedType + 'CurrentMappings');
+            
+            
+        } catch (e) {
+            
+        }
+    }
+    
+    function loadMappingsData(mappings) {
+        // Reset mappings
+        currentMappings = { epic: {}, story: {}, bug: {} };
+        
+        // For backward compatibility, if mappings use old format (stage->statuses),
+        // we need to convert them to new format (status->stages)
+        mappings.forEach(function(m) {
+            if (m.stage && m.expectedStatuses) {
+                // Old format: convert stage->statuses to status->stages
+                m.expectedStatuses.forEach(function(status) {
+                    // For now, put in all three types until we have type-specific data
+                    ['epic', 'story', 'bug'].forEach(function(type) {
+                        if (!currentMappings[type][status]) {
+                            currentMappings[type][status] = [];
+                        }
+                        if (currentMappings[type][status].indexOf(m.stage) === -1) {
+                            currentMappings[type][status].push(m.stage);
+                        }
+                    });
+                });
+            }
+        });
+        
+        renderCurrentMappings();
+    }
+    
+    // Helper function to get configuration options list
+    function getConfigOptionsList(optionId) {
+        var element = document.getElementById(optionId);
+        if (!element || !element.value) {
+            
+            return [];
+        }
+        var options = element.value.split('\n')
+            .map(function(s) { return s.trim(); })
+            .filter(Boolean)
+            .sort();
+        
+        return options;
+    }
+    
+        // Visual mapping functions
+        function extractDataFromProjects() {
+            
+            
+            // Get the project data from the global state
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    
+                    
+                    // Handle different possible response formats
+                    var projects = null;
+                    if (response && response.projects && Array.isArray(response.projects)) {
+                        projects = response.projects;
+                    } else if (response && Array.isArray(response)) {
+                        projects = response;
+                    } else if (response && response.items && Array.isArray(response.items)) {
+                        projects = response.items;
+                    } else if (response && response.data && Array.isArray(response.data)) {
+                        projects = response.data;
+                    } else if (response && response.allItems && Array.isArray(response.allItems)) {
+                        projects = response.allItems;
+                    }
+                    
+                    if (projects && Array.isArray(projects)) {
+                        
+                        
+                        // Extract unique statuses only - stages come from configuration
+                        var statusesSet = new Set();
+                        
+                        projects.forEach(function(project) {
+                            var status = project['Status'];
+                            if (status && status.trim()) {
+                                statusesSet.add(status.trim());
+                            }
+                        });
+                        
+                        // Get stages from configuration options, not from project data
+                        availableStages.epic = getConfigOptionsList('epicProjectStageOptions');
+                        availableStages.story = getConfigOptionsList('storyProjectStageOptions'); 
+                        availableStages.bug = getConfigOptionsList('bugProjectStageOptions');
+                        availableStatuses = Array.from(statusesSet).sort();
+                        
+                        
+                        
+                        // Render the updated lists for current tab
+                        
+                        
+                        // Always initialize the epic tab when data is first loaded
+                        
+                        switchMappingTab('epic');
+                        
+                        // Update status
+                        var statusEl = document.getElementById('refreshDataStatus');
+                        if (statusEl) {
+                            var totalStages = availableStages.epic.length + availableStages.story.length + availableStages.bug.length;
+                            statusEl.textContent = 'Found ' + availableStatuses.length + ' statuses and ' + totalStages + ' total stages';
+                            statusEl.className = 'text-sm text-green-600';
+                            setTimeout(function() { statusEl.textContent = ''; }, 3000);
+                        }
+                    } else {
+                        
+                        var statusEl = document.getElementById('refreshDataStatus');
+                        if (statusEl) {
+                            statusEl.textContent = 'Failed to extract data - no project array found';
+                            statusEl.className = 'text-sm text-red-600';
+                        }
+                    }
+                })
+                .withFailureHandler(function(error) {
+                    
+                    var statusEl = document.getElementById('refreshDataStatus');
+                    if (statusEl) {
+                        statusEl.textContent = 'Error: ' + error.message;
+                        statusEl.className = 'text-sm text-red-600';
+                    }
+                })
+                .getProjectData(); // This should call the same function as the dashboard
+        }
+        
+        function renderStatusValuesList() {
+            var containerId = selectedType + 'StatusValuesList';
+            var container = document.getElementById(containerId);
+            
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            availableStatuses.forEach(function(status) {
+                var btn = document.createElement('button');
+                btn.className = 'status-btn w-full text-left p-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300';
+                btn.textContent = status;
+                btn.onclick = function() { selectStatus(status); };
+                container.appendChild(btn);
+            });
+            
+        }
+        
+        function renderProjectStagesList() {
+            var containerId = selectedType + 'ProjectStagesList';
+            var container = document.getElementById(containerId);
+            
+            if (!container) return;
+            
+            if (!selectedStatus) {
+                container.innerHTML = '<p class="text-xs text-gray-500">Select a status first</p>';
+                return;
+            }
+            
+            container.innerHTML = '';
+            var stages = availableStages[selectedType] || [];
+            
+            stages.forEach(function(stage) {
+                var btn = document.createElement('button');
+                btn.className = 'stage-btn w-full text-left p-2 rounded border text-sm hover:bg-green-50 hover:border-green-300';
+                btn.textContent = stage;
+                btn.onclick = function() { toggleStageForSelectedStatus(stage); };
+                container.appendChild(btn);
+            });
+            
+            updateStageButtonStyles();
+        }
+        
+        function selectStatus(status) {
+            selectedStatus = status;
+            
+            
+            // Update status button styles
+            document.querySelectorAll('#' + selectedType + 'StatusValuesList .status-btn').forEach(function(btn) {
+                btn.classList.remove('bg-blue-100', 'border-blue-500', 'font-medium');
+                if (btn.textContent === status) {
+                    btn.classList.add('bg-blue-100', 'border-blue-500', 'font-medium');
+                    
+                }
+            });
+            
+            // Update stage list and styles
+            
+            renderProjectStagesList();
+        }
+        
+        function updateStageButtonStyles() {
+            var mappedStages = selectedStatus ? (currentMappings[selectedType][selectedStatus] || []) : [];
+            
+            // Get all stages that are mapped to ANY status WITHIN THIS TYPE ONLY
+            var allMappedStages = [];
+            if (currentMappings[selectedType]) {
+                Object.keys(currentMappings[selectedType]).forEach(function(status) {
+                    allMappedStages = allMappedStages.concat(currentMappings[selectedType][status] || []);
+                });
+            }
+            
+            
+            
+            document.querySelectorAll('#' + selectedType + 'ProjectStagesList .stage-btn').forEach(function(btn) {
+                var stageName = btn.textContent;
+                
+                // Reset all styles
+                btn.classList.remove('bg-green-100', 'border-green-500', 'font-medium', 'bg-yellow-100', 'border-yellow-500');
+                
+                if (mappedStages.includes(stageName)) {
+                    // This stage is mapped to the currently selected status (green = active mapping)
+                    btn.classList.add('bg-green-100', 'border-green-500', 'font-medium');
+                } else if (allMappedStages.includes(stageName)) {
+                    // This stage is mapped to a different status within this type (yellow = taken by another status)
+                    btn.classList.add('bg-yellow-100', 'border-yellow-500');
+                }
+            });
+        }
+        
+        function toggleStageForSelectedStatus(stage) {
+            
+            if (!selectedStatus) {
+                
+                return;
+            }
+            
+            // Ensure the type-specific mapping object exists
+            if (!currentMappings[selectedType]) {
+                currentMappings[selectedType] = {};
+                
+            }
+            
+            // Check if this stage is already mapped to a different status WITHIN THIS TYPE ONLY
+            var existingStatus = null;
+            Object.keys(currentMappings[selectedType]).forEach(function(status) {
+                if (status !== selectedStatus && currentMappings[selectedType][status].indexOf(stage) > -1) {
+                    existingStatus = status;
+                }
+            });
+            
+            if (existingStatus) {
+                // Remove from existing status first (within this type only)
+                var existingStages = currentMappings[selectedType][existingStatus];
+                var existingIndex = existingStages.indexOf(stage);
+                if (existingIndex > -1) {
+                    existingStages.splice(existingIndex, 1);
+                    if (existingStages.length === 0) {
+                        delete currentMappings[selectedType][existingStatus];
+                    }
+                    
+                }
+            }
+            
+            if (!currentMappings[selectedType][selectedStatus]) {
+                currentMappings[selectedType][selectedStatus] = [];
+                
+            }
+            
+            var stages = currentMappings[selectedType][selectedStatus];
+            var index = stages.indexOf(stage);
+            
+            if (index > -1) {
+                stages.splice(index, 1);
+                
+                if (stages.length === 0) {
+                    delete currentMappings[selectedType][selectedStatus];
+                    
+                }
+            } else {
+                stages.push(stage);
+                
+                if (existingStatus) {
+                    
+                }
+            }
+            
+            
+            updateStageButtonStyles();
+            try {
+                
+                renderCurrentMappings();
+                
+                
+                // Trigger real-time update of sync indicators
+                triggerSyncIndicatorUpdate();
+            } catch (e) {
+                
+            }
+        }
+        
+        function renderCurrentMappings() {
+            var containerId = selectedType + 'CurrentMappings';
+            var container = document.getElementById(containerId);
+            
+            if (!container) return;
+            
+            container.innerHTML = '';
+            var mappings = currentMappings[selectedType] || {};
+            
+            
+            if (Object.keys(mappings).length === 0) {
+                container.innerHTML = '<p class="text-xs text-gray-500">No mappings yet</p>';
+                
+                return;
+            }
+            
+            Object.keys(mappings).sort().forEach(function(status) {
+                var stages = mappings[status] || [];
+                
+                if (stages.length > 0) {
+                    var mappingDiv = document.createElement('div');
+                    mappingDiv.className = 'mb-2 p-2 bg-white rounded border text-xs';
+                    
+                    var statusDiv = document.createElement('div');
+                    statusDiv.className = 'font-medium text-blue-700 mb-1';
+                    statusDiv.textContent = status;
+                    
+                    var stagesDiv = document.createElement('div');
+                    stagesDiv.className = 'text-gray-600';
+                    stagesDiv.textContent = '← ' + stages.join(', ');
+                    
+                    var removeBtn = document.createElement('button');
+                    removeBtn.className = 'text-red-500 hover:text-red-700 float-right';
+                    removeBtn.textContent = '×';
+                    removeBtn.onclick = function() {
+                        delete currentMappings[selectedType][status];
+                        renderCurrentMappings();
+                        updateStageButtonStyles();
+                    };
+                    
+                    mappingDiv.appendChild(removeBtn);
+                    mappingDiv.appendChild(statusDiv);
+                    mappingDiv.appendChild(stagesDiv);
+                    container.appendChild(mappingDiv);
+                    
+                }
+            });
+            
+            
+        }
+
+    // Legacy functions removed - now using visual mapping interface
+    
+    function selectStage(stage) {
+        selectedStage = stage;
+        
+        // Update stage button styles
+        document.querySelectorAll('.stage-btn').forEach(function(btn) {
+            btn.classList.remove('bg-blue-100', 'border-blue-500', 'font-medium');
+            if (btn.textContent === stage) {
+                btn.classList.add('bg-blue-100', 'border-blue-500', 'font-medium');
+            }
+        });
+        
+        // Update status button styles to show current mappings
+        updateStatusButtonStyles();
+    }
+    
+    function updateStatusButtonStyles() {
+        var mappedStatuses = selectedStage ? (currentMappings[selectedStage] || []) : [];
+        
+        document.querySelectorAll('.status-btn').forEach(function(btn) {
+            btn.classList.remove('bg-green-100', 'border-green-500', 'font-medium');
+            if (mappedStatuses.includes(btn.textContent)) {
+                btn.classList.add('bg-green-100', 'border-green-500', 'font-medium');
+            }
+        });
+    }
+    
+    function toggleStatusForSelectedStage(status) {
+        if (!selectedStage) {
+            alert('Please select a Project Stage first');
+            return;
+        }
+        
+        if (!currentMappings[selectedStage]) {
+            currentMappings[selectedStage] = [];
+        }
+        
+        var mappedStatuses = currentMappings[selectedStage];
+        var index = mappedStatuses.indexOf(status);
+        
+        if (index === -1) {
+            // Add status to mapping
+            mappedStatuses.push(status);
+        } else {
+            // Remove status from mapping
+            mappedStatuses.splice(index, 1);
+            
+            // If no statuses left, remove the mapping entirely
+            if (mappedStatuses.length === 0) {
+                delete currentMappings[selectedStage];
+            }
+        }
+        
+        updateStatusButtonStyles();
+        renderCurrentMappings();
+    }
+
+    function getCurrentMappingsAsArray() {
+        var result = [];
+        Object.keys(currentMappings).forEach(function(type) {
+            Object.keys(currentMappings[type]).forEach(function(status) {
+                var stages = currentMappings[type][status] || [];
+                if (stages.length > 0) {
+                    // Convert back to stage->statuses format for backend compatibility
+                    stages.forEach(function(stage) {
+                        var existing = result.find(function(m) { return m.stage === stage; });
+                        if (existing) {
+                            if (existing.expectedStatuses.indexOf(status) === -1) {
+                                existing.expectedStatuses.push(status);
+                            }
+                        } else {
+                            result.push({
+                                stage: stage,
+                                expectedStatuses: [status]
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return result;
+    }
+
+    // Legacy functions removed - now using visual mapping interface
+
+    document.addEventListener('DOMContentLoaded', function() {
+        
+        var statusEl = document.getElementById('configStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Loading configuration…';
+            statusEl.className = 'text-sm text-gray-500';
+        }
+        // Tabs: simple toggling between panels
+        document.querySelectorAll('.tab-btn').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
+                document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.add('hidden'); });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected','true');
+                var target = document.querySelector(btn.dataset.target);
+                if (target) target.classList.remove('hidden');
+            });
+        });
+
+        // Clean buttons: dedupe, trim, sort
+        document.querySelectorAll('[data-clean-for]').forEach(function(el){
+            el.addEventListener('click', function(){
+                var id = el.getAttribute('data-clean-for');
+                var ta = document.getElementById(id);
+                if (!ta) return;
+                var cleaned = (ta.value || '')
+                    .split('\n')
+                    .map(function(s){ return s.trim(); })
+                    .filter(Boolean);
+                var seen = {};
+                var result = [];
+                cleaned.forEach(function(v){ var key = v.toLowerCase(); if(!seen[key]) { seen[key]=true; result.push(v); } });
+                result.sort(function(a,b){ return a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0; });
+                ta.value = result.join('\n');
+            });
+        });
+
+        google.script.run
+            .withSuccessHandler(onConfigDataLoaded)
+            .withFailureHandler(handleFailure)
+            .forceGetProjectData();
+    
+        
+        var saveBtn = document.getElementById('saveConfigBtn');
+        var statusEl = document.getElementById('configStatus');
+        
+        document.getElementById('addLinkBtn').addEventListener('click', function() {
+            var titleInput = document.getElementById('newLinkTitle');
+            var urlInput = document.getElementById('newLinkUrl');
+            var title = titleInput.value.trim();
+            var url = urlInput.value.trim();
+
+            if (title && url) {
+                var newLink = { title: title, url: url };
+                var currentLinks = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
+                    return {
+                        title: el.querySelector('span').textContent,
+                        url: el.getAttribute('data-url')
+                    };
+                });
+                currentLinks.push(newLink);
+                renderLinks(currentLinks);
+                titleInput.value = '';
+                urlInput.value = '';
+            }
+        });
+
+        document.getElementById('linksList').addEventListener('click', function(e) {
+            if (e.target.classList.contains('remove-link-btn')) {
+                e.target.parentElement.remove();
+            }
+        });
+
+        // Add mapping refresh button
+        document.getElementById('refreshMappingDataBtn').addEventListener('click', extractDataFromProjects);
+
+        // Add tab functionality (only once)
+        var tabsInitialized = false;
+        if (!tabsInitialized) {
+            document.querySelectorAll('.mapping-tab-btn').forEach(function(btn) {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var type = btn.getAttribute('data-type');
+                    
+                    switchMappingTab(type);
+                });
+            });
+            tabsInitialized = true;
+        }
+
+        saveBtn.addEventListener('click', function() {
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+            statusEl.textContent = '';
+            statusEl.className = 'text-sm text-gray-500';
+            
+            var linksData = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
+                return {
+                    title: el.querySelector('span').textContent,
+                    url: el.getAttribute('data-url')
+                };
+            });
+            
+            var optionsData = {
+                actPctOptions: document.getElementById('actPctOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                planningStageOptions: document.getElementById('planningStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                projectStageOptions: document.getElementById('projectStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                epicProjectStageOptions: (document.getElementById('epicProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                storyProjectStageOptions: (document.getElementById('storyProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                bugProjectStageOptions: (document.getElementById('bugProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                priorityOptions: (document.getElementById('priorityOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                // closedStatuses removed: stage-only logic
+                helpfulLinks: linksData,
+                stageStatusMappings: getCurrentMappingsAsArray()
+            };
+
+            google.script.run
+                .withSuccessHandler(function(response) {
+                    if (response.status === 'success') {
+                        statusEl.textContent = response.message || 'Configuration Saved!';
+                        statusEl.className = 'text-sm text-green-600';
+                    } else {
+                        handleFailure(new Error(response.message));
+                    }
+                    saveBtn.disabled = false;
+                    saveBtn.textContent = 'Save Configuration';
+                    setTimeout(function() { statusEl.textContent = ''; }, 3000);
+                })
+                .withFailureHandler(handleFailure)
+                .saveConfiguration(optionsData);
+        });
+    });
+
+    // Function to trigger real-time sync indicator updates
+    function triggerSyncIndicatorUpdate() {
+        
+        
+        // Try to post message to parent window/iframe
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'mappingChanged',
+                    data: currentMappings
+                }, '*');
+                
+            }
+        } catch (e) {
+            
+        }
+        
+        // Try to trigger refresh via Google Apps Script
+        try {
+            google.script.run
+                .withSuccessHandler(function(result) {
+                    
+                })
+                .withFailureHandler(function(error) {
+                    
+                })
+                .updateSyncIndicators(currentMappings);
+        } catch (e) {
+            
+        }
+    }
+</script>

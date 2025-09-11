@@ -1,0 +1,247 @@
+<script>
+/**
+ * @file api.js
+ * @description Handles all server communication with Google Apps Script.
+ */
+
+// --- DATA FETCHING & CALLBACKS ---
+function handleDataLoaded(data) {
+  // Validate data structure
+  if (!isValidData(data)) {
+    return false;
+  }
+  
+  // Store the data
+  APP_STATE.allData = data;
+  
+  // Initialize the UI components
+  initializeUI();
+  
+  return true;
+}
+
+/**
+ * Validates the data received from the server
+ * @param {Object} data - The data object from the server
+ * @returns {boolean} - Whether the data is valid
+ */
+function isValidData(data) {
+  // Check for explicit error from server
+  if (data && data.error) {
+    handleFailure({ message: data.message || 'Server error retrieving data.' });
+    return false;
+  }
+  
+  // Check for required data structures
+  if (!data || !data.projects || !data.independentTasks || !data.config) {
+    handleFailure({ message: "Invalid data structure received from server." });
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Initialize the UI components after data is loaded
+ */
+function initializeUI() {
+  // Populate the filters before loading saved filter state
+  populateFilters();
+  
+  // Setup multi-select dropdown event listeners after filters are populated
+  if (typeof setupMultiSelectDropdowns === 'function') {
+    setupMultiSelectDropdowns();
+  }
+  
+  // Load filter state from localStorage
+  let filterStateLoaded = false;
+  if (typeof loadFilterState === 'function') {
+    filterStateLoaded = loadFilterState();
+    console.log("Filter state loaded:", filterStateLoaded);
+  }
+  
+  // Apply filters to ensure UI is updated
+  if (filterStateLoaded) {
+    applyFilters();
+  }
+  
+  // Render the application
+  renderApp();
+}
+
+
+function handleFailure(error) {
+  // Create a more informative error message
+  var errorMessage = "An unknown error occurred on the server. The script may have timed out or requires new permissions.";
+  if (error && error.message) {
+    errorMessage = error.message;
+  } else if (typeof error === 'string') {
+    errorMessage = error;
+  }
+  
+  // Suppress raw error logging in production
+
+  // Display the message to the user on the page
+  var wrapper = $('#content-wrapper');
+  if (wrapper) {
+    wrapper.innerHTML = '<div class="p-8 text-center text-red-500 font-semibold">Error: ' + errorMessage + '</div>';
+  }
+  
+  // Re-enable any disabled buttons from the upload modal
+  var uploadBtn = $('#uploadBtn');
+  if(uploadBtn) {
+    uploadBtn.disabled = false;
+    uploadBtn.textContent = 'Upload and Replace Data';
+  }
+}
+
+
+function handleUpdateSuccess(response) {
+  if (response.status === 'success') {
+    showToast(response.message || 'Saved!');
+  } else {
+    alert('Failed to save: ' + response.message);
+  }
+}
+
+// --- SERVER-CALLING FUNCTIONS ---
+function refreshData() {
+  google.script.run
+    .withSuccessHandler(handleDataLoaded)
+    .withFailureHandler(handleFailure)
+    .getProjectData();
+}
+
+function forceRefreshData() {
+  showToast('Fetching latest data from sheet...');
+  var btn = $('#forceRefreshBtn');
+  if(btn) btn.disabled = true;
+  
+  google.script.run
+    .withSuccessHandler(function(data) {
+        handleDataLoaded(data);
+        if(btn) btn.disabled = false;
+    })
+    .withFailureHandler(function(error) {
+        handleFailure(error);
+        if(btn) btn.disabled = false;
+    })
+    .forceGetProjectData();
+}
+
+function saveTask(taskData) {
+  google.script.run
+    .withSuccessHandler(function(response) {
+      handleUpdateSuccess(response);
+      if (response.status === 'success') {
+        closeModal();
+        refreshData();
+      }
+    })
+    .withFailureHandler(handleFailure)
+    .saveIndependentTask(taskData);
+}
+
+function saveManualField(jiraId, field, value) {
+  google.script.run
+    .withSuccessHandler(function(response) {
+      handleUpdateSuccess(response);
+      if (response.status === 'success') {
+        // Update validation status in real-time after saving any manual field
+        updateRowValidation(jiraId);
+      }
+    })
+    .withFailureHandler(handleFailure)
+    .saveManualData(jiraId, field, value);
+}
+
+function updateLastChecked(jiraId, button) {
+  button.disabled = true;
+  button.textContent = '...';
+  
+  google.script.run
+    .withSuccessHandler(function(response) {
+      handleUpdateSuccess(response);
+      if (response.status === 'success') {
+        // Update the single row instead of a full refresh
+        updateRowTimestamp(jiraId, response.newTimestamp);
+        // Also refresh the sync indicator (status/stage dot)
+        try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) {}
+      }
+      // Re-enable the button regardless of success or failure
+      button.disabled = false;
+      button.textContent = 'Check';
+    })
+    .withFailureHandler(function(error) {
+      handleFailure(error);
+      // Re-enable the button on failure
+      button.disabled = false;
+      button.textContent = 'Check';
+    })
+    .updateLastChecked(jiraId);
+}
+
+function uploadCsvData(fileData) {
+    updateProgress(75, 'Processing data on server...');
+    
+    google.script.run
+        .withSuccessHandler(function(response) {
+            console.log('UPLOAD SUCCESS RESPONSE:', JSON.stringify(response, null, 2));
+            if (response.results) {
+                console.log('UPLOAD RESULTS SUMMARY:');
+                console.log('- Added:', response.results.added);
+                console.log('- Updated:', response.results.updated);
+                console.log('- Archived:', response.results.archived);
+                console.log('- Total:', response.results.total);
+                if (response.results.details) {
+                    console.log('DETAILED RESULTS:');
+                    if (response.results.details.addedItems && response.results.details.addedItems.length > 0) {
+                        console.log('Added items:', response.results.details.addedItems.map(item => item.jiraId).join(', '));
+                    }
+                    if (response.results.details.updatedItems && response.results.details.updatedItems.length > 0) {
+                        console.log('Updated items:', response.results.details.updatedItems.map(item => item.jiraId).join(', '));
+                    }
+                    if (response.results.details.archivedItems && response.results.details.archivedItems.length > 0) {
+                        console.log('Archived items:', response.results.details.archivedItems.map(item => item.jiraId).join(', '));
+                    }
+                }
+            }
+            updateProgress(100, 'Upload complete!');
+            setTimeout(function() {
+                hideUploadProgress();
+                showUploadResults(response);
+                handleUpdateSuccess(response);
+                refreshData();
+            }, 500);
+        })
+        .withFailureHandler(function(error) {
+            hideUploadProgress();
+            var errorMessage = error.message || 'Upload failed. Please try again.';
+            
+            // Enhanced error display for debugging
+            var resultsHtml = '<div class="upload-error">' +
+                '<h4 class="font-semibold mb-2 text-red-600">Upload Failed</h4>' +
+                '<div class="error-message bg-red-50 p-3 rounded border-l-4 border-red-400">' +
+                '<pre style="white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto;">' + 
+                errorMessage + 
+                '</pre></div>' +
+                '<div class="mt-3 text-sm text-gray-600">' +
+                '<p><strong>Troubleshooting tips:</strong></p>' +
+                '<ul class="list-disc ml-5 mt-1">' +
+                '<li>Ensure your file has a "Key" or "Issue Key" column</li>' +
+                '<li>Try exporting as CSV directly from Jira instead of Excel</li>' +
+                '<li>Open the file in Excel/Google Sheets first, then save as CSV</li>' +
+                '</ul>' +
+                '</div>' +
+                '</div>';
+                
+            showUploadResults({ 
+                status: 'error', 
+                message: 'Upload failed',
+                html: resultsHtml
+            });
+            handleFailure(error);
+        })
+        .importJiraFile(fileData);
+}
+</script>

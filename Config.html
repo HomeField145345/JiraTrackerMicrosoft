@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Configuration</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <?!= include('Config.css'); ?>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-6">
+        <div class="bg-white p-0 rounded-lg shadow-sm">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                 <h2 class="text-xl font-semibold text-gray-800">Configuration</h2>
+                 <a href="<?= url ?>" class="text-sm text-blue-600 hover:underline">&larr; Back to Dashboard</a>
+            </div>
+
+            <!-- Tabs -->
+            <div class="px-6 pt-4">
+                <nav class="flex gap-4 border-b border-gray-200" role="tablist">
+                    <button class="tab-btn active" data-target="#tab-dropdowns" role="tab" aria-selected="true">Dropdowns</button>
+                    <button class="tab-btn" data-target="#tab-mappings" role="tab" aria-selected="false">Mappings</button>
+                    <button class="tab-btn" data-target="#tab-links" role="tab" aria-selected="false">Links</button>
+                </nav>
+            </div>
+
+            <!-- Panels -->
+            <div class="p-6">
+                <!-- Dropdowns Panel -->
+                <section id="tab-dropdowns" class="tab-panel">
+                    <p class="text-sm text-gray-600 mb-4">Manage list options shown in the app. One value per line. Use the per-type project stage lists to override the global list.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="actPctOptions" class="block text-sm font-medium text-gray-700">ACT/PCT Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="actPctOptions">Clean</button>
+                            </div>
+                            <textarea id="actPctOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="ACT\nPCT"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="planningStageOptions" class="block text-sm font-medium text-gray-700">Planning Stage Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="planningStageOptions">Clean</button>
+                            </div>
+                            <textarea id="planningStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="projectStageOptions" class="block text-sm font-medium text-gray-700">Project Stage Options (Global)</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="projectStageOptions">Clean</button>
+                            </div>
+                            <textarea id="projectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="epicProjectStageOptions" class="block text-sm font-medium text-gray-700">Epic Project Stage Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="epicProjectStageOptions">Clean</button>
+                            </div>
+                            <textarea id="epicProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="storyProjectStageOptions" class="block text-sm font-medium text-gray-700">Story Project Stage Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="storyProjectStageOptions">Clean</button>
+                            </div>
+                            <textarea id="storyProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="bugProjectStageOptions" class="block text-sm font-medium text-gray-700">Bug Project Stage Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="bugProjectStageOptions">Clean</button>
+                            </div>
+                            <textarea id="bugProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="priorityOptions" class="block text-sm font-medium text-gray-700">Priority Options</label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="priorityOptions">Clean</button>
+                            </div>
+                            <textarea id="priorityOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Critical\nHigh\nMedium\nLow"></textarea>
+                            <p class="mt-1 text-xs text-gray-500">One priority per line, ordered from highest to lowest priority for sorting.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Mappings Panel -->
+                <section id="tab-mappings" class="tab-panel hidden">
+                    <p class="text-sm text-gray-600 mb-4">Configure what is considered “Closed”. Only Project Stage determines if an item is closed. This impacts: Validation (shows Closed when Project Stage matches), Filters (Show Closed toggle), and the Status ↔ Project Stage sync indicator (for mismatch detection only).</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="closedProjectStages" class="block text-sm font-medium text-gray-700">
+                                    Closed Project Stages
+                                    <span class="inline-flex align-middle ml-1 text-blue-600" title="Any Project Stage equal to these values (case-insensitive) is treated as Closed. Only Project Stage drives closed logic. Affects: Validation (shows Closed), Filters (Show Closed), and the Status–Project Stage sync check.">
+                                        <!-- info icon -->
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                    </span>
+                                </label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="closedProjectStages">Clean</button>
+                            </div>
+                            <textarea id="closedProjectStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Done\nIn Production\nProduction\nProd\nFixed\nCanceled"></textarea>
+                            <p class="mt-1 text-xs text-gray-500">Matches the Project Stage dropdown exactly (case-insensitive). One value per line.</p>
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="pastSprintClosedStages" class="block text-sm font-medium text-gray-700">
+                                    Past Sprint Closed Project Stages
+                                    <span class="inline-flex align-middle ml-1 text-blue-600" title="Only used when counting Past Sprint Open items. Treat items with these Project Stages as Closed for past sprint metrics. This does not affect filters or validation.">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                    </span>
+                                </label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="pastSprintClosedStages">Clean</button>
+                            </div>
+                            <textarea id="pastSprintClosedStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g. Released\nReady for Prod"></textarea>
+                            <p class="mt-1 text-xs text-gray-500">Optional. One value per line. Case-insensitive match to the Project Stage dropdown.</p>
+                        </div>
+                    </div>
+
+                    <!-- Stage ↔ Status Mapping -->
+                    <div class="mt-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">Status ↔ Project Stage Mapping</h3>
+                    <div class="flex items-center gap-4">
+                        <div id="refreshDataStatus" class="text-sm"></div>
+                        <button type="button" id="refreshMappingDataBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
+                            Refresh Data
+                        </button>
+                    </div>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-4">
+                    Select a Status on the left, then click Project Stages on the right to map multiple stages to that status. Configure separately for each item type.
+                </p>
+                
+                <!-- Tabs for item types -->
+                <div class="mb-4">
+                    <div class="flex border-b">
+                        <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-type="epic">
+                            Epics
+                        </button>
+                        <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:border-gray-300" data-type="story">
+                            Stories
+                        </button>
+                        <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:border-gray-300" data-type="bug">
+                            Bugs
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Mapping interface for each type -->
+                <div id="epicMappingPanel" class="mapping-panel">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Epic Status ↔ Project Stage Mapping</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                            <div id="epicStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Epic Project Stages</h5>
+                            <div id="epicProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Select a status first</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Current Epic Mappings</h5>
+                            <div id="epicCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">No mappings yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="storyMappingPanel" class="mapping-panel hidden">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Story Status ↔ Project Stage Mapping</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                            <div id="storyStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Story Project Stages</h5>
+                            <div id="storyProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Select a status first</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Current Story Mappings</h5>
+                            <div id="storyCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">No mappings yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="bugMappingPanel" class="mapping-panel hidden">
+                    <h4 class="text-md font-medium text-gray-700 mb-3">Bug Status ↔ Project Stage Mapping</h4>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                            <div id="bugStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Bug Project Stages</h5>
+                            <div id="bugProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">Select a status first</p>
+                            </div>
+                        </div>
+                        <div>
+                            <h5 class="text-sm font-medium text-gray-700 mb-2">Current Bug Mappings</h5>
+                            <div id="bugCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                <p class="text-xs text-gray-500">No mappings yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                        
+                        <div class="mt-4 p-3 bg-blue-50 rounded-md">
+                            <p class="text-sm text-blue-800">
+                                <strong>How to use:</strong> 
+                                1) Click "Refresh Data" to load current Project Stages and Status values from your data
+                                2) Click a Project Stage on the left to select it
+                                3) Click Status values in the middle to map them to the selected stage
+                                4) Review mappings on the right
+                                5) Click "Save Configuration" to apply changes
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Links Panel -->
+                <section id="tab-links" class="tab-panel hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                        <div>
+                            <label for="newLinkTitle" class="block text-sm font-medium text-gray-700">Link Title</label>
+                            <input type="text" id="newLinkTitle" placeholder="Project Brief" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label for="newLinkUrl" class="block text-sm font-medium text-gray-700">Link URL</label>
+                            <input type="url" id="newLinkUrl" placeholder="https://docs.google.com/..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-between items-center mt-3">
+                        <p class="text-xs text-gray-500">Links show in the Dashboard’s Links menu.</p>
+                        <button id="addLinkBtn" class="px-3 py-1.5 bg-gray-200 text-sm text-gray-800 rounded-md hover:bg-gray-300">Add Link</button>
+                    </div>
+                    <div id="linksList" class="mt-4 space-y-2"></div>
+                </section>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sticky Footer -->
+    <div class="sticky-footer">
+        <div class="container mx-auto px-6 py-3 flex items-center justify-between gap-4">
+            <p id="configStatus" class="text-sm"></p>
+            <button id="saveConfigBtn" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Save Configuration</button>
+        </div>
+    </div>
+
+    <?!= include('Config.js'); ?>
+</body>
+</html>

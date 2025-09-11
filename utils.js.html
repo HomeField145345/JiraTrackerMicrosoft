@@ -1,0 +1,149 @@
+<script>
+/**
+ * @file utils.js
+ * @description Contains reusable utility functions.
+ */
+
+// Private cache for DOM elements to reduce DOM lookups
+var _domCache = {};
+
+/**
+ * Gets an element by selector with optional caching
+ * @param {string} selector - CSS selector
+ * @param {boolean} [useCache=false] - Whether to cache the result
+ * @returns {Element} - The DOM element or null
+ */
+function $(selector, useCache) {
+  // Return from cache if available and requested
+  if (useCache && _domCache[selector]) {
+    return _domCache[selector];
+  }
+  
+  // Query the DOM
+  var element = document.querySelector(selector);
+  
+  // Save to cache if requested
+  if (useCache && element) {
+    _domCache[selector] = element;
+    
+    // Also register with AppCleanup for proper cleanup
+    if (typeof AppCleanup !== 'undefined') {
+      AppCleanup.cacheRef(selector, element);
+    }
+  }
+  
+  return element;
+}
+
+/**
+ * Gets elements by selector
+ * @param {string} selector - CSS selector
+ * @returns {NodeList} - The matching elements
+ */
+function $$(selector) { 
+  return document.querySelectorAll(selector); 
+}
+
+/**
+ * Clears the DOM element cache
+ */
+function clearDomCache() {
+  _domCache = {};
+}
+
+/**
+ * Updates text content of an element safely
+ * @param {string} selector - The CSS selector for the element
+ * @param {string|number} value - The value to set
+ * @param {boolean} [useCache=false] - Whether to use cached element
+ * @returns {boolean} - Whether the operation was successful
+ */
+function setText(selector, value, useCache) {
+  const el = $(selector, useCache);
+  if (!el) return false;
+  el.textContent = value;
+  return true;
+}
+
+/**
+ * Gets or sets the value of an input element safely
+ * @param {string} selector - The CSS selector for the element
+ * @param {string|number} [value] - Optional value to set
+ * @param {boolean} [useCache=false] - Whether to use cached element
+ * @returns {string|boolean} - The current value or false if element not found
+ */
+function inputValue(selector, value, useCache) {
+  const el = $(selector, useCache);
+  if (!el) return false;
+  
+  if (value !== undefined) {
+    el.value = value;
+    return true;
+  }
+  return el.value;
+}
+
+/**
+ * Toggles a class on an element safely
+ * @param {string} selector - The CSS selector for the element
+ * @param {string} className - The class to toggle
+ * @param {boolean} [force] - Optional force state
+ * @param {boolean} [useCache=false] - Whether to use cached element
+ * @returns {boolean} - Whether the operation was successful
+ */
+function toggleClass(selector, className, force) {
+  const el = $(selector);
+  if (!el) return false;
+  el.classList.toggle(className, force);
+  return true;
+}
+
+/**
+ * Checks if an element has a specific class
+ * @param {string} selector - The CSS selector for the element
+ * @param {string} className - The class to check
+ * @returns {boolean} - Whether the element has the class or false if not found
+ */
+function hasClass(selector, className) {
+  const el = $(selector);
+  if (!el) return false;
+  return el.classList.contains(className);
+}
+
+/**
+ * Normalizes a string by making it lowercase and removing all non-alphanumeric characters.
+ * This allows for "fuzzy" matching between epic summaries and epic links.
+ * @param {string} str The string to normalize.
+ * @returns {string} The normalized string.
+ */
+function normalizeString(str) {
+  if (!str || typeof str !== 'string') {
+    return '';
+  }
+  return str.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function formatSprint(sprintString) {
+  if (!sprintString || typeof sprintString !== 'string') {
+    return null;
+  }
+  var match = sprintString.match(/Sprint\s?(\d+)/i);
+  if (match) {
+    return 'Sprint ' + match[1];
+  }
+  return null;
+}
+
+function showToast(message) {
+  var t = $('#toast');
+  if (!t) return;
+  t.textContent = message || 'Saved';
+  t.style.display = 'block';
+  
+  // Use TimerManager instead of setTimeout
+  TimerManager.setTimeout(function() { 
+    t.style.display = 'none'; 
+  }, 2500, 'toast_hide');
+}
+</script>
+

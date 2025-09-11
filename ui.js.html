@@ -1,0 +1,1471 @@
+<script>
+/**
+ * @file ui.js
+ * @description Handles all UI rendering and DOM manipulation.
+ */
+
+// --- HELPER FUNCTION ---
+function getClosedMappings() {
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var stages = Array.isArray(cfg.closedProjectStages) ? cfg.closedProjectStages : ['In Production','Production','Prod','Fixed','Done','Canceled'];
+    var statuses = Array.isArray(cfg.closedStatuses) ? cfg.closedStatuses : ['Fixed','Closed','Done','Resolved','Ready for Production','In Production'];
+    // Normalize for comparison
+    return {
+        stages: stages.map(function(s){ return (s||'').toLowerCase().trim(); }),
+        statuses: statuses.map(function(s){ return (s||'').toLowerCase().trim(); })
+    };
+}
+
+function isStoryObjectClosed(story) {
+    var projectStage = (story['Project Stage'] || '').toLowerCase().trim();
+    var status = (story['Status'] || '').toLowerCase().trim();
+    var maps = getClosedMappings();
+    return maps.stages.indexOf(projectStage) !== -1 || maps.statuses.indexOf(status) !== -1;
+}
+
+// --- MODAL UI ---
+function openModal(title, type) {
+  type = type || 'task';
+  var modalHost = type === 'import' ? $('#importModalHost') : $('#modalHost');
+  if (type === 'task') {
+    $('#modalTitle').textContent = title || 'New Task';
+  }
+  modalHost.style.display = 'flex';
+  modalHost.setAttribute('aria-hidden', 'false');
+  
+  // Use TimerManager for better memory management
+  TimerManager.setTimeout(function() {
+      var firstInput = modalHost.querySelector('input, select');
+      if (firstInput) firstInput.focus();
+  }, 50, 'modal_focus');
+}
+
+function closeModal(type) {
+    type = type || 'task';
+    var modalHost = type === 'import' ? $('#importModalHost') : $('#modalHost');
+    modalHost.style.display = 'none';
+    modalHost.setAttribute('aria-hidden', 'true');
+    if (type === 'task') {
+        APP_STATE.currentEditId = null;
+        var form = modalHost.querySelector('.grid');
+        if (form) {
+            var elements = form.querySelectorAll('input, select, textarea');
+            for (var i = 0; i < elements.length; i++) {
+                if (elements[i].tagName === 'SELECT') {
+                    elements[i].selectedIndex = 0;
+                } else {
+                    elements[i].value = '';
+                }
+            }
+        }
+    }
+}
+
+// --- DATA VALIDATION & FORMATTING ---
+function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage) {
+    const projectStageStatus = (projectStage || '').toLowerCase().trim();
+
+    // Configurable closed project stages: treat as Closed
+    const maps = getClosedMappings();
+    if (maps.stages.indexOf(projectStageStatus) !== -1) {
+        return { 
+            text: APP_CONSTANTS.VALIDATION.CLOSED, 
+            className: 'status-ok', 
+            updatedClassName: '', 
+            checkedClassName: '' 
+        };
+    }
+
+    // Use robust parser so comparisons are consistent (UTC -> local)
+    const updated = updatedStr ? parseServerDate(updatedStr) : null;
+    const checked = checkedStr ? parseServerDate(checkedStr) : null;
+    const today = new Date();
+    
+    // If no last checked date exists, it needs review
+    if (!checked) {
+        return { 
+            text: APP_CONSTANTS.VALIDATION.NEEDS_REVIEW, 
+            className: 'status-review', 
+            updatedClassName: '', 
+            checkedClassName: '' 
+        };
+    }
+
+    // Calculate days since last checked
+    const daysSinceChecked = Math.floor((today.getTime() - checked.getTime()) / APP_CONSTANTS.TIME.DAY_MS);
+    
+    // Priority 1: If item was updated after last checked, it needs review
+    if (updated && updated.getTime() > checked.getTime()) {
+        return { 
+            text: APP_CONSTANTS.VALIDATION.NEEDS_REVIEW, 
+            className: 'status-review', 
+            updatedClassName: '', 
+            checkedClassName: '' 
+        };
+    }
+    
+    // Priority 2: If last checked date is greater than the stale threshold, it's stale
+    if (daysSinceChecked >= APP_CONSTANTS.TIME.STALE_DAYS) {
+        return { 
+            text: APP_CONSTANTS.VALIDATION.STALE, 
+            className: 'status-stale',
+            updatedClassName: '',
+            checkedClassName: 'text-red-500 font-semibold'
+        };
+    }
+
+    // Otherwise, it's up to date
+    const result = { 
+        text: APP_CONSTANTS.VALIDATION.UP_TO_DATE, 
+        className: 'status-ok', 
+        updatedClassName: '', 
+        checkedClassName: '' 
+    };
+    
+    // Add highlighting for old dates
+    if (updated) {
+        var daysSinceUpdatedHighlight = Math.floor((new Date().getTime() - updated.getTime()) / (1000 * 3600 * 24));
+        if (daysSinceUpdatedHighlight > 14) {
+            result.updatedClassName = 'text-red-500 font-semibold';
+        }
+    }
+
+    return result;
+}
+
+
+// --- DYNAMIC ELEMENT CREATION ---
+function createDropdown(options, selectedValue, jiraId, field) {
+  var select = document.createElement('select');
+  select.className = 'manual-field-dropdown select w-full text-xs';
+  select.dataset.jiraId = jiraId;
+  select.dataset.field = field;
+  var optionsHtml = '<option value="">Select...</option>';
+  
+  // Safety check: ensure options is an array
+  if (!options || !Array.isArray(options)) {
+    options = [];
+  }
+  
+  for (var i = 0; i < options.length; i++) {
+    var opt = options[i];
+    var isSelected = (opt === selectedValue);
+    optionsHtml += '<option value="' + opt + '" ' + (isSelected ? 'selected' : '') + '>' + opt + '</option>';
+  }
+  select.innerHTML = optionsHtml;
+  return select;
+}
+
+function createRow(item, type, parentEpicId, validationBadgeCount) {
+    var row = document.createElement('tr');
+    row.className = 'row-' + type;
+    // Preserve full sprint string (may contain multiple sprints) for accurate filtering
+    row.dataset.sprint = (item['sprint'] && typeof item['sprint'] === 'string') ? item['sprint'] : '';
+    row.dataset.title = (item.Summary || item.Title || '').toLowerCase();
+    row.dataset.status = (item.Status || '').toString().trim();
+    row.dataset.planningStage = (item['Planning Stage'] || '').toString().trim();
+    row.dataset.projectStage = (item['Project Stage'] || '').toString().trim();
+    // Prefer Assigned PM/Dev; fall back to PM Lead/Assignee; always trim
+    row.dataset.assignedPM = ((item['Assigned PM'] || item['PM Lead'] || '') + '').trim();
+    row.dataset.assignedDev = ((item['Assigned Dev'] || item['Assignee'] || '') + '').trim();
+    row.dataset.issueType = item['Issue Type'] || '';
+    row.dataset.jiraId = (item['Jira #'] || '').toLowerCase(); // Add Jira ID for search
+    // Store canonical ISO values for updated/checked (server values are UTC)
+    row.dataset.updatedIso = normalizeUtcString(item['Updated']) || '';
+    row.dataset.checkedIso = normalizeUtcString(item['Last Checked']) || '';
+
+    var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage']);
+    row.dataset.validation = validation.text;
+    var isFauxEpic = item['Jira #'] === 'UNASSIGNED';
+    var isJiraItem = (type === 'epic' || type === 'story') && !isFauxEpic;
+    var jiraCellHtml = '';
+
+    // Logic for 'task' type (nested task)
+    if (type === 'task') {
+      row.dataset.parentEpic = parentEpicId; 
+      jiraCellHtml = item.Title || 'Untitled Task';
+      row.innerHTML = '<td></td>' + // Sync Status
+        '<td colspan="2">' + jiraCellHtml + '</td>' + // Span Jira # and Planning Stage
+        '<td colspan="15">' + (item.Assignee ? 'Assignee: ' + item.Assignee : '') + '</td>' + // Span remaining cells for Assignee (15 = 18 total - 3 already used)
+        '<td><button class="btn edit-task-btn" data-id="' + item.ID + '">Edit</button></td>'; // Action
+      return row;
+    }
+
+    // Logic for 'epic' and 'story' types
+    if (type === 'epic') {
+        row.dataset.id = item['Jira #'];
+        row.dataset.showingAll = 'false'; 
+        var expanderSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>';
+        var link = isFauxEpic ? '<span class="font-medium">' + item.Summary + '</span>' : '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>';
+        
+        var driveIconHtml = '';
+        if (item['Drive Link']) {
+            var driveIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 3l.04.87a1.99 1.99 0 0 0 .342 1.311l.637.637L7.086 8l-5.12 5.12-.637.637a1.99 1.99 0 0 0-.342 1.311L.5 16H2a1 1 0 0 0 .707-.293l2.414-2.414a1 1 0 0 0 .293-.707v-1.172h3.793a1 1 0 0 0 .707-.293L15.043 8 9.207 2.157A1 1 0 0 0 8.5 2H4.707v-1.172a1 1 0 0 0-.293-.707L2.707.293A1 1 0 0 0 2 0H.5zM2 1l1 1v1.172A1 1 0 0 0 4.172 4H8.5a1 1 0 0 0 .707-.293L13.854 8l-4.647 4.646a1 1 0 0 0-.707.293H4.172A1 1 0 0 0 3 13.828V14l-1 1H2z"/></svg>';
+            driveIconHtml = '<a href="' + item['Drive Link'] + '" target="_blank" class="drive-icon" title="Open Drive Folder">' + driveIconSvg + '</a>';
+        }
+
+        jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + driveIconHtml + '</div>';
+    } else if (type === 'story') {
+        row.dataset.parentEpic = parentEpicId;
+        jiraCellHtml = '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>';
+    } else { // Fallback for independent tasks on the old task view
+        jiraCellHtml = item['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>' : '—';
+    }
+
+    var issueType = item['Issue Type'] || '';
+    var typePillClass = '';
+    var displayText = issueType; 
+
+    if (isJiraItem || isFauxEpic) {
+      switch (issueType.toLowerCase()) {
+        case 'epic': typePillClass = 'type-epic'; break;
+        case 'vzagile story': typePillClass = 'type-story'; displayText = 'Story'; break;
+        case 'story': typePillClass = 'type-story'; break;
+        case 'bug': typePillClass = 'type-bug'; break;
+      }
+    }
+    var typeCellHtml = '<td>' + (typePillClass ? '<span class="type-pill ' + typePillClass + '">' + displayText + '</span>' : '—') + '</td>';
+    
+    var createCellWithDropdown = function(options, value, jiraId, field) {
+        var cell = document.createElement('td');
+        if (isJiraItem) {
+            cell.appendChild(createDropdown(options, value, jiraId, field));
+        } else {
+            cell.textContent = '—';
+        }
+        return cell.outerHTML;
+    };
+
+    var actionCellHtml = isJiraItem ? '<button class="btn check-btn" data-jira-id="' + item['Jira #'] + '">Check</button>' : (type === 'task') ? '<button class="btn edit-task-btn" data-id="' + item.ID + '">Edit</button>' : '—';
+    var sprintDisplayText = item['sprint'] || '—';
+    var assignedPm = item['PM Lead'] || '—';
+    var assignedDev = item['Assignee'] || '—';
+    var storyPoints = item['Story Points'] || '—';
+    
+    var formatDateTime = function(dateStr) {
+      return formatDateTimeLocal(dateStr);
+    };
+    
+    var createDateInputCell = function(dateStr, jiraId, field) {
+        var cell = '<td>';
+        if (isJiraItem) {
+            var dateValue = '';
+            if (dateStr) {
+                // Use local date-only formatter for inputs
+                dateValue = formatDateLocalDateOnly(dateStr);
+            }
+            cell += '<input type="text" class="manual-text-input input text-xs p-1 w-full" data-jira-id="' + jiraId + '" data-field="' + field + '" value="' + dateValue + '">';
+        } else {
+            cell += '—';
+        }
+        return cell + '</td>';
+    };
+    
+    // Before building innerHTML, compute localized displays from canonical dataset ISOs
+    var lastUpdatedDisplay = row.dataset.updatedIso ? formatDateTimeLocal(row.dataset.updatedIso) : formatSheetDateToLocal(item['Updated']);
+    var lastCheckedDisplay = row.dataset.checkedIso ? formatDateTimeLocal(row.dataset.checkedIso) : (item['Last Checked'] ? formatSheetDateToLocal(item['Last Checked']) : 'Never');
+
+    row.innerHTML = '<td class="col-sync-status">' + (item['Sync Status'] || '') + '</td>' +
+  '<td>' + jiraCellHtml + '</td>' +
+      (function(){
+          var type = (item['Issue Type'] || '').toLowerCase();
+          var cfg = APP_STATE.allData.config || {};
+          var opts = cfg.projectStageOptions || [];
+          if (type === 'epic' && Array.isArray(cfg.epicProjectStageOptions) && cfg.epicProjectStageOptions.length) opts = cfg.epicProjectStageOptions;
+          else if ((type === 'story' || type === 'vzagile story') && Array.isArray(cfg.storyProjectStageOptions) && cfg.storyProjectStageOptions.length) opts = cfg.storyProjectStageOptions;
+          else if (type === 'bug' && Array.isArray(cfg.bugProjectStageOptions) && cfg.bugProjectStageOptions.length) opts = cfg.bugProjectStageOptions;
+          return createCellWithDropdown(opts, item['Project Stage'], item['Jira #'], 'Project Stage');
+      })() +
+      '<td>' + (item.Summary || item.Title || 'Untitled') + '</td>' +
+      '<td><span class="validation-pill-container"><span class="status-pill ' + validation.className + '">' + validation.text + '</span>' + ((type === 'epic' && validationBadgeCount > 0) ? '<span class="validation-badge">' + validationBadgeCount + '</span>' : '') + '</span></td>' +
+            (function(){
+          var statusText = item.Status || '—';
+          var stageText = item['Project Stage'] || '';
+          
+          if (!isJiraItem) {
+              return '<td>' + statusText + '</td>';
+          }
+          
+          // Flag as out of sync if Project Stage is blank/empty
+          var stageIsEmpty = !item['Project Stage'] || String(item['Project Stage']).trim() === '';
+          if (stageIsEmpty) {
+              var tooltip = 'Project Stage is empty - this should be set';
+              var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
+              return '<td>' + statusText + dot + '</td>';
+          }
+                    var s = String(item.Status).toLowerCase().trim();
+                    var stg = String(item['Project Stage']).toLowerCase().trim();
+                    var maps = getClosedMappings();
+                    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+                    
+                    var stageMap = {};
+                    (cfg.stageStatusMappings || []).forEach(function(m){ 
+                        if (m && m.stage) {
+                            var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+                            stageMap[(m.stage+'').toLowerCase().trim()] = expectedStatuses;
+                        }
+                    });
+
+                    // Stage closed check is exact-match against configured closed stages
+                    var stageIsClosed = maps.stages.indexOf(stg) !== -1;
+
+                    // Evaluate mapping - check if current Status matches any expected Status for this Project Stage
+                    var expectedStatuses = stageMap[stg] || [];
+                    var matchedStatus = '';
+                    var statusAlignedWithStage = false;
+                    var statusIsEmpty = !item.Status || String(item.Status).trim() === '';
+                    
+                    if (expectedStatuses.length > 0) {
+                        if (statusIsEmpty) {
+                            statusAlignedWithStage = false;
+                        } else {
+                            var currentStatus = s; // already normalized
+                            for (var si = 0; si < expectedStatuses.length; si++) {
+                                var expectedStatus = expectedStatuses[si];
+                                if (expectedStatus && currentStatus === expectedStatus) { 
+                                    matchedStatus = expectedStatus; 
+                                    statusAlignedWithStage = true; 
+                                    break; 
+                                } 
+                            }
+                        }
+                    } else {
+                        // No stage-specific mapping: flag as mismatch so it gets attention
+                        statusAlignedWithStage = false;
+                    }
+
+                    var mismatch = !statusAlignedWithStage;
+                    
+                    try {
+                        if (mismatch || expectedStatuses.length > 0) {
+                        }
+                    } catch (e) {}
+            if (!mismatch) {
+                return '<td>' + statusText + '</td>';
+            }
+                    var tooltip = 'Status ("' + item.Status + '") and Project Stage ("' + item['Project Stage'] + '") may be out of sync' + (expectedStatuses.length ? ('\nExpected Status: ' + expectedStatuses.join(', ') + (matchedStatus ? ('\nCurrent matches: ' + matchedStatus) : '\nNo match found')) : '\nNo stage-specific mapping configured');
+                    var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
+                    return '<td>' + statusText + dot + '</td>';
+      })() +
+    typeCellHtml + 
+    createCellWithDropdown(APP_STATE.allData.config.priorityOptions, item['Priority'], item['Jira #'], 'Priority') +
+    '<td>' + storyPoints + '</td>' +
+    '<td>' + assignedPm + '</td>' + '<td>' + assignedDev + '</td>' + '<td>' + sprintDisplayText + '</td>' +
+    createCellWithDropdown(APP_STATE.allData.config.actPctOptions, item['ACT/PCT'], item['Jira #'], 'ACT/PCT') +
+    createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date') +
+    createDateInputCell(item['End Date'], item['Jira #'], 'End Date') +
+    '<td class="' + validation.updatedClassName + '">' + lastUpdatedDisplay + '</td>' +
+    '<td class="' + validation.checkedClassName + '">' + lastCheckedDisplay + '</td>' +
+    '<td>' + actionCellHtml + '</td>';
+    return row;
+}
+
+function renderApp() {
+    // Safety check: ensure config has the required properties
+    if (!APP_STATE.allData.config) {
+        APP_STATE.allData.config = {};
+    }
+    if (!APP_STATE.allData.config.projectStageOptions) {
+        APP_STATE.allData.config.projectStageOptions = ['Open', 'In Progress', 'Fixed', 'Closed'];
+    }
+    if (!APP_STATE.allData.config.actPctOptions) {
+        APP_STATE.allData.config.actPctOptions = ['ACT', 'PCT'];
+    }
+    if (!APP_STATE.allData.config.planningStageOptions) {
+        APP_STATE.allData.config.planningStageOptions = ['Planning', 'In Flight', 'Backlog'];
+    }
+    if (!APP_STATE.allData.config.priorityOptions) {
+        APP_STATE.allData.config.priorityOptions = ['Critical', 'High', 'Medium', 'Low'];
+    }
+    if (!APP_STATE.allData.config.helpfulLinks) {
+        APP_STATE.allData.config.helpfulLinks = [];
+    }
+
+    // Update Project Stage options dynamically from data (union with existing)
+    try {
+        var itemsForStages = (APP_STATE.allData.projects || []).concat(APP_STATE.allData.independentTasks || []);
+        var derivedStages = {};
+        for (var i = 0; i < itemsForStages.length; i++) {
+            var psVal = (itemsForStages[i]['Project Stage'] || '').toString().trim();
+            if (!psVal) continue;
+            var low = psVal.toLowerCase();
+            if (psVal === '—' || low === 'none' || low === 'n/a') continue;
+            derivedStages[psVal] = true;
+        }
+        var currentStages = Array.isArray(APP_STATE.allData.config.projectStageOptions) ? APP_STATE.allData.config.projectStageOptions : [];
+        var unionMap = {};
+        currentStages.forEach(function(v){ if ((v || '').toString().trim()) unionMap[(v + '').trim()] = true; });
+        Object.keys(derivedStages).forEach(function(v){ unionMap[v] = true; });
+        var finalStages = Object.keys(unionMap).sort();
+        if (finalStages.length > 0) APP_STATE.allData.config.projectStageOptions = finalStages;
+    } catch (err) {
+    }
+
+    // *** REMOVED call to obsolete renderToolbar() ***
+    populateFilters();
+    renderKPIs();
+    populateLinksDropdown();
+
+    if (APP_STATE.currentView === 'table') {
+        renderTable();
+    } else if (APP_STATE.currentView === 'board') {
+        renderBoard();
+    } else if (APP_STATE.currentView === 'gantt') {
+        renderGanttChart(APP_STATE.allData.projects);
+    } else if (APP_STATE.currentView === 'tasks') {
+        // This view is now a separate page, but we'll keep the function for now
+        renderTasksView();
+    }
+
+    var isGanttView = (APP_STATE.currentView === 'gantt');
+    var ganttControls = $('#gantt-zoom-controls');
+    if(ganttControls) ganttControls.style.display = isGanttView ? 'flex' : 'none';
+    
+    // Show/hide table controls based on view
+    var tableControls = $('#table-controls');
+    if (tableControls) {
+        var shouldShowControls = APP_STATE.currentView === 'table' && 
+                                APP_STATE.allData && 
+                                APP_STATE.allData.projects && 
+                                APP_STATE.allData.projects.length > 0;
+        tableControls.style.display = shouldShowControls ? 'block' : 'none';
+    }
+    
+    // Logic to show/hide filter popup is now handled by dropdown events
+    
+    if (APP_STATE.currentView !== 'gantt') {
+        applyFilters();
+    }
+}
+
+function renderKPIs() {
+    // Update KPI card values
+    if (typeof updateKPICards === 'function') {
+        updateKPICards();
+    }
+}
+
+function populateLinksDropdown() {
+    var linksPopup = $('#links-popup');
+    if (!linksPopup) {
+        return;
+    }
+    
+    var helpfulLinks = APP_STATE.allData.config.helpfulLinks || [];
+    
+    if (helpfulLinks.length === 0) {
+        linksPopup.innerHTML = '<div class="px-4 py-2 text-gray-500 text-sm">No links configured</div>';
+        return;
+    }
+    
+    var linksHtml = helpfulLinks.map(function(link) {
+        return '<a href="' + link.url + '" target="_blank" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900">' +
+               link.title + 
+               '</a>';
+    }).join('');
+    
+    linksPopup.innerHTML = linksHtml;
+}
+
+// *** DELETED the renderToolbar() function as it is no longer needed ***
+
+function populateFilters() {
+    var allItems = [].concat(APP_STATE.allData.projects, APP_STATE.allData.independentTasks);
+    var allStatuses = {}, allSprints = {}, allPlanningStages = {}, allValidations = {};
+    var allProjectStages = {}, allAssignedPMs = {}, allAssignedDevs = {};
+    
+    for (var i = 0; i < allItems.length; i++) {
+        var item = allItems[i];
+        if (item.Status) allStatuses[(item.Status + '').trim()] = true;
+        if (item['Planning Stage']) allPlanningStages[(item['Planning Stage'] + '').trim()] = true;
+        var ps = (item['Project Stage'] || '').toString().trim();
+        if (ps && ps !== '—' && ps.toLowerCase() !== 'none' && ps.toLowerCase() !== 'n/a') allProjectStages[ps] = true;
+        // Prefer Assigned PM/Dev; fall back to PM Lead/Assignee
+        var apm = (item['Assigned PM'] || item['PM Lead'] || '').toString().trim();
+        if (apm && apm !== '—' && apm.toLowerCase() !== 'none') allAssignedPMs[apm] = true;
+        var adv = (item['Assigned Dev'] || item['Assignee'] || '').toString().trim();
+        if (adv && adv !== '—' && adv.toLowerCase() !== 'none') allAssignedDevs[adv] = true;
+        
+        var validationText = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage']).text;
+        allValidations[validationText] = true;
+        if (item.sprint) {
+            var sprintParts = item.sprint.split(',');
+            sprintParts.forEach(function(part) {
+                var formatted = formatSprint(part.trim());
+                if (formatted) allSprints[formatted] = true;
+            });
+        }
+    }
+
+    var sortedSprints = Object.keys(allSprints).sort(function(a, b) {
+        var numA = parseInt((a.match(/\d+/) || [0])[0], 10);
+        var numB = parseInt((b.match(/\d+/) || [0])[0], 10);
+        return numB - numA;
+    });
+
+    // Populate multi-select dropdowns
+    populateMultiSelectDropdown('status', Object.keys(allStatuses).sort(), 'All Statuses');
+    populateMultiSelectDropdown('sprint', sortedSprints, 'All Sprints');
+    populateMultiSelectDropdown('planningStage', Object.keys(allPlanningStages).sort(), 'All Planning Stages');
+    populateMultiSelectDropdown('validation', Object.keys(allValidations).sort(), 'All Validations');
+    populateMultiSelectDropdown('projectStage', Object.keys(allProjectStages).sort(), 'All Project Stages');
+    populateMultiSelectDropdown('assignedPM', Object.keys(allAssignedPMs).sort(), 'All PMs');
+    populateMultiSelectDropdown('assignedDev', Object.keys(allAssignedDevs).sort(), 'All Devs');
+    
+    // Still populate the task modal status dropdown the old way
+    var tStatus = $('#t-status');
+    if (tStatus) {
+        var statusOptions = Object.keys(allStatuses).sort();
+        var statusHtml = '';
+        statusOptions.forEach(function(opt){
+            statusHtml += '<option value="' + opt + '">' + opt + '</option>';
+        });
+        tStatus.innerHTML = statusHtml;
+    }
+    
+    // Populate the task modal priority dropdown from configuration
+    var tPriority = $('#t-priority');
+    if (tPriority && APP_STATE.allData && APP_STATE.allData.config && APP_STATE.allData.config.priorityOptions) {
+        var priorityOptions = APP_STATE.allData.config.priorityOptions;
+        var priorityHtml = '';
+        priorityOptions.forEach(function(opt){
+            priorityHtml += '<option value="' + opt + '">' + opt + '</option>';
+        });
+        tPriority.innerHTML = priorityHtml;
+    }
+}
+
+function populateMultiSelectDropdown(filterType, options, defaultLabel) {
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var optionsList = dropdown.querySelector('.filter-options-list');
+    var label = dropdown.querySelector('.filter-label');
+    
+    if (!optionsList || !label) return;
+    
+    // Clear existing options
+    optionsList.innerHTML = '';
+    
+    // Add "Select All" option at the top
+    var selectAllDiv = document.createElement('div');
+    selectAllDiv.className = 'filter-option select-all-option';
+    
+    var selectAllCheckbox = document.createElement('input');
+    selectAllCheckbox.type = 'checkbox';
+    selectAllCheckbox.id = filterType + '-select-all';
+    selectAllCheckbox.className = 'select-all-checkbox';
+    
+    var selectAllLabel = document.createElement('label');
+    selectAllLabel.htmlFor = selectAllCheckbox.id;
+    selectAllLabel.textContent = 'Select All';
+    selectAllLabel.className = 'select-all-label';
+    
+    selectAllDiv.appendChild(selectAllCheckbox);
+    selectAllDiv.appendChild(selectAllLabel);
+    optionsList.appendChild(selectAllDiv);
+    
+    // Add a divider
+    var divider = document.createElement('div');
+    divider.className = 'filter-divider';
+    optionsList.appendChild(divider);
+    
+    // Add individual options with checkboxes
+    options.forEach(function(option) {
+        var optionDiv = document.createElement('div');
+        optionDiv.className = 'filter-option';
+        
+        var checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = option;
+        checkbox.id = filterType + '-' + option.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9-]/g, '');
+        checkbox.className = 'filter-checkbox';
+        
+        var labelEl = document.createElement('label');
+        labelEl.htmlFor = checkbox.id;
+        labelEl.textContent = option;
+        
+        optionDiv.appendChild(checkbox);
+        optionDiv.appendChild(labelEl);
+        optionsList.appendChild(optionDiv);
+        
+        // Add event listener for checkbox changes
+        checkbox.addEventListener('change', function() {
+            // When an individual checkbox changes, update the "Select All" checkbox
+            updateSelectAllCheckbox(filterType);
+            updateFilterSelection(filterType);
+        });
+    });
+    
+    // Add event listener for "Select All" checkbox
+    selectAllCheckbox.addEventListener('change', function() {
+        var isChecked = this.checked;
+        var checkboxes = optionsList.querySelectorAll('.filter-checkbox');
+        
+        // Update all checkboxes to match the "Select All" state
+        checkboxes.forEach(function(cb) {
+            cb.checked = isChecked;
+        });
+        
+        updateFilterSelection(filterType);
+    });
+    
+    // Update the display label
+    updateFilterLabel(filterType, defaultLabel);
+}
+
+function updateFilterSelection(filterType) {
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var checkboxes = dropdown.querySelectorAll('.filter-checkbox:checked');
+    var selectedValues = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    
+    // Update the state
+    APP_STATE.multiSelectFilters[filterType] = selectedValues;
+    
+    // Removed auto-enabling of the "Show Closed" toggle based on status selection.
+    
+    // Update the label
+    updateFilterLabel(filterType, getDefaultLabel(filterType));
+    
+    // Apply filters
+    applyFilters();
+}
+
+function updateSelectAllCheckbox(filterType) {
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var selectAllCheckbox = dropdown.querySelector('.select-all-checkbox');
+    var individualCheckboxes = dropdown.querySelectorAll('.filter-checkbox');
+    var checkedCount = dropdown.querySelectorAll('.filter-checkbox:checked').length;
+    
+    if (!selectAllCheckbox || individualCheckboxes.length === 0) return;
+    
+    // Set the select all checkbox state based on individual checkboxes
+    selectAllCheckbox.checked = checkedCount > 0 && checkedCount === individualCheckboxes.length;
+    
+    // Make it indeterminate if some but not all are checked
+    selectAllCheckbox.indeterminate = checkedCount > 0 && checkedCount < individualCheckboxes.length;
+}
+
+function updateFilterLabel(filterType, defaultLabel) {
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var label = dropdown.querySelector('.filter-label');
+    if (!label) return;
+    
+    var selectedCount = APP_STATE.multiSelectFilters[filterType].length;
+    var toggleButton = dropdown.querySelector('.filter-dropdown-toggle');
+    
+    // If no defaultLabel provided, determine based on filterType
+    if (!defaultLabel) {
+        switch(filterType) {
+            case 'status': defaultLabel = 'All Statuses'; break;
+            case 'sprint': defaultLabel = 'All Sprints'; break;
+            case 'planningStage': defaultLabel = 'All Planning Stages'; break;
+            case 'validation': defaultLabel = 'All Validations'; break;
+            case 'projectStage': defaultLabel = 'All Project Stages'; break;
+            case 'assignedPM': defaultLabel = 'All PMs'; break;
+            case 'assignedDev': defaultLabel = 'All Devs'; break;
+            default: defaultLabel = 'All Items';
+        }
+    }
+    
+    // Remove existing badges from the label
+    while (label.querySelector('.filter-badge')) {
+        label.querySelector('.filter-badge').remove();
+    }
+    
+    // Remove active class from toggle button
+    if (toggleButton) {
+        toggleButton.classList.remove('has-active-filters');
+    }
+    
+    if (selectedCount === 0) {
+        // No filters active - reset to default
+        label.textContent = defaultLabel;
+    } else {
+        // Filters are active - show with badge
+        // First, set the base text without "All"
+        label.textContent = defaultLabel.replace('All ', '');
+        
+        // Create badge element
+        var badge = document.createElement('span');
+        badge.className = 'filter-badge';
+        badge.textContent = selectedCount;
+        
+        // Append the badge to the label
+        label.appendChild(document.createTextNode(' '));
+        label.appendChild(badge);
+        
+        // Mark the toggle button as having active filters
+        if (toggleButton) {
+            toggleButton.classList.add('has-active-filters');
+        }
+        
+    }
+}
+
+function getDefaultLabel(filterType) {
+    var labels = {
+        'status': 'All Statuses',
+        'sprint': 'All Sprints',
+        'validation': 'All Validations',
+        'projectStage': 'All Project Stages',
+        'assignedPM': 'All PMs',
+        'assignedDev': 'All Devs'
+    };
+    return labels[filterType] || 'All';
+}
+
+function renderTable() {
+    var wrapper = $('#content-wrapper');
+    wrapper.innerHTML = '<div class="table-container"><table class="table" aria-describedby="count"><thead><tr>' +
+              '<th class="col-sync-status">S</th><th class="col-jira">Jira #</th><th class="col-project-stage">Project Stage</th><th class="col-title">Title</th>' +
+              '<th class="col-validation">Validation</th><th class="col-status">Status</th><th class="col-type">Type</th><th class="col-priority">Priority</th><th class="col-story-points">Story Points</th>' +
+              '<th class="col-pm-lead">Assigned PM</th><th class="col-dev-assignee">Assigned Dev</th><th class="col-sprint">Sprint</th>' +
+              '<th class="col-act-pct">ACT/PCT</th><th class="col-start-date">Start Date</th><th class="col-end-date">End Date</th><th class="col-last-updated">Last Updated</th><th class="col-last-checked">Last Checked</th><th class="col-action">Action</th>' +
+          '</tr></thead><tbody id="list-body"></tbody></table></div>';
+    var projects = APP_STATE.allData.projects;
+    var epics = projects.filter(function(p) { return p['Issue Type'] === 'Epic'; });
+    var stories = projects.filter(function(p) { return p['Issue Type'] !== 'Epic'; });
+    
+    var epicSummaries = {};
+    epics.forEach(function(epic) { epicSummaries[normalizeString(epic.Summary)] = true; });
+    var orphanStories = stories.filter(function(p) { return !epicSummaries[normalizeString(p['Epic Link'])]; });
+
+    var body = $('#list-body');
+    var sortOrders = {
+        projectStage: {
+            'in progress': 1,
+            'in planning': 2,
+            'planning': 2,
+            'on hold': 3,
+            'done': 4,
+            'in production': 4,
+            'production': 4,
+            'prod': 4,
+            'fixed': 4,
+            'canceled': 5,
+            'cancelled': 5
+        },
+        validation: { 'Needs Review': 1, 'Stale': 2, 'Up to Date': 3, 'Closed': 4 },
+        priority: {} // Will be populated dynamically from config
+    };
+    
+    // Populate priority sort order from configuration
+    if (APP_STATE.allData && APP_STATE.allData.config && APP_STATE.allData.config.priorityOptions) {
+        APP_STATE.allData.config.priorityOptions.forEach(function(priority, index) {
+            sortOrders.priority[priority.toLowerCase().trim()] = index + 1;
+        });
+    }
+    var sortEpics = function(a, b) {
+        // 1) Priority (highest priority first)
+        var priorityA = (a['Priority'] || '').toLowerCase().trim();
+        var priorityB = (b['Priority'] || '').toLowerCase().trim();
+        var priorOrderA = sortOrders.priority[priorityA] || 99;
+        var priorOrderB = sortOrders.priority[priorityB] || 99;
+        if (priorOrderA !== priorOrderB) return priorOrderA - priorOrderB;
+        
+        // 2) Project Stage (custom order)
+        var stageA = (a['Project Stage'] || '').toLowerCase().trim();
+        var stageB = (b['Project Stage'] || '').toLowerCase().trim();
+        var orderA = sortOrders.projectStage[stageA] || 99;
+        var orderB = sortOrders.projectStage[stageB] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        
+        // 3) Validation
+        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage']).text;
+        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage']).text;
+        var valOrderA = sortOrders.validation[valA] || 99;
+        var valOrderB = sortOrders.validation[valB] || 99;
+        if (valOrderA !== valOrderB) return valOrderA - valOrderB;
+        
+        // 4) Tie-breaker by title
+        var ta = (a.Summary || '').toLowerCase();
+        var tb = (b.Summary || '').toLowerCase();
+        return ta < tb ? -1 : ta > tb ? 1 : 0;
+    };
+
+    var sortChildren = function(a, b) {
+        // 1) Priority (highest priority first)
+        var priorityA = (a['Priority'] || '').toLowerCase().trim();
+        var priorityB = (b['Priority'] || '').toLowerCase().trim();
+        var priorOrderA = sortOrders.priority[priorityA] || 99;
+        var priorOrderB = sortOrders.priority[priorityB] || 99;
+        if (priorOrderA !== priorOrderB) return priorOrderA - priorOrderB;
+        
+        // 2) Validation
+        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage']).text;
+        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage']).text;
+        var valOrderA = sortOrders.validation[valA] || 99;
+        var valOrderB = sortOrders.validation[valB] || 99;
+        if (valOrderA !== valOrderB) return valOrderA - valOrderB;
+        
+        // 3) Project Stage (custom order)
+        var stageA = (a['Project Stage'] || '').toLowerCase().trim();
+        var stageB = (b['Project Stage'] || '').toLowerCase().trim();
+        var orderA = sortOrders.projectStage[stageA] || 99;
+        var orderB = sortOrders.projectStage[stageB] || 99;
+        if (orderA !== orderB) return orderA - orderB;
+        
+        // 4) Tie-breaker by title
+        var ta = (a.Summary || '').toLowerCase();
+        var tb = (b.Summary || '').toLowerCase();
+        return ta < tb ? -1 : ta > tb ? 1 : 0;
+    };
+
+    epics.sort(sortEpics);
+
+    for (var i = 0; i < epics.length; i++) {
+        var epic = epics[i];
+        var childStories = stories.filter(function(story) { return normalizeString(story['Epic Link']) === normalizeString(epic.Summary); });
+        
+        var needsAttentionCount = 0;
+        childStories.forEach(function(story) {
+            if (getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage']).text === 'Needs Review') {
+                needsAttentionCount++;
+            }
+        });
+        
+        body.appendChild(createRow(epic, 'epic', null, needsAttentionCount));
+        
+        if (epic.tasks) {
+            epic.tasks.forEach(function(task){
+                if (!task['Associated Story']) {
+                    body.appendChild(createRow(task, 'task', epic['Jira #']));
+                }
+            });
+        }
+        
+    childStories.sort(sortChildren);
+        childStories.forEach(function(story) { 
+            body.appendChild(createRow(story, 'story', epic['Jira #']));
+            if (story.tasks) {
+                story.tasks.forEach(function(task){
+                    body.appendChild(createRow(task, 'task', epic['Jira #']));
+                });
+            }
+        });
+
+        var footerRow = document.createElement('tr');
+        footerRow.className = 'row-epic-footer';
+        footerRow.dataset.parentEpic = epic['Jira #'];
+        var footerCell = document.createElement('td');
+    footerCell.colSpan = 17;
+        footerRow.appendChild(footerCell);
+        body.appendChild(footerRow);
+    }
+    
+    if (orphanStories.length > 0) {
+        var unassignedEpic = { 'Jira #': 'UNASSIGNED', Summary: 'Unassigned Stories', 'Issue Type': 'Epic' };
+        var unassignedAttentionCount = 0;
+        orphanStories.forEach(function(story) {
+            if (getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage']).text === 'Needs Review') {
+                unassignedAttentionCount++;
+            }
+        });
+        
+        var unassignedEpicRow = createRow(unassignedEpic, 'epic', null, unassignedAttentionCount);
+        body.prepend(unassignedEpicRow);
+        
+        var orphanStoryRows = [];
+    orphanStories.sort(sortChildren).forEach(function(story) {
+            orphanStoryRows.push(createRow(story, 'story', 'UNASSIGNED'));
+        });
+        
+        unassignedEpicRow.after.apply(unassignedEpicRow, orphanStoryRows);
+
+        var unassignedFooterRow = document.createElement('tr');
+        unassignedFooterRow.className = 'row-epic-footer';
+        unassignedFooterRow.dataset.parentEpic = 'UNASSIGNED';
+        var unassignedFooterCell = document.createElement('td');
+        unassignedFooterCell.colSpan = 18;
+        unassignedFooterRow.appendChild(unassignedFooterCell);
+        
+        if(orphanStoryRows.length > 0) {
+            orphanStoryRows[orphanStoryRows.length - 1].after(unassignedFooterRow);
+        } else {
+            unassignedEpicRow.after(unassignedFooterRow);
+        }
+    }
+
+    APP_STATE.allData.independentTasks.forEach(function(task) { body.appendChild(createRow(task, 'task')); });
+    
+    if (Object.keys(APP_STATE.expandedEpicIds).length > 0) {
+        for (var epicId in APP_STATE.expandedEpicIds) {
+            if (APP_STATE.expandedEpicIds.hasOwnProperty(epicId)) {
+                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]');
+                if (epicRow) epicRow.classList.add('expanded');
+            }
+        }
+        applyFilters();
+    }
+}
+
+function renderTasksView() {
+    var wrapper = $('#content-wrapper');
+    wrapper.innerHTML = '<div class="table-container"><table class="table"><thead>' +
+        '<tr><th>Title</th><th>Assignee</th><th>Status</th><th>Priority</th><th>Due Date</th><th>Project</th><th>Associated Jira</th><th>Action</th></tr>' +
+        '</thead><tbody id="tasks-body"></tbody></table></div>';
+    
+    var tasks = APP_STATE.allData.independentTasks;
+    var body = $('#tasks-body');
+    body.innerHTML = ''; 
+    
+    tasks.forEach(function(task) {
+        var row = document.createElement('tr');
+        var dueDate = task.Due ? formatDateLocalDateOnly(task.Due) : '—';
+        var jiraLink = task['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + task['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline">' + task['Jira #'] + '</a>' : '—';
+        row.innerHTML = '<td>' + (task.Title || '') + '</td>' +
+                      '<td>' + (task.Assignee || '') + '</td>' +
+                      '<td>' + (task.Status || '') + '</td>' +
+                      '<td>' + (task.Priority || '') + '</td>' +
+                      '<td>' + dueDate + '</td>' +
+                      '<td>' + (task.Project || '') + '</td>' +
+                      '<td>' + jiraLink + '</td>' +
+                      '<td><button class="btn edit-task-btn" data-id="' + task.ID + '">Edit</button></td>';
+        body.appendChild(row);
+    });
+}
+
+
+function renderBoard() {
+    var wrapper = $('#content-wrapper');
+    wrapper.innerHTML = '<div id="kanban-board" class="kanban-board-container"></div>';
+    var board = $('#kanban-board');
+    var tasks = APP_STATE.allData.independentTasks;
+    var statusMap = {};
+    tasks.forEach(function(task) { if(task.Status) statusMap[task.Status] = true; });
+    var statuses = Object.keys(statusMap).sort();
+    
+    if (statuses.length === 0) {
+        board.innerHTML = '<p class="p-8 text-center text-gray-500">No independent tasks to display.</p>';
+        return;
+    }
+
+    statuses.forEach(function(status) {
+        var column = document.createElement('div');
+        column.className = 'kanban-column';
+        column.innerHTML = '<h3 class="kanban-column-title">' + status + '</h3><div class="kanban-cards"></div>';
+        board.appendChild(column);
+        var cardsContainer = column.querySelector('.kanban-cards');
+        tasks.filter(function(task) { return task.Status === status; })
+             .forEach(function(task) {
+                var card = document.createElement('div');
+                card.className = 'kanban-card edit-task-btn';
+                card.dataset.id = task.ID;
+                card.dataset.title = (task.Title || '').toLowerCase();
+                card.dataset.status = task.Status || '';
+                card.innerHTML = '<div class="kanban-card-title">' + (task.Title || 'Untitled') + '</div>' +
+                                 '<div class="kanban-card-meta">' + (task.Assignee || 'Unassigned') + '</div>';
+                cardsContainer.appendChild(card);
+             });
+    });
+}
+
+// --- DATE/TIME HELPERS ---
+function normalizeUtcString(val) {
+    if (!val && val !== 0) return null;
+    
+    // If a Date is passed, return ISO
+    if (val instanceof Date) {
+        return isNaN(val.getTime()) ? null : val.toISOString();
+    }
+    var s = String(val).trim();
+    if (!s) return null;
+
+    // If already ISO with timezone (Z or +/-hh:mm), trust it
+    if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
+        var d1 = new Date(s);
+        return isNaN(d1.getTime()) ? null : d1.toISOString();
+    }
+
+    // Handle common US-style slash date-times as UTC, e.g. "M/D/YYYY HH:mm[:ss]" or with AM/PM
+    // Examples: "2/15/2025 13:21", "02/15/2025 13:21:45", "2/15/2025 1:21 PM"
+    var slashDateTimeRe = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i;
+    var m = s.match(slashDateTimeRe);
+    if (m) {
+        var mm = parseInt(m[1], 10);
+        var dd = parseInt(m[2], 10);
+        var yy = parseInt(m[3], 10);
+        if (yy < 100) yy += 2000; // handle YY format just in case
+        var hh = parseInt(m[4], 10);
+        var mi = parseInt(m[5], 10);
+        var ss = m[6] ? parseInt(m[6], 10) : 0;
+        var ampm = m[7] ? m[7].toUpperCase() : '';
+        if (ampm) {
+            // Convert 12-hour to 24-hour
+            if (ampm === 'AM') {
+                if (hh === 12) hh = 0;
+            } else if (ampm === 'PM') {
+                if (hh !== 12) hh += 12;
+            }
+        }
+        var utcMs = Date.UTC(yy, mm - 1, dd, hh, mi, ss);
+        var dSlash = new Date(utcMs);
+        return isNaN(dSlash.getTime()) ? null : dSlash.toISOString();
+    }
+
+    // Handle US-style slash date-only as UTC midnight for consistency (M/D/YYYY)
+    var slashDateOnlyRe = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/;
+    var md = s.match(slashDateOnlyRe);
+    if (md) {
+        var mmOnly = parseInt(md[1], 10);
+        var ddOnly = parseInt(md[2], 10);
+        var yyOnly = parseInt(md[3], 10);
+        if (yyOnly < 100) yyOnly += 2000;
+        var utcMsOnly = Date.UTC(yyOnly, mmOnly - 1, ddOnly, 0, 0, 0);
+        var dSlashOnly = new Date(utcMsOnly);
+        return isNaN(dSlashOnly.getTime()) ? null : dSlashOnly.toISOString();
+    }
+
+    // Date-only string 'YYYY-MM-DD' -> treat as UTC midnight
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        var parts = s.split('-');
+        var utcMsDate = Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 0, 0, 0);
+        var dLocal = new Date(utcMsDate);
+        return isNaN(dLocal.getTime()) ? null : dLocal.toISOString();
+    }
+
+    // Pattern like 'YYYY-MM-DD HH:mm:ss' or 'YYYY-MM-DDTHH:mm:ss' without TZ -> treat as UTC
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(s)) {
+        var d2 = new Date(s.replace(' ', 'T') + 'Z');
+        return isNaN(d2.getTime()) ? null : d2.toISOString();
+    }
+
+    // Handle sheet timestamps with no timezone info (e.g., "6/12/2025 22:04:00")
+    // The sheet time is ALREADY in UTC
+    var generalTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/;
+    var tm = s.match(generalTimestampRe);
+    if (tm) {
+        // Parse components
+        var tmMonth = parseInt(tm[1], 10);
+        var tmDay = parseInt(tm[2], 10);
+        var tmYear = parseInt(tm[3], 10);
+        var tmHour = parseInt(tm[4], 10);
+        var tmMin = parseInt(tm[5], 10);
+        var tmSec = parseInt(tm[6], 10);
+        
+        // Create Date in UTC directly - the sheet data is ALREADY in UTC
+        var utcMs = Date.UTC(tmYear, tmMonth - 1, tmDay, tmHour, tmMin, tmSec);
+        var utcDate = new Date(utcMs);
+        var isoResult = utcDate.toISOString();
+        
+        return isNaN(utcDate.getTime()) ? null : isoResult;
+    }
+    
+    // Fallback: try to parse as-is and append 'Z' to force UTC interpretation
+    var d3 = new Date(s);
+    if (!isNaN(d3.getTime())) {
+        // If the string doesn't have timezone info, append 'Z' and re-parse
+        if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s)) {
+            var d4 = new Date(s + 'Z');
+            if (!isNaN(d4.getTime())) {
+                return d4.toISOString();
+            }
+        }
+        return d3.toISOString();
+    }
+
+    // Final fallback: return null if we can't parse it
+    return null;
+}
+
+function parseServerDate(val) {
+    // Handle the case when val is already a Date object
+    if (val instanceof Date) return val;
+    
+    // If it's null, undefined, or empty string, return null
+    if (!val) return null;
+    
+    try {
+        // For sheet timestamp format like "9/4/2025 00:21:18"
+        if (typeof val === 'string') {
+            // If the string contains date and time components with a slash (MM/DD/YYYY format)
+            if (val.indexOf('/') !== -1 && val.indexOf(':') !== -1) {
+                // Parse the date string
+                var parts = val.split(' ');
+                if (parts.length === 2) {
+                    var dateParts = parts[0].split('/');
+                    var timeParts = parts[1].split(':');
+                    
+                    // Parse as MM/DD/YYYY format (sheet format)
+                    var month = parseInt(dateParts[0], 10) - 1; // Months are 0-indexed in JS
+                    var day = parseInt(dateParts[1], 10);
+                    var year = parseInt(dateParts[2], 10);
+                    
+                    var hour = parseInt(timeParts[0], 10);
+                    var minute = parseInt(timeParts[1], 10);
+                    var second = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+                    
+                    // IMPORTANT: The sheet data is ALREADY in UTC
+                    // Create a UTC Date object directly - don't try to adjust timezone
+                    var d = new Date(Date.UTC(year, month, day, hour, minute, second));
+                    
+                    return d;
+                }
+            }
+        }
+        
+        // Fall back to the normalized UTC string approach
+        var iso = normalizeUtcString(val);
+        return iso ? new Date(iso) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function formatDateTimeLocal(val) {
+    // If no value provided, return placeholder
+    if (!val) return '—';
+    
+    try {
+        // Parse the input date (ensuring it's treated as UTC if it comes from the sheet)
+        var d = val instanceof Date ? val : parseServerDate(val);
+        if (!d) return '—';
+        
+        // Format for local timezone display
+        var opts = { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit',
+            year: 'numeric',
+            month: 'numeric', 
+            day: 'numeric',
+            timeZoneName: 'short'
+        };
+        
+        // Return the date formatted in the user's local timezone
+        var result = d.toLocaleString([], opts);
+        return result;
+    } catch (e) {
+        return '—';
+    }
+}
+
+// New: date-only formatter for inputs and date-only displays
+function formatDateLocalDateOnly(val) {
+    var d = val instanceof Date ? val : parseServerDate(val);
+    if (!d) return '';
+    return d.toLocaleDateString();
+}
+
+// Direct sheet timestamp to local time conversion
+function formatSheetDateToLocal(val) {
+    if (!val) return '—';
+    
+    try {
+        // For sheet dates like "9/4/2025 00:21:18" - these are already in UTC time
+        if (typeof val === 'string' && val.indexOf('/') !== -1 && val.indexOf(':') !== -1) {
+            var parts = val.split(' ');
+            if (parts.length === 2) {
+                var dateParts = parts[0].split('/');
+                var timeParts = parts[1].split(':');
+                
+                // Parse as MM/DD/YYYY format
+                var month = parseInt(dateParts[0], 10) - 1; // JS months are 0-indexed
+                var day = parseInt(dateParts[1], 10);
+                var year = parseInt(dateParts[2], 10);
+                
+                var hour = parseInt(timeParts[0], 10);
+                var minute = parseInt(timeParts[1], 10);
+                var second = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+                
+                // IMPORTANT: We need to create the date correctly from UTC values
+                // Use Date constructor directly with UTC values but make sure browser doesn't apply local timezone offset
+                var utcDate = new Date(Date.UTC(year, month, day, hour, minute, second));
+                
+                // Format it for display in local timezone
+                var opts = {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    timeZoneName: 'short'
+                };
+                
+                return utcDate.toLocaleString([], opts);
+            }
+        }
+        
+        // Handle ISO format dates (like "2025-06-19T21:50:00.000Z")
+        if (typeof val === 'string' && (val.indexOf('T') !== -1 || val.endsWith('Z'))) {
+            // These already have timezone info, so we can parse directly
+            var isoDate = new Date(val);
+            if (!isNaN(isoDate.getTime())) {
+                // Format it for display in local timezone
+                var isoOpts = {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    year: 'numeric',
+                    month: 'numeric',
+                    day: 'numeric',
+                    timeZoneName: 'short'
+                };
+                
+                return isoDate.toLocaleString([], isoOpts);
+            }
+        }
+        
+        // Fallback to general formatter
+        return formatDateTimeLocal(val);
+    } catch (e) {
+        return formatDateTimeLocal(val); // Fallback
+    }
+}
+
+// --- UPDATE ROW HELPERS ---
+function updateRowTimestamp(jiraId, newTimestampISO) {
+    var allRows = $$('#list-body tr');
+    var rowToUpdate = null;
+    
+    for (var i = 0; i < allRows.length; i++) {
+        // Look for the Jira ID in the second cell (td:nth-child(2)) which contains the link
+        var link = allRows[i].querySelector('td:nth-child(2) a');
+        if (link && link.textContent.trim() === jiraId) {
+            rowToUpdate = allRows[i];
+            break;
+        }
+    }
+
+    if (!rowToUpdate) {
+        return;
+    }
+
+    // Persist canonical ISO and recompute validation
+    var checkedIso = normalizeUtcString(newTimestampISO);
+    rowToUpdate.dataset.checkedIso = checkedIso || '';
+
+    var planningStage = (rowToUpdate.dataset.planningStage || '');
+    var updatedStr = rowToUpdate.dataset.updatedIso || null;
+    var projectStageSelect = rowToUpdate.cells[2] ? rowToUpdate.cells[2].querySelector('select') : null;
+    var projectStage = projectStageSelect ? projectStageSelect.value : '';
+
+    var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage);
+
+    // Update Last Checked cell text and class (17th column)
+    var checkedCell = rowToUpdate.cells[16];
+    if (checkedCell) {
+        var formattedCheckedDate = checkedIso ? formatDateTimeLocal(checkedIso) : 'Never';
+        checkedCell.textContent = formattedCheckedDate;
+        checkedCell.className = validation.checkedClassName || 'recent-check';
+    }
+
+    // Update Last Updated cell class (16th column) and ensure local display
+    var updatedCell = rowToUpdate.cells[15];
+    if (updatedCell) {
+        var formattedUpdatedDate = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
+        updatedCell.textContent = formattedUpdatedDate;
+        updatedCell.className = validation.updatedClassName || '';
+    }
+    
+    // Update validation pill (preserve any existing badge)
+    var pillWrap = rowToUpdate.cells[4] ? rowToUpdate.cells[4].querySelector('.validation-pill-container') : null;
+    if (pillWrap) {
+        var statusPill = pillWrap.querySelector('.status-pill');
+        if (!statusPill) {
+            statusPill = document.createElement('span');
+            statusPill.className = 'status-pill ' + validation.className;
+            statusPill.textContent = validation.text;
+            pillWrap.insertBefore(statusPill, pillWrap.firstChild || null);
+        } else {
+            statusPill.className = 'status-pill ' + validation.className;
+            statusPill.textContent = validation.text;
+        }
+    }
+
+    // Update row dataset for filtering
+    rowToUpdate.dataset.validation = validation.text;
+
+    // Update validation badges for parent epics
+    updateEpicValidationBadges();
+}
+
+// New helper: Recompute and refresh a row's validation/sync classes without changing timestamps
+function updateRowValidation(jiraId) {
+    var allRows = $$('#list-body tr');
+    var row = null;
+    for (var i = 0; i < allRows.length; i++) {
+        var link = allRows[i].querySelector('td:nth-child(2) a');
+        if (link && link.textContent.trim() === jiraId) { row = allRows[i]; break; }
+    }
+    if (!row) return;
+
+    // Gather current values from dataset/DOM
+    var planningStage = (row.dataset.planningStage || '');
+    var updatedStr = row.dataset.updatedIso || null;
+    var checkedStr = row.dataset.checkedIso || null;
+    var stageSelect = row.cells[2] ? row.cells[2].querySelector('select') : null;
+    var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
+
+    // Persist dataset.projectStage so filters/search use latest value
+    row.dataset.projectStage = projectStage;
+
+    // Recalculate validation
+    var validation = getValidationStatus(planningStage, updatedStr, checkedStr, projectStage);
+
+    // Update validation pill
+    var pillWrap = row.cells[4] ? row.cells[4].querySelector('.validation-pill-container') : null;
+    if (pillWrap) {
+        var statusPill = pillWrap.querySelector('.status-pill');
+        if (!statusPill) {
+            statusPill = document.createElement('span');
+            statusPill.className = 'status-pill ' + validation.className;
+            statusPill.textContent = validation.text;
+            pillWrap.insertBefore(statusPill, pillWrap.firstChild || null);
+        } else {
+            statusPill.className = 'status-pill ' + validation.className;
+            statusPill.textContent = validation.text;
+        }
+    }
+
+    // Update dataset used by filters
+    row.dataset.validation = validation.text;
+
+    // Update date cell classes and ensure local display using canonical ISO
+    var updatedCell = row.cells[15];
+    if (updatedCell) {
+        updatedCell.textContent = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
+        updatedCell.className = validation.updatedClassName || '';
+    }
+    var checkedCell = row.cells[16];
+    if (checkedCell) {
+        checkedCell.textContent = checkedStr ? formatDateTimeLocal(checkedStr) : 'Never';
+        checkedCell.className = validation.checkedClassName || '';
+    }
+
+    // Update epic badges since a child may have changed validation
+    updateEpicValidationBadges();
+}
+
+// Add message listener for real-time sync indicator updates
+window.addEventListener('message', function(event) {
+    if (event.data && event.data.type === 'mappingChanged') {
+        // Trigger a re-render of the app to update sync indicators
+        try {
+            if (typeof renderApp === 'function') {
+                renderApp();
+            }
+        } catch (e) {}
+    }
+});
+
+// --- SYNC INDICATOR & EPIC BADGE HELPERS ---
+function updateRowSyncIndicator(jiraId) {
+    try {
+        var rows = $$('#list-body tr');
+        var row = null;
+        for (var i = 0; i < rows.length; i++) {
+            var link = rows[i].querySelector('td:nth-child(2) a');
+            if (link && link.textContent.trim() === jiraId) { row = rows[i]; break; }
+        }
+        if (!row) return;
+
+        // Read latest values
+        var statusText = (row.dataset.status || '').toString();
+        var stageSelect = row.cells[2] ? row.cells[2].querySelector('select') : null;
+        var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
+
+        // Persist stage into dataset for filters and future reads
+        row.dataset.projectStage = projectStage;
+
+        // Only applicable for Jira items (epic/story). If not, do nothing.
+        var isJiraItem = row.classList.contains('row-epic') || row.classList.contains('row-story');
+        if (!isJiraItem) return;
+
+        // Empty/blank stage -> show warning dot
+        var statusCell = row.cells[5];
+        if (!statusCell) return;
+
+        var stageIsEmpty = !projectStage || String(projectStage).trim() === '';
+        if (stageIsEmpty) {
+            var dotEmpty = '<span title="Project Stage is empty - this should be set" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
+            statusCell.innerHTML = (statusText || '—') + dotEmpty;
+            return;
+        }
+
+        // Build mapping from config
+        var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+        var maps = getClosedMappings();
+        var stageMap = {};
+        (cfg.stageStatusMappings || []).forEach(function(m){
+            if (m && m.stage) {
+                var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+                stageMap[(m.stage + '').toLowerCase().trim()] = expectedStatuses;
+            }
+        });
+
+        var s = String(statusText).toLowerCase().trim();
+        var stg = String(projectStage).toLowerCase().trim();
+        var expectedStatuses = stageMap[stg] || [];
+        var statusAligned = false;
+        var matchedStatus = '';
+
+        if (expectedStatuses.length > 0) {
+            if (s) {
+                for (var si = 0; si < expectedStatuses.length; si++) {
+                    if (expectedStatuses[si] && s === expectedStatuses[si]) { matchedStatus = expectedStatuses[si]; statusAligned = true; break; }
+                }
+            } else {
+                statusAligned = false;
+            }
+        } else {
+            // No mapping defined for this stage -> flag mismatch to draw attention
+            statusAligned = false;
+        }
+
+        if (statusAligned) {
+            statusCell.textContent = statusText || '—';
+        } else {
+            var tooltip = 'Status ("' + (statusText || '') + '") and Project Stage ("' + (projectStage || '') + '") may be out of sync' + (expectedStatuses.length ? ('\nExpected Status: ' + expectedStatuses.join(', ') + (matchedStatus ? ('\nCurrent matches: ' + matchedStatus) : '\nNo match found')) : '\nNo stage-specific mapping configured');
+            var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
+            statusCell.innerHTML = (statusText || '—') + dot;
+        }
+    } catch (e) { /* no-op */ }
+}
+
+function updateEpicValidationBadges() {
+    try {
+        // For each epic row, count children requiring review and update its badge
+        var epicRows = $$('tr.row-epic');
+        for (var i = 0; i < epicRows.length; i++) {
+            var epicRow = epicRows[i];
+            var epicId = epicRow.dataset.id;
+            if (!epicId) continue;
+
+            var count = 0;
+            // Count both stories and tasks under this epic
+            var childRows = $$('tr.row-story[data-parent-epic="' + epicId + '"], tr.row-task[data-parent-epic="' + epicId + '"]');
+            for (var j = 0; j < childRows.length; j++) {
+                var r = childRows[j];
+                var v = (r.dataset.validation || '').trim();
+                if (v === 'Needs Review') count++;
+            }
+
+            var cell = epicRow.cells[4];
+            if (!cell) continue;
+            var container = cell.querySelector('.validation-pill-container');
+            if (!container) continue;
+            var badge = container.querySelector('.validation-badge');
+
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'validation-badge';
+                    container.appendChild(badge);
+                }
+                badge.textContent = String(count);
+            } else {
+                if (badge) badge.remove();
+            }
+        }
+    } catch (e) { /* no-op */ }
+}
+</script>

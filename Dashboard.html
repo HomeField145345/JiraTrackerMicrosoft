@@ -65,7 +65,7 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <span class="version-badge">v6.7</span>
+      <span class="version-badge">v6.8</span>
       <div id="actions-container" class="dropdown">
           <button id="actions-toggle-btn" class="btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -200,6 +200,13 @@
             <div class="kpi-number" id="current-sprint-count">-</div>
             <div class="kpi-label">Current Sprint <span id="current-sprint-number"></span></div>
           </div>
+          <div class="kpi-trend kpi-trend-up">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+            <span>12% from last sprint</span>
+          </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -211,13 +218,6 @@
             </svg>
           </div>
         </div>
-        <div class="kpi-trend kpi-trend-up">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-          <span>12% from last sprint</span>
-        </div>
       </div>
       
       <div class="kpi-card" id="past-sprint-card" data-kpi="past-sprint">
@@ -225,6 +225,12 @@
           <div class="kpi-content">
             <div class="kpi-number" id="past-sprint-count">-</div>
             <div class="kpi-label">Past Sprint</div>
+          </div>
+          <div class="kpi-trend kpi-trend-neutral">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>No change from previous</span>
           </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -235,12 +241,6 @@
             </svg>
           </div>
         </div>
-        <div class="kpi-trend kpi-trend-neutral">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>No change from previous</span>
-        </div>
       </div>
       
       <div class="kpi-card" id="needs-review-card" data-kpi="needs-review">
@@ -249,19 +249,19 @@
             <div class="kpi-number" id="needs-review-count">-</div>
             <div class="kpi-label">Needs Review</div>
           </div>
+          <div class="kpi-trend kpi-trend-down">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <polyline points="19 12 12 19 5 12"></polyline>
+            </svg>
+            <span>5% less than last week</span>
+          </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
               <circle cx="12" cy="12" r="3"></circle>
             </svg>
           </div>
-        </div>
-        <div class="kpi-trend kpi-trend-down">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <polyline points="19 12 12 19 5 12"></polyline>
-          </svg>
-          <span>5% less than last week</span>
         </div>
         <div class="kpi-sub-stats">
           <div class="kpi-sub-item">
@@ -285,6 +285,13 @@
             <div class="kpi-number" id="total-tasks-count">-</div>
             <div class="kpi-label">Total Tasks</div>
           </div>
+          <div class="kpi-trend kpi-trend-up">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"></line>
+              <polyline points="5 12 12 5 19 12"></polyline>
+            </svg>
+            <span>8% increase this month</span>
+          </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
@@ -295,13 +302,6 @@
               <line x1="12" y1="22.08" x2="12" y2="12"></line>
             </svg>
           </div>
-        </div>
-        <div class="kpi-trend kpi-trend-up">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <line x1="12" y1="19" x2="12" y2="5"></line>
-            <polyline points="5 12 12 5 19 12"></polyline>
-          </svg>
-          <span>8% increase this month</span>
         </div>
       </div>
     </div>

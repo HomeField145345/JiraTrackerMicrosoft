@@ -18,6 +18,8 @@ function onOpen() {
     .addSeparator()
     .addItem('Migrate: Resolution → Project Stage', 'migrateResolutionToProjectStage')
     .addItem('Migrate: Add Priority Column', 'addPriorityColumnToManualData')
+    .addItem('Migrate: Add New Jira Fields', 'addNewJiraFields')
+    .addItem('Migrate: Clean Column Headers', 'cleanupColumnHeaders')
     .addToUi();
 }
 
@@ -27,7 +29,7 @@ function onOpen() {
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description']
@@ -41,6 +43,30 @@ function setupSheets() {
       sheet.setFrozenRows(1);
       SpreadsheetApp.getUi().alert(`Sheet "${sheetName}" was created successfully.`);
     } else {
+      // --- Add missing columns to JiraData if missing ---
+      if (sheetName === JIRA_DATA_SHEET) {
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        let columnsAdded = [];
+        
+        // Add Acceptance Criteria column (O) if missing
+        if (headers.indexOf('Acceptance Criteria') === -1) {
+          sheet.insertColumnAfter(headers.length);
+          sheet.getRange(1, headers.length + 1).setValue('Acceptance Criteria');
+          columnsAdded.push('Acceptance Criteria (Column O)');
+        }
+        
+        // Add Target Date column (P) if missing
+        const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (updatedHeaders.indexOf('Target Date') === -1) {
+          sheet.insertColumnAfter(updatedHeaders.length);
+          sheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date'); // Clean header without trailing space
+          columnsAdded.push('Target Date (Column P)');
+        }
+        
+        if (columnsAdded.length > 0) {
+          SpreadsheetApp.getUi().alert('Added columns to JiraData sheet: ' + columnsAdded.join(', '));
+        }
+      }
       SpreadsheetApp.getUi().alert(`Sheet "${sheetName}" already exists.`);
     }
   }
@@ -109,6 +135,83 @@ function addPriorityColumnToManualData() {
 }
 
 /**
+ * Migration function to add new Jira fields (Acceptance Criteria and Target Date) to existing JiraData sheet
+ */
+function addNewJiraFields() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  try {
+    const jiraSheet = ss.getSheetByName(JIRA_DATA_SHEET);
+    if (jiraSheet) {
+      const headers = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      let columnsAdded = [];
+      
+      // Add Acceptance Criteria column (O) if missing
+      if (headers.indexOf('Acceptance Criteria') === -1) {
+        jiraSheet.insertColumnAfter(headers.length);
+        jiraSheet.getRange(1, headers.length + 1).setValue('Acceptance Criteria');
+        columnsAdded.push('Acceptance Criteria (Column O)');
+      }
+      
+      // Add Target Date column (P) if missing
+      const updatedHeaders = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      if (updatedHeaders.indexOf('Target Date') === -1) {
+        jiraSheet.insertColumnAfter(updatedHeaders.length);
+        jiraSheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date');
+        columnsAdded.push('Target Date (Column P)');
+      }
+      
+      if (columnsAdded.length > 0) {
+        SpreadsheetApp.getUi().alert('Successfully added new fields to JiraData sheet: ' + columnsAdded.join(', ') + '\n\nThese fields will now be imported from your Jira CSV exports.');
+      } else {
+        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria (Column O)\n- Target Date (Column P)');
+      }
+    } else {
+      SpreadsheetApp.getUi().alert('JiraData sheet not found. Please run "1. Create Backend Sheets" first.');
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('Migration failed: ' + e.message);
+  }
+}
+
+/**
+ * Migration function to clean up column headers with trailing spaces
+ */
+function cleanupColumnHeaders() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  try {
+    const jiraSheet = ss.getSheetByName(JIRA_DATA_SHEET);
+    if (jiraSheet) {
+      const headers = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      let cleanedHeaders = [];
+      let changesMade = false;
+      
+      for (let i = 0; i < headers.length; i++) {
+        const originalHeader = headers[i];
+        const cleanedHeader = String(originalHeader).trim();
+        cleanedHeaders.push(cleanedHeader);
+        
+        if (originalHeader !== cleanedHeader) {
+          jiraSheet.getRange(1, i + 1).setValue(cleanedHeader);
+          changesMade = true;
+        }
+      }
+      
+      if (changesMade) {
+        SpreadsheetApp.getUi().alert('Column headers cleaned up successfully! Removed trailing/leading spaces from headers.');
+      } else {
+        SpreadsheetApp.getUi().alert('All column headers are already clean - no changes needed.');
+      }
+    } else {
+      SpreadsheetApp.getUi().alert('JiraData sheet not found. Please run "1. Create Backend Sheets" first.');
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('Header cleanup failed: ' + e.message);
+  }
+}
+
+/**
  * Generates 100 rows of mock data across the JiraData, ManualData, and IndependentTasks sheets.
  */
 function createMockData() {
@@ -158,12 +261,18 @@ function createMockData() {
 
     // Create a resolved date for some items
     const resolvedDate = i % 3 === 0 ? new Date(Date.now() - Math.random() * 10 * 24 * 60 * 60 * 1000) : null;
+    
+    // Create sample acceptance criteria
+    const acceptanceCriteria = isEpic ? '' : (i % 4 === 0 ? 'Given user is logged in\nWhen they click the button\nThen the action should complete' : '');
+    
+    // Create sample target date (some items have target dates, others don't)
+    const targetDate = i % 3 === 0 ? new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000) : null;
 
     jiraData.push([
       '✅', jiraId, summary, statuses[i % statuses.length], issueType,
       assignees[i % assignees.length], sprint, epicLink, pmLeads[i % pmLeads.length],
       isEpic ? '' : Math.floor(Math.random() * 5) + 1, new Date(), resolvedDate, new Date(),
-      resolutions[i % resolutions.length]
+      resolutions[i % resolutions.length], acceptanceCriteria, targetDate
     ]);
 
     manualData.push([

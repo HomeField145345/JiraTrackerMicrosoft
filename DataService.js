@@ -711,7 +711,7 @@ function importJiraCsv_(fileData) {
       
       return { 
         status: 'error', 
-        message: '[V2.5] Could not find header row with a Jira key column in the uploaded file (searched in first ' + maxHeaderSearchRows + ' rows, total file has ' + uploadedValues.length + ' rows).\n\n' +
+        message: '[V7.1] Could not find header row with a Jira key column in the uploaded file (searched in first ' + maxHeaderSearchRows + ' rows, total file has ' + uploadedValues.length + ' rows).\n\n' +
                  'Looking for columns containing: "key", "issue key", "issuekey", "jira key", or any header containing "key".\n\n' +
                  'Detected normalized headers in first ' + Math.min(20, uploadedValues.length) + ' rows:\n' + 
                  detectedHeaders.map(function(row, idx) { return 'Row ' + (idx + 1) + ': [' + row.join(', ') + ']'; }).join('\n') + '\n\n' +
@@ -728,7 +728,10 @@ function importJiraCsv_(fileData) {
     const headerNameMap = {
       'Key': 'Jira #', 'Summary': 'Summary', 'Status': 'Status', 'Issue Type': 'Issue Type',
       'Assignee': 'Assignee', 'Sprint': 'sprint', 'Epic Link': 'Epic Link', 'PM Lead': 'PM Lead',
-      'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created'
+      'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created',
+      'Resolution': 'Resolution',
+      'Acceptance Criteria': 'Acceptance Criteria', // Map for import to column O
+      'Target Date': 'Target Date' // NEW: map for import to column P
     };
     
     const headerMap = {};

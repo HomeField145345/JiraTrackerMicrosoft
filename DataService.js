@@ -731,7 +731,8 @@ function importJiraCsv_(fileData) {
       'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created',
       'Resolution': 'Resolution',
       'Acceptance Criteria': 'Acceptance Criteria', // Map for import to column O
-      'Target Date': 'Target Date' // NEW: map for import to column P
+      'Target Date': 'Target Date', // Map for import to column P
+      'Fix Version': 'Fix Version' // NEW: map for import to column Q
     };
     
     const headerMap = {};

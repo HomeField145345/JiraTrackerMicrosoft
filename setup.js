@@ -29,7 +29,7 @@ function onOpen() {
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description']
@@ -61,6 +61,14 @@ function setupSheets() {
           sheet.insertColumnAfter(updatedHeaders.length);
           sheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date'); // Clean header without trailing space
           columnsAdded.push('Target Date (Column P)');
+        }
+        
+        // Add Fix Version column (Q) if missing
+        const updatedHeaders2 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (updatedHeaders2.indexOf('Fix Version') === -1) {
+          sheet.insertColumnAfter(updatedHeaders2.length);
+          sheet.getRange(1, updatedHeaders2.length + 1).setValue('Fix Version');
+          columnsAdded.push('Fix Version (Column Q)');
         }
         
         if (columnsAdded.length > 0) {
@@ -161,10 +169,18 @@ function addNewJiraFields() {
         columnsAdded.push('Target Date (Column P)');
       }
       
+      // Add Fix Version column (Q) if missing
+      const updatedHeaders2 = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      if (updatedHeaders2.indexOf('Fix Version') === -1) {
+        jiraSheet.insertColumnAfter(updatedHeaders2.length);
+        jiraSheet.getRange(1, updatedHeaders2.length + 1).setValue('Fix Version');
+        columnsAdded.push('Fix Version (Column Q)');
+      }
+      
       if (columnsAdded.length > 0) {
         SpreadsheetApp.getUi().alert('Successfully added new fields to JiraData sheet: ' + columnsAdded.join(', ') + '\n\nThese fields will now be imported from your Jira CSV exports.');
       } else {
-        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria (Column O)\n- Target Date (Column P)');
+        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria (Column O)\n- Target Date (Column P)\n- Fix Version (Column Q)');
       }
     } else {
       SpreadsheetApp.getUi().alert('JiraData sheet not found. Please run "1. Create Backend Sheets" first.');
@@ -267,12 +283,16 @@ function createMockData() {
     
     // Create sample target date (some items have target dates, others don't)
     const targetDate = i % 3 === 0 ? new Date(Date.now() + Math.random() * 90 * 24 * 60 * 60 * 1000) : null;
+    
+    // Create sample fix version (some items have fix versions, others don't)
+    const fixVersions = ['v1.0', 'v1.1', 'v1.2', 'v2.0', 'v2.1'];
+    const fixVersion = i % 4 === 0 ? fixVersions[i % fixVersions.length] : '';
 
     jiraData.push([
       '✅', jiraId, summary, statuses[i % statuses.length], issueType,
       assignees[i % assignees.length], sprint, epicLink, pmLeads[i % pmLeads.length],
       isEpic ? '' : Math.floor(Math.random() * 5) + 1, new Date(), resolvedDate, new Date(),
-      resolutions[i % resolutions.length], acceptanceCriteria, targetDate
+      resolutions[i % resolutions.length], acceptanceCriteria, targetDate, fixVersion
     ]);
 
     manualData.push([

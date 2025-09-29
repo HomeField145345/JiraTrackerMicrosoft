@@ -363,6 +363,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
             return targetDate;
         }
     })() + '</td>' +
+    '<td>' + (item['Fix Version'] || '—') + '</td>' +
     createCellWithDropdown(APP_STATE.allData.config.actPctOptions, item['ACT/PCT'], item['Jira #'], 'ACT/PCT') +
     createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date') +
     createDateInputCell(item['End Date'], item['Jira #'], 'End Date') +
@@ -738,7 +739,7 @@ function renderTable() {
     wrapper.innerHTML = '<div class="table-container"><table class="table" aria-describedby="count"><thead><tr>' +
               '<th class="col-sync-status">S</th><th class="col-jira">Jira #</th><th class="col-project-stage">Project Stage</th><th class="col-title">Title</th>' +
               '<th class="col-validation">Validation</th><th class="col-status">Status</th><th class="col-type">Type</th><th class="col-priority">Priority</th><th class="col-story-points">Story Points</th>' +
-              '<th class="col-pm-lead">Assigned PM</th><th class="col-dev-assignee">Assigned Dev</th><th class="col-sprint">Sprint</th><th class="col-target-date">Target Date</th>' +
+              '<th class="col-pm-lead">Assigned PM</th><th class="col-dev-assignee">Assigned Dev</th><th class="col-sprint">Sprint</th><th class="col-target-date">Target Date</th><th class="col-fix-version">Fix Version</th>' +
               '<th class="col-act-pct">ACT/PCT</th><th class="col-start-date">Start Date</th><th class="col-end-date">End Date</th><th class="col-last-updated">Last Updated</th><th class="col-last-checked">Last Checked</th><th class="col-action">Action</th>' +
           '</tr></thead><tbody id="list-body"></tbody></table></div>';
     var projects = APP_STATE.allData.projects;
@@ -1262,16 +1263,16 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
 
     var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage);
 
-    // Update Last Checked cell text and class (17th column)
-    var checkedCell = rowToUpdate.cells[16];
+    // Update Last Checked cell text and class (19th column)
+    var checkedCell = rowToUpdate.cells[18];
     if (checkedCell) {
         var formattedCheckedDate = checkedIso ? formatDateTimeLocal(checkedIso) : 'Never';
         checkedCell.textContent = formattedCheckedDate;
         checkedCell.className = validation.checkedClassName || 'recent-check';
     }
 
-    // Update Last Updated cell class (16th column) and ensure local display
-    var updatedCell = rowToUpdate.cells[15];
+    // Update Last Updated cell class (18th column) and ensure local display
+    var updatedCell = rowToUpdate.cells[17];
     if (updatedCell) {
         var formattedUpdatedDate = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.textContent = formattedUpdatedDate;
@@ -1342,12 +1343,12 @@ function updateRowValidation(jiraId) {
     row.dataset.validation = validation.text;
 
     // Update date cell classes and ensure local display using canonical ISO
-    var updatedCell = row.cells[15];
+    var updatedCell = row.cells[17];
     if (updatedCell) {
         updatedCell.textContent = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.className = validation.updatedClassName || '';
     }
-    var checkedCell = row.cells[16];
+    var checkedCell = row.cells[18];
     if (checkedCell) {
         checkedCell.textContent = checkedStr ? formatDateTimeLocal(checkedStr) : 'Never';
         checkedCell.className = validation.checkedClassName || '';

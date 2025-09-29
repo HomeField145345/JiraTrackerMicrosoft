@@ -220,7 +220,7 @@ Utility-based naming:
 The application uses 4 main sheets:
 
 1. **JiraData Sheet** (Primary data storage)
-   - Columns A-P: Sync Status, Jira #, Summary, Status, Issue Type, Assignee, Sprint, Epic Link, PM Lead, Story Points, Updated, Resolved, Created, Resolution, Acceptance Criteria, Target Date
+   - Columns A-Q: Sync Status, Jira #, Summary, Status, Issue Type, Assignee, Sprint, Epic Link, PM Lead, Story Points, Updated, Resolved, Created, Resolution, Acceptance Criteria, Target Date, Fix Version
    - Stores imported Jira data with sync status tracking
 
 2. **ManualData Sheet** (User input overlay)

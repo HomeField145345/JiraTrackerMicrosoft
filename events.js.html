@@ -1744,13 +1744,14 @@ function updateNeedsReviewKPI() {
             project['Planning Stage'], 
             project['Updated'], 
             project['Last Checked'], 
-            project['Project Stage']
+            project['Project Stage'],
+            project['Target Date']
         );
         
         const issueType = (project['Issue Type'] || '').toLowerCase();
         
-        // Count by validation status
-        if (validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
+        // Count by validation status - Past Due and Needs Review both count for "needs review"
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.PAST_DUE || validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
             counts.needsReview++;
             
             // Count by issue type

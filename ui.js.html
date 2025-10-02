@@ -153,7 +153,7 @@ function closeStoryInfoModal() {
 }
 
 // --- DATA VALIDATION & FORMATTING ---
-function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage) {
+function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDateStr) {
     const projectStageStatus = (projectStage || '').toLowerCase().trim();
 
     // Configurable closed project stages: treat as Closed
@@ -165,6 +165,24 @@ function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage
             updatedClassName: '', 
             checkedClassName: '' 
         };
+    }
+
+    // Check for Past Due - only if target date exists and is valid
+    // Skip if targetDateStr is null, undefined, empty, or whitespace
+    if (targetDateStr && targetDateStr.toString().trim() !== '') {
+        const targetDate = parseServerDate(targetDateStr);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Compare dates only, not times
+        
+        if (targetDate && !isNaN(targetDate.getTime()) && targetDate < today) {
+            // Target date exists, is valid, and is in the past
+            return { 
+                text: APP_CONSTANTS.VALIDATION.PAST_DUE, 
+                className: 'status-overdue', 
+                updatedClassName: '', 
+                checkedClassName: '' 
+            };
+        }
     }
 
     // Use robust parser so comparisons are consistent (UTC -> local)
@@ -265,7 +283,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
     row.dataset.updatedIso = normalizeUtcString(item['Updated']) || '';
     row.dataset.checkedIso = normalizeUtcString(item['Last Checked']) || '';
 
-    var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage']);
+    var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']);
     row.dataset.validation = validation.text;
     var isFauxEpic = item['Jira #'] === 'UNASSIGNED';
     var isJiraItem = (type === 'epic' || type === 'story') && !isFauxEpic;
@@ -596,7 +614,7 @@ function populateFilters() {
         var adv = (item['Assigned Dev'] || item['Assignee'] || '').toString().trim();
         if (adv && adv !== '—' && adv.toLowerCase() !== 'none') allAssignedDevs[adv] = true;
         
-        var validationText = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage']).text;
+        var validationText = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']).text;
         allValidations[validationText] = true;
         if (item.sprint) {
             var sprintParts = item.sprint.split(',');
@@ -862,7 +880,7 @@ function renderTable() {
             'canceled': 5,
             'cancelled': 5
         },
-        validation: { 'Needs Review': 1, 'Stale': 2, 'Up to Date': 3, 'Closed': 4 },
+        validation: { 'Past Due': 1, 'Needs Review': 2, 'Stale': 3, 'Up to Date': 4, 'Closed': 5 },
         priority: {} // Will be populated dynamically from config
     };
     
@@ -888,8 +906,8 @@ function renderTable() {
         if (orderA !== orderB) return orderA - orderB;
         
         // 3) Validation
-        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage']).text;
-        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage']).text;
+        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage'], a['Target Date']).text;
+        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage'], b['Target Date']).text;
         var valOrderA = sortOrders.validation[valA] || 99;
         var valOrderB = sortOrders.validation[valB] || 99;
         if (valOrderA !== valOrderB) return valOrderA - valOrderB;
@@ -909,8 +927,8 @@ function renderTable() {
         if (priorOrderA !== priorOrderB) return priorOrderA - priorOrderB;
         
         // 2) Validation
-        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage']).text;
-        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage']).text;
+        var valA = getValidationStatus(a['Planning Stage'], a['Updated'], a['Last Checked'], a['Project Stage'], a['Target Date']).text;
+        var valB = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage'], b['Target Date']).text;
         var valOrderA = sortOrders.validation[valA] || 99;
         var valOrderB = sortOrders.validation[valB] || 99;
         if (valOrderA !== valOrderB) return valOrderA - valOrderB;
@@ -936,7 +954,8 @@ function renderTable() {
         
         var needsAttentionCount = 0;
         childStories.forEach(function(story) {
-            if (getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage']).text === 'Needs Review') {
+            var status = getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage'], story['Target Date']).text;
+            if (status === 'Needs Review' || status === 'Past Due') {
                 needsAttentionCount++;
             }
         });
@@ -974,7 +993,8 @@ function renderTable() {
         var unassignedEpic = { 'Jira #': 'UNASSIGNED', Summary: 'Unassigned Stories', 'Issue Type': 'Epic' };
         var unassignedAttentionCount = 0;
         orphanStories.forEach(function(story) {
-            if (getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage']).text === 'Needs Review') {
+            var status = getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage'], story['Target Date']).text;
+            if (status === 'Needs Review' || status === 'Past Due') {
                 unassignedAttentionCount++;
             }
         });
@@ -1356,8 +1376,12 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     var updatedStr = rowToUpdate.dataset.updatedIso || null;
     var projectStageSelect = rowToUpdate.cells[2] ? rowToUpdate.cells[2].querySelector('select') : null;
     var projectStage = projectStageSelect ? projectStageSelect.value : '';
+    
+    // Get Target Date from the row
+    var targetDateInput = rowToUpdate.cells[15] ? rowToUpdate.cells[15].querySelector('input') : null;
+    var targetDate = targetDateInput ? targetDateInput.value : '';
 
-    var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage);
+    var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage, targetDate);
 
     // Update Last Checked cell text and class (19th column)
     var checkedCell = rowToUpdate.cells[18];
@@ -1414,11 +1438,15 @@ function updateRowValidation(jiraId) {
     var stageSelect = row.cells[2] ? row.cells[2].querySelector('select') : null;
     var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
 
+    // Get Target Date from the row
+    var targetDateInput = row.cells[15] ? row.cells[15].querySelector('input') : null;
+    var targetDate = targetDateInput ? targetDateInput.value : '';
+
     // Persist dataset.projectStage so filters/search use latest value
     row.dataset.projectStage = projectStage;
 
     // Recalculate validation
-    var validation = getValidationStatus(planningStage, updatedStr, checkedStr, projectStage);
+    var validation = getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDate);
 
     // Update validation pill
     var pillWrap = row.cells[4] ? row.cells[4].querySelector('.validation-pill-container') : null;

@@ -575,6 +575,34 @@
           <div class="story-info-label">Acceptance Criteria</div>
           <div id="storyInfoAcceptanceCriteria" class="story-info-value preformatted"></div>
         </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Links</div>
+          <div class="story-info-links">
+            <div class="story-info-link-item">
+              <div id="storyInfoDriveLinkView" class="story-info-link-view">
+                <a id="storyInfoDriveLink" href="#" target="_blank" class="story-info-link-clickable">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M.5 3l.04.87a1.99 1.99 0 0 0 .342 1.311l.637.637L7.086 8l-5.12 5.12-.637.637a1.99 1.99 0 0 0-.342 1.311L.5 16H2a1 1 0 0 0 .707-.293l2.414-2.414a1 1 0 0 0 .293-.707v-1.172h3.793a1 1 0 0 0 .707-.293L15.043 8 9.207 2.157A1 1 0 0 0 8.5 2H4.707v-1.172a1 1 0 0 0-.293-.707L2.707.293A1 1 0 0 0 2 0H.5zM2 1l1 1v1.172A1 1 0 0 0 4.172 4H8.5a1 1 0 0 0 .707-.293L13.854 8l-4.647 4.646a1 1 0 0 0-.707.293H4.172A1 1 0 0 0 3 13.828V14l-1 1H2z"/>
+                  </svg>
+                  <span id="storyInfoDriveLinkText">Drive Link</span>
+                </a>
+                <button id="storyInfoDriveLinkEdit" class="btn-icon-small" title="Edit Drive Link">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                    <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="storyInfoDriveLinkEditView" class="story-info-link-edit-view" style="display: none;">
+                <input id="storyInfoDriveLinkInput" class="input input-sm" placeholder="Paste Google Drive link here..." />
+                <div class="story-info-link-edit-actions">
+                  <button id="storyInfoDriveLinkSave" class="btn btn-sm primary">Save</button>
+                  <button id="storyInfoDriveLinkCancel" class="btn btn-sm">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="story-info-section">
           <div class="story-info-label">Created</div>
           <div id="storyInfoCreated" class="story-info-value"></div>

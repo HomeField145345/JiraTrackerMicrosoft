@@ -2075,6 +2075,16 @@ function setupEventListeners() {
     var editButton = e.target.closest('.edit-task-btn');
     if (editButton) { handleEditTask(editButton); return; }
 
+    // Handle info icon clicks
+    var infoButton = e.target.closest('.info-icon-btn');
+    if (infoButton) {
+      var jiraId = infoButton.dataset.jiraId;
+      if (jiraId) {
+        openStoryInfoModal(jiraId);
+      }
+      return;
+    }
+
     var showAllBtn = e.target.closest('.show-all-stories-btn');
     if (showAllBtn) {
         var epicId = showAllBtn.dataset.epicId;
@@ -2152,13 +2162,109 @@ function setupEventListeners() {
   $('#modalClose').addEventListener('click', function() { closeModal('task'); });
   $('#modalSave').addEventListener('click', handleSaveTask);
   $('#importModalClose').addEventListener('click', function() { closeModal('import'); });
-  $('#uploadBtn').addEventListener('click', handleFileUpload);
-  $('#cancelUploadBtn').addEventListener('click', function() {
-    if (confirm('Are you sure you want to cancel the upload?')) {
-      hideUploadProgress();
-      $('#csvFile').value = '';
-      $('#uploadResults').style.display = 'none';
+  
+  // Story Info Modal handlers
+  $('#storyInfoClose').addEventListener('click', closeStoryInfoModal);
+  $('#storyInfoModal').addEventListener('click', function(e) {
+    if (e.target.id === 'storyInfoModal') {
+      closeStoryInfoModal();
     }
+  });
+  
+  // Drive Link Edit handlers
+  $('#storyInfoDriveLinkEdit').addEventListener('click', function() {
+    var driveLinkElement = $('#storyInfoDriveLink');
+    var currentLink = driveLinkElement.href && driveLinkElement.href !== '#' ? driveLinkElement.href : '';
+    $('#storyInfoDriveLinkInput').value = currentLink;
+    $('#storyInfoDriveLinkView').style.display = 'none';
+    $('#storyInfoDriveLinkEditView').style.display = 'flex';
+    TimerManager.setTimeout(function() {
+      $('#storyInfoDriveLinkInput').focus();
+    }, 50, 'drive_link_focus');
+  });
+  
+  $('#storyInfoDriveLinkCancel').addEventListener('click', function() {
+    $('#storyInfoDriveLinkView').style.display = 'flex';
+    $('#storyInfoDriveLinkEditView').style.display = 'none';
+  });
+  
+  $('#storyInfoDriveLinkSave').addEventListener('click', function() {
+    var newLink = $('#storyInfoDriveLinkInput').value.trim();
+    var jiraId = $('#storyInfoModal').dataset.currentJiraId;
+    
+    if (!jiraId) {
+      console.error('No Jira ID found for Drive Link update');
+      return;
+    }
+    
+    // Validate and fix URL format - ensure it has a protocol
+    if (newLink && !newLink.match(/^https?:\/\//i)) {
+      newLink = 'https://' + newLink;
+      // Update the input field to show the corrected URL
+      $('#storyInfoDriveLinkInput').value = newLink;
+    }
+    
+    // Show loading state
+    $('#storyInfoDriveLinkSave').disabled = true;
+    $('#storyInfoDriveLinkSave').textContent = 'Saving...';
+    
+    // Call the API to update the Drive Link
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+          // Update the link in the view
+          var driveLinkElement = $('#storyInfoDriveLink');
+          var driveLinkText = $('#storyInfoDriveLinkText');
+          
+          if (newLink) {
+            driveLinkElement.href = newLink;
+            driveLinkText.textContent = 'Drive Link';
+            driveLinkElement.classList.remove('no-link');
+            driveLinkElement.onclick = null; // Allow default click behavior
+          } else {
+            driveLinkElement.href = '#';
+            driveLinkText.textContent = 'No Drive Link set';
+            driveLinkElement.classList.add('no-link');
+            // Prevent click when no link
+            driveLinkElement.onclick = function(e) {
+              e.preventDefault();
+              return false;
+            };
+          }
+          
+          // Update the story data in APP_STATE
+          if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var story = APP_STATE.allData.projects.find(function(p) {
+              return p['Jira #'] === jiraId;
+            });
+            if (story) {
+              story['Drive Link'] = newLink;
+            }
+          }
+          
+          // Switch back to view mode
+          $('#storyInfoDriveLinkView').style.display = 'flex';
+          $('#storyInfoDriveLinkEditView').style.display = 'none';
+          
+          // Show success message
+          showToast('Drive Link updated successfully');
+          
+          // Re-render the table to show updated drive icon
+          renderApp();
+        } else {
+          alert('Failed to update Drive Link: ' + (result.error || 'Unknown error'));
+        }
+        
+        // Reset button state
+        $('#storyInfoDriveLinkSave').disabled = false;
+        $('#storyInfoDriveLinkSave').textContent = 'Save';
+      })
+      .withFailureHandler(function(error) {
+        alert('Error updating Drive Link: ' + error);
+        $('#storyInfoDriveLinkSave').disabled = false;
+        $('#storyInfoDriveLinkSave').textContent = 'Save';
+      })
+      .updateDriveLink(jiraId, newLink);
   });
 }
 </script>

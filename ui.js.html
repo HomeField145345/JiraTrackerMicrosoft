@@ -61,6 +61,97 @@ function closeModal(type) {
     }
 }
 
+// --- STORY INFO MODAL ---
+function openStoryInfoModal(jiraId) {
+  // Find the story data
+  var story = null;
+  if (APP_STATE.allData && APP_STATE.allData.projects) {
+    story = APP_STATE.allData.projects.find(function(p) {
+      return p['Jira #'] === jiraId;
+    });
+  }
+  
+  if (!story) {
+    console.error('Story not found:', jiraId);
+    return;
+  }
+  
+  // Populate modal with story data
+  $('#storyInfoJiraNumber').innerHTML = '<a href="https://onejira.verizon.com/browse/' + jiraId + '" target="_blank" class="text-blue-600 hover:underline">' + jiraId + '</a>';
+  $('#storyInfoSummary').textContent = story.Summary || '—';
+  $('#storyInfoStatus').textContent = story.Status || '—';
+  $('#storyInfoType').textContent = story['Issue Type'] || '—';
+  $('#storyInfoPriority').textContent = story.Priority || '—';
+  $('#storyInfoAssignee').textContent = story.Assignee || '—';
+  $('#storyInfoSprint').textContent = story.sprint || '—';
+  $('#storyInfoStoryPoints').textContent = story['Story Points'] || '—';
+  
+  // Format acceptance criteria
+  // Try multiple possible field names for Acceptance Criteria (including common typo)
+  var acceptanceCriteria = story['Acceptance Criteria'] || 
+                          story['Acceptance Critera'] || // common typo (missing 'i')
+                          story['Acceptance Criteria '] || // with trailing space
+                          story['AcceptanceCriteria'] || // no space
+                          story['acceptance criteria'] || // lowercase
+                          story['acceptance_criteria'] || // underscore
+                          'No acceptance criteria defined';
+  
+  $('#storyInfoAcceptanceCriteria').textContent = acceptanceCriteria;
+  
+  // Populate Drive Link
+  var driveLink = story['Drive Link'] || '';
+  var driveLinkElement = $('#storyInfoDriveLink');
+  var driveLinkText = $('#storyInfoDriveLinkText');
+  
+  if (driveLink) {
+    driveLinkElement.href = driveLink;
+    driveLinkText.textContent = 'Drive Link';
+    driveLinkElement.classList.remove('no-link');
+    driveLinkElement.onclick = null; // Allow default click behavior
+  } else {
+    driveLinkElement.href = '#';
+    driveLinkText.textContent = 'No Drive Link set';
+    driveLinkElement.classList.add('no-link');
+    // Prevent click when no link
+    driveLinkElement.onclick = function(e) {
+      e.preventDefault();
+      return false;
+    };
+  }
+  
+  // Store the current jiraId for saving later
+  $('#storyInfoModal').dataset.currentJiraId = jiraId;
+  
+  // Reset the edit view (make sure view mode is shown)
+  $('#storyInfoDriveLinkView').style.display = 'flex';
+  $('#storyInfoDriveLinkEditView').style.display = 'none';
+  
+  // Format dates
+  var formatDate = function(dateStr) {
+    if (!dateStr) return '—';
+    try {
+      var date = parseServerDate(dateStr);
+      return date ? formatDateTimeLocal(dateStr) : '—';
+    } catch (e) {
+      return dateStr;
+    }
+  };
+  
+  $('#storyInfoCreated').textContent = formatDate(story.Created);
+  $('#storyInfoUpdated').textContent = formatDate(story.Updated);
+  
+  // Show modal
+  var modal = $('#storyInfoModal');
+  modal.style.display = 'flex';
+  modal.setAttribute('aria-hidden', 'false');
+}
+
+function closeStoryInfoModal() {
+  var modal = $('#storyInfoModal');
+  modal.style.display = 'none';
+  modal.setAttribute('aria-hidden', 'true');
+}
+
 // --- DATA VALIDATION & FORMATTING ---
 function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage) {
     const projectStageStatus = (projectStage || '').toLowerCase().trim();
@@ -197,13 +288,14 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
         var expanderSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>';
         var link = isFauxEpic ? '<span class="font-medium">' + item.Summary + '</span>' : '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>';
         
-        var driveIconHtml = '';
-        if (item['Drive Link']) {
-            var driveIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 3l.04.87a1.99 1.99 0 0 0 .342 1.311l.637.637L7.086 8l-5.12 5.12-.637.637a1.99 1.99 0 0 0-.342 1.311L.5 16H2a1 1 0 0 0 .707-.293l2.414-2.414a1 1 0 0 0 .293-.707v-1.172h3.793a1 1 0 0 0 .707-.293L15.043 8 9.207 2.157A1 1 0 0 0 8.5 2H4.707v-1.172a1 1 0 0 0-.293-.707L2.707.293A1 1 0 0 0 2 0H.5zM2 1l1 1v1.172A1 1 0 0 0 4.172 4H8.5a1 1 0 0 0 .707-.293L13.854 8l-4.647 4.646a1 1 0 0 0-.707.293H4.172A1 1 0 0 0 3 13.828V14l-1 1H2z"/></svg>';
-            driveIconHtml = '<a href="' + item['Drive Link'] + '" target="_blank" class="drive-icon" title="Open Drive Folder">' + driveIconSvg + '</a>';
+        // Add info icon for epics (not faux epics)
+        var infoIconHtml = '';
+        if (!isFauxEpic && item['Jira #']) {
+            var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
+            infoIconHtml = '<button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Epic Details">' + infoIconSvg + '</button>';
         }
 
-        jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + driveIconHtml + '</div>';
+        jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + infoIconHtml + '</div>';
     } else if (type === 'story') {
         row.dataset.parentEpic = parentEpicId;
         var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';

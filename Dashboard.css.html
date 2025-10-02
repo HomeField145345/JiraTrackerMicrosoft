@@ -591,6 +591,218 @@
     .modal .field { display: flex; flex-direction: column; gap: 0.25rem; }
     .modal .label { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
     
+    /* Story Info Modal */
+    .story-info-modal-backdrop { 
+      position: fixed; 
+      inset: 0; 
+      background: rgba(17, 24, 39, 0.6); 
+      backdrop-filter: blur(4px); 
+      display: none; 
+      align-items: center; 
+      justify-content: center; 
+      padding: 1rem; 
+      z-index: 60; 
+      overflow-y: auto; 
+    }
+    
+    .story-info-modal { 
+      width: min(600px, 100%); 
+      max-height: 85vh;
+      background: var(--surface); 
+      border-radius: 16px; 
+      box-shadow: var(--shadow-md); 
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .story-info-header { 
+      display: flex; 
+      align-items: center; 
+      justify-content: space-between; 
+      padding: 1rem 1.25rem; 
+      border-bottom: 1px solid var(--line); 
+    }
+    
+    .story-info-header h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin: 0;
+    }
+    
+    .story-info-content { 
+      padding: 1.25rem; 
+      overflow-y: auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    
+    .story-info-section {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    
+    .story-info-section.full-width {
+      grid-column: 1 / -1;
+    }
+    
+    .story-info-label { 
+      font-size: 0.75rem; 
+      font-weight: 600; 
+      color: var(--muted); 
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    
+    .story-info-value { 
+      font-size: 0.95rem; 
+      color: var(--ink); 
+      word-wrap: break-word;
+    }
+    
+    .story-info-value.preformatted {
+      white-space: pre-wrap;
+      background: var(--bg);
+      padding: 0.75rem;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      font-family: 'Inter', system-ui, sans-serif;
+      line-height: 1.6;
+    }
+    
+    .btn-close {
+      background: none;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--muted);
+      padding: 0.25rem 0.5rem;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+    
+    .btn-close:hover {
+      color: var(--ink);
+    }
+    
+    .info-icon-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      transition: color 0.2s, background-color 0.2s;
+      border-radius: 4px;
+    }
+    
+    .info-icon-btn:hover {
+      color: var(--primary);
+      transform: scale(1.1);
+      background: rgba(59, 130, 246, 0.1);
+    }
+    
+    .info-icon-btn:active {
+      transform: scale(0.95);
+    }
+    
+    /* Story Info Modal - Links Section */
+    .story-info-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    
+    .story-info-link-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding: 0.75rem;
+      background: var(--bg);
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
+    
+    .story-info-link-view {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .story-info-link-clickable {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--primary);
+      padding: 0.5rem;
+      border-radius: 6px;
+      transition: background-color 0.2s;
+    }
+    
+    .story-info-link-clickable svg {
+      flex-shrink: 0;
+    }
+    
+    .story-info-link-clickable:hover {
+      background-color: rgba(59, 130, 246, 0.1);
+    }
+    
+    .story-info-link-clickable.no-link {
+      color: var(--muted);
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    
+    .story-info-link-clickable.no-link span {
+      font-style: italic;
+    }
+    
+    .btn-icon-small {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+      transition: color 0.2s, background-color 0.2s;
+      border-radius: 4px;
+    }
+    
+    .btn-icon-small:hover {
+      color: var(--primary);
+      background: rgba(59, 130, 246, 0.1);
+    }
+    
+    .story-info-link-edit-view {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    
+    .story-info-link-edit-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .input-sm {
+      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+    }
+    
+    .btn-sm {
+      font-size: 0.875rem;
+      padding: 0.5rem 0.75rem;
+    }
+    
     .checkbox-container {
       display: flex;
       align-items: center;

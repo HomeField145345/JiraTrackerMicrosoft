@@ -122,6 +122,7 @@ function saveManualData_(jiraId, field, value) {
     else if (field === 'Project Stage') colToUpdate = 4;
     else if (field === 'Start Date') colToUpdate = 6;
     else if (field === 'End Date') colToUpdate = 7;
+    else if (field === 'Drive Link') colToUpdate = 8;
     else if (field === 'Priority') colToUpdate = 9;
     
     // Log any date field updates
@@ -157,6 +158,25 @@ function saveManualData_(jiraId, field, value) {
     return { status: 'success', message: 'Data saved!' };
   } catch (e) {
     return { status: 'error', message: 'Failed to save data: ' + e.message };
+  }
+}
+
+/**
+ * Update Drive Link for a specific Jira item
+ * @param {string} jiraId - The Jira ID
+ * @param {string} driveLink - The Drive Link URL
+ * @returns {Object} Result object with success status
+ */
+function updateDriveLink(jiraId, driveLink) {
+  try {
+    var result = saveManualData_(jiraId, 'Drive Link', driveLink);
+    if (result.status === 'success') {
+      return { success: true, message: 'Drive Link updated successfully' };
+    } else {
+      return { success: false, error: result.message };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
   }
 }
 

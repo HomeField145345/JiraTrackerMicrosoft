@@ -187,7 +187,8 @@ function _buildHeaderMapping(headers, uploadedHeaders) {
     'Assignee': 'Assignee', 'Sprint': 'sprint', 'Epic Link': 'Epic Link', 'PM Lead': 'PM Lead',
     'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created',
     'Resolution': 'Resolution',
-    'Acceptance Criteria': 'Acceptance Criteria' // NEW: map for import
+    'Acceptance Criteria': 'Acceptance Critera', // Map to existing sheet header (with typo)
+    'Acceptance Critera': 'Acceptance Critera' // Also support if import has the typo
   };
   
   const headerMap = {};

@@ -543,6 +543,7 @@ function getProjectData_() {
       for (var keyManual in manualData) {
           if (manualData.hasOwnProperty(keyManual)) combined[keyManual] = manualData[keyManual];
       }
+      
       return combined;
     });
     
@@ -730,7 +731,8 @@ function importJiraCsv_(fileData) {
       'Assignee': 'Assignee', 'Sprint': 'sprint', 'Epic Link': 'Epic Link', 'PM Lead': 'PM Lead',
       'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created',
       'Resolution': 'Resolution',
-      'Acceptance Criteria': 'Acceptance Criteria', // Map for import to column O
+      'Acceptance Criteria': 'Acceptance Critera', // Map to existing sheet header (with typo)
+      'Acceptance Critera': 'Acceptance Critera', // Also support if import has the typo
       'Target Date': 'Target Date', // Map for import to column P
       'Fix Version': 'Fix Version' // NEW: map for import to column Q
     };
@@ -1062,6 +1064,7 @@ function saveManualData_(jiraId, field, value) {
     else if (field === 'Project Stage') colToUpdate = 4;
     else if (field === 'Start Date') colToUpdate = 6;
     else if (field === 'End Date') colToUpdate = 7;
+    else if (field === 'Drive Link') colToUpdate = 8;
     else if (field === 'Priority') colToUpdate = 9;
     
     // Log any date field updates
@@ -1096,6 +1099,26 @@ function saveManualData_(jiraId, field, value) {
     return { status: 'error', message: 'Failed to save data: ' + e.message };
   }
 }
+
+/**
+ * Update Drive Link for a specific Jira item
+ * @param {string} jiraId - The Jira ID
+ * @param {string} driveLink - The Drive Link URL
+ * @returns {Object} Result object with success status
+ */
+function updateDriveLink(jiraId, driveLink) {
+  try {
+    var result = saveManualData_(jiraId, 'Drive Link', driveLink);
+    if (result.status === 'success') {
+      return { success: true, message: 'Drive Link updated successfully' };
+    } else {
+      return { success: false, error: result.message };
+    }
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
 function saveIndependentTask_(taskData) {
   try { var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), INDEPENDENT_TASKS_SHEET); var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]; var idIndex = headers.indexOf('ID'); var newRow = headers.map(function(header) { return taskData[header] || ''; }); if (taskData.ID) { var data = sheet.getRange(2, 1, sheet.getLastRow() - 1, headers.length).getValues(); var rowIndex = -1; for (var i = 0; i < data.length; i++) { if (data[i][idIndex] === taskData.ID) { rowIndex = i + 2; break; } } if (rowIndex !== -1) { sheet.getRange(rowIndex, 1, 1, newRow.length).setValues([newRow]); } } else { newRow[idIndex] = Utilities.getUuid(); sheet.appendRow(newRow); } clearProjectCache(); return { status: 'success', message: 'Task saved successfully!' }; } catch (e) { return { status: 'error', message: 'Failed to save task: ' + e.message }; }
 }
@@ -1171,7 +1194,7 @@ function readJiraData(sheet) {
     var jiraDataValues = sheet.getRange(2, 1, numRows, numCols).getValues(); 
     // Also read display strings so we can treat certain columns as raw UTC text
     var jiraDisplayValues = sheet.getRange(2, 1, numRows, numCols).getDisplayValues();
-    var jiraHeaders = sheet.getRange(1, 1, 1, numCols).getValues()[0]; 
+    var jiraHeaders = sheet.getRange(1, 1, 1, numCols).getValues()[0];
     
     for (var i = 0; i < jiraDataValues.length; i++) { 
       var row = jiraDataValues[i]; 

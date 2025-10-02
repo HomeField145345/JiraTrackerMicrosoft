@@ -155,28 +155,65 @@ function saveManualField(jiraId, field, value) {
     .saveManualData(jiraId, field, value);
 }
 
-function updateLastChecked(jiraId, button) {
-  button.disabled = true;
-  button.textContent = '...';
+function updateLastChecked(jiraId, element) {
+  // Element can be either a button or a validation badge
+  var isButton = element && element.tagName === 'BUTTON';
+  var isBadge = element && element.classList && element.classList.contains('validation-clickable');
+  
+  // Store original state
+  var originalText = element ? element.textContent : '';
+  var originalDisabled = element ? element.disabled : false;
+  
+  // Disable and show loading state
+  if (element) {
+    element.disabled = true;
+    if (isButton) {
+      element.textContent = '...';
+    } else if (isBadge) {
+      // For badge, just add a visual indicator without changing text
+      element.style.opacity = '0.6';
+      element.style.pointerEvents = 'none';
+    }
+  }
   
   google.script.run
     .withSuccessHandler(function(response) {
+      console.log('updateLastChecked response:', response);
       handleUpdateSuccess(response);
       if (response.status === 'success') {
-        // Update the single row instead of a full refresh
+        console.log('Updating row timestamp for Jira ID:', jiraId, 'with timestamp:', response.newTimestamp);
+        // Update the single row timestamp
         updateRowTimestamp(jiraId, response.newTimestamp);
+        // Update validation status based on new timestamp
+        console.log('Updating row validation for Jira ID:', jiraId);
+        updateRowValidation(jiraId);
         // Also refresh the sync indicator (status/stage dot)
         try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) {}
       }
-      // Re-enable the button regardless of success or failure
-      button.disabled = false;
-      button.textContent = 'Check';
+      // Re-enable the element and restore original state
+      if (element) {
+        element.disabled = false;
+        if (isButton) {
+          element.textContent = 'Check';
+        } else if (isBadge) {
+          element.style.opacity = '';
+          element.style.pointerEvents = '';
+          // Badge text should be updated by updateRowValidation, not here
+        }
+      }
     })
     .withFailureHandler(function(error) {
       handleFailure(error);
-      // Re-enable the button on failure
-      button.disabled = false;
-      button.textContent = 'Check';
+      // Re-enable the element on failure
+      if (element) {
+        element.disabled = false;
+        if (isButton) {
+          element.textContent = 'Check';
+        } else if (isBadge) {
+          element.style.opacity = '';
+          element.style.pointerEvents = '';
+        }
+      }
     })
     .updateLastChecked(jiraId);
 }

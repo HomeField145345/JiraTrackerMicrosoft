@@ -947,10 +947,7 @@ function handleEpicExpand(expander) {
     }
 }
 
-function handleCheck(button) {
-  var jiraId = button.dataset.jiraId;
-  updateLastChecked(jiraId, button);
-}
+// Removed handleCheck function - validation badge click now directly calls updateLastChecked
 
 // Local helper: format server UTC date string to yyyy-mm-dd in user's local timezone
 function formatDateInputYYYYMMDDLocal(val) {
@@ -2061,8 +2058,19 @@ function setupEventListeners() {
     var expander = e.target.closest('.expander');
     if (expander) { handleEpicExpand(expander); return; }
     
-    var checkButton = e.target.closest('.check-btn');
-    if (checkButton) { handleCheck(checkButton); return; }
+    // Handle validation badge click (replaces check button)
+    var validationBadge = e.target.closest('.validation-clickable[data-clickable="true"]');
+    if (validationBadge) { 
+      var jiraId = validationBadge.dataset.jiraId;
+      console.log('Validation badge clicked for Jira ID:', jiraId);
+      console.log('Badge element:', validationBadge);
+      if (jiraId) {
+        updateLastChecked(jiraId, validationBadge);
+      } else {
+        console.error('No Jira ID found on validation badge');
+      }
+      return; 
+    }
     
     var editButton = e.target.closest('.edit-task-btn');
     if (editButton) { handleEditTask(editButton); return; }

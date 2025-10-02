@@ -186,8 +186,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
       jiraCellHtml = item.Title || 'Untitled Task';
       row.innerHTML = '<td></td>' + // Sync Status
         '<td colspan="2">' + jiraCellHtml + '</td>' + // Span Jira # and Planning Stage
-        '<td colspan="15">' + (item.Assignee ? 'Assignee: ' + item.Assignee : '') + '</td>' + // Span remaining cells for Assignee (15 = 18 total - 3 already used)
-        '<td><button class="btn edit-task-btn" data-id="' + item.ID + '">Edit</button></td>'; // Action
+        '<td colspan="16">' + (item.Assignee ? 'Assignee: ' + item.Assignee : '') + '</td>'; // Span remaining cells for Assignee (16 = 19 total - 3 already used, Action column removed)
       return row;
     }
 
@@ -207,7 +206,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
         jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + driveIconHtml + '</div>';
     } else if (type === 'story') {
         row.dataset.parentEpic = parentEpicId;
-        jiraCellHtml = '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>';
+        var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
+        jiraCellHtml = '<div class="flex items-center gap-2"><a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
     } else { // Fallback for independent tasks on the old task view
         jiraCellHtml = item['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>' : '—';
     }
@@ -236,7 +236,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
         return cell.outerHTML;
     };
 
-    var actionCellHtml = isJiraItem ? '<button class="btn check-btn" data-jira-id="' + item['Jira #'] + '">Check</button>' : (type === 'task') ? '<button class="btn edit-task-btn" data-id="' + item.ID + '">Edit</button>' : '—';
+    // Removed separate check button - validation badge is now clickable
     var sprintDisplayText = item['sprint'] || '—';
     var assignedPm = item['PM Lead'] || '—';
     var assignedDev = item['Assignee'] || '—';
@@ -277,7 +277,13 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
           return createCellWithDropdown(opts, item['Project Stage'], item['Jira #'], 'Project Stage');
       })() +
       '<td>' + (item.Summary || item.Title || 'Untitled') + '</td>' +
-      '<td><span class="validation-pill-container"><span class="status-pill ' + validation.className + '">' + validation.text + '</span>' + ((type === 'epic' && validationBadgeCount > 0) ? '<span class="validation-badge">' + validationBadgeCount + '</span>' : '') + '</span></td>' +
+      '<td><span class="validation-pill-container">' + 
+        '<span class="status-pill validation-clickable ' + validation.className + '" ' + 
+        (isJiraItem ? 'data-jira-id="' + item['Jira #'] + '" data-clickable="true"' : '') + '>' + 
+        validation.text + 
+        '</span>' + 
+        ((type === 'epic' && validationBadgeCount > 0) ? '<span class="validation-badge">' + validationBadgeCount + '</span>' : '') + 
+      '</span></td>' +
             (function(){
           var statusText = item.Status || '—';
           var stageText = item['Project Stage'] || '';
@@ -368,8 +374,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
     createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date') +
     createDateInputCell(item['End Date'], item['Jira #'], 'End Date') +
     '<td class="' + validation.updatedClassName + '">' + lastUpdatedDisplay + '</td>' +
-    '<td class="' + validation.checkedClassName + '">' + lastCheckedDisplay + '</td>' +
-    '<td>' + actionCellHtml + '</td>';
+    '<td class="' + validation.checkedClassName + '">' + lastCheckedDisplay + '</td>';
     return row;
 }
 
@@ -740,7 +745,7 @@ function renderTable() {
               '<th class="col-sync-status">S</th><th class="col-jira">Jira #</th><th class="col-project-stage">Project Stage</th><th class="col-title">Title</th>' +
               '<th class="col-validation">Validation</th><th class="col-status">Status</th><th class="col-type">Type</th><th class="col-priority">Priority</th><th class="col-story-points">Story Points</th>' +
               '<th class="col-pm-lead">Assigned PM</th><th class="col-dev-assignee">Assigned Dev</th><th class="col-sprint">Sprint</th><th class="col-target-date">Target Date</th><th class="col-fix-version">Fix Version</th>' +
-              '<th class="col-act-pct">ACT/PCT</th><th class="col-start-date">Start Date</th><th class="col-end-date">End Date</th><th class="col-last-updated">Last Updated</th><th class="col-last-checked">Last Checked</th><th class="col-action">Action</th>' +
+              '<th class="col-act-pct">ACT/PCT</th><th class="col-start-date">Start Date</th><th class="col-end-date">End Date</th><th class="col-last-updated">Last Updated</th><th class="col-last-checked">Last Checked</th>' +
           '</tr></thead><tbody id="list-body"></tbody></table></div>';
     var projects = APP_STATE.allData.projects;
     var epics = projects.filter(function(p) { return p['Issue Type'] === 'Epic'; });
@@ -922,7 +927,7 @@ function renderTable() {
 function renderTasksView() {
     var wrapper = $('#content-wrapper');
     wrapper.innerHTML = '<div class="table-container"><table class="table"><thead>' +
-        '<tr><th>Title</th><th>Assignee</th><th>Status</th><th>Priority</th><th>Due Date</th><th>Project</th><th>Associated Jira</th><th>Action</th></tr>' +
+        '<tr><th>Title</th><th>Assignee</th><th>Status</th><th>Priority</th><th>Due Date</th><th>Project</th><th>Associated Jira</th></tr>' +
         '</thead><tbody id="tasks-body"></tbody></table></div>';
     
     var tasks = APP_STATE.allData.independentTasks;
@@ -939,8 +944,7 @@ function renderTasksView() {
                       '<td>' + (task.Priority || '') + '</td>' +
                       '<td>' + dueDate + '</td>' +
                       '<td>' + (task.Project || '') + '</td>' +
-                      '<td>' + jiraLink + '</td>' +
-                      '<td><button class="btn edit-task-btn" data-id="' + task.ID + '">Edit</button></td>';
+                      '<td>' + jiraLink + '</td>';
         body.appendChild(row);
     });
 }
@@ -1330,12 +1334,21 @@ function updateRowValidation(jiraId) {
         var statusPill = pillWrap.querySelector('.status-pill');
         if (!statusPill) {
             statusPill = document.createElement('span');
-            statusPill.className = 'status-pill ' + validation.className;
+            statusPill.className = 'status-pill validation-clickable ' + validation.className;
+            statusPill.setAttribute('data-jira-id', jiraId);
+            statusPill.setAttribute('data-clickable', 'true');
             statusPill.textContent = validation.text;
             pillWrap.insertBefore(statusPill, pillWrap.firstChild || null);
         } else {
-            statusPill.className = 'status-pill ' + validation.className;
+            // Preserve validation-clickable class if it exists
+            var isClickable = statusPill.classList.contains('validation-clickable');
+            statusPill.className = 'status-pill ' + (isClickable ? 'validation-clickable ' : '') + validation.className;
             statusPill.textContent = validation.text;
+            // Ensure data attributes are present if clickable
+            if (isClickable) {
+                statusPill.setAttribute('data-jira-id', jiraId);
+                statusPill.setAttribute('data-clickable', 'true');
+            }
         }
     }
 

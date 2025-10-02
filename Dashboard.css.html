@@ -824,6 +824,22 @@
         white-space: nowrap;
     }
 
+    .validation-clickable {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+
+    .validation-clickable:hover {
+        transform: scale(1.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        filter: brightness(0.95);
+    }
+
+    .validation-clickable:active {
+        transform: scale(0.98);
+    }
+
     .validation-badge {
         background-color: #ef4444;
         color: white;
@@ -837,6 +853,7 @@
         top: -0.5rem; 
         right: -0.5rem; 
         border: 2px solid var(--surface);
+        pointer-events: none; /* Badge doesn't interfere with pill clicks */
     }
     
     .drive-icon { color: var(--muted); display: inline-flex; align-items: center; justify-content: center; transition: color 0.2s ease; }
@@ -892,7 +909,6 @@
     .col-end-date { min-width: 120px; }
     .col-last-updated { min-width: 120px; }
     .col-last-checked { min-width: 120px; }
-    .col-action { min-width: 100px; }
 
     /* Multi-select filter dropdowns */
     .filter-dropdown {

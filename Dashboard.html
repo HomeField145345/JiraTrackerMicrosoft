@@ -532,6 +532,61 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite">Saved</div>
 
+  <div id="storyInfoModal" class="story-info-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="story-info-modal" role="document">
+      <div class="story-info-header">
+        <h3 id="storyInfoTitle">Story Details</h3>
+        <button id="storyInfoClose" class="btn-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="story-info-content">
+        <div class="story-info-section">
+          <div class="story-info-label">Jira #</div>
+          <div id="storyInfoJiraNumber" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Summary</div>
+          <div id="storyInfoSummary" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Status</div>
+          <div id="storyInfoStatus" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Issue Type</div>
+          <div id="storyInfoType" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Priority</div>
+          <div id="storyInfoPriority" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Assignee</div>
+          <div id="storyInfoAssignee" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Sprint</div>
+          <div id="storyInfoSprint" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Story Points</div>
+          <div id="storyInfoStoryPoints" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Acceptance Criteria</div>
+          <div id="storyInfoAcceptanceCriteria" class="story-info-value preformatted"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Created</div>
+          <div id="storyInfoCreated" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Updated</div>
+          <div id="storyInfoUpdated" class="story-info-value"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <?!= include('constants.js.html'); ?>
   <?!= include('TimerManager.js.html'); ?>
   <?!= include('EventManager.js.html'); ?>

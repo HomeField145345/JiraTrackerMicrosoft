@@ -5,9 +5,28 @@
  */
 
 // --- DATA FETCHING & CALLBACKS ---
+function showLoading(message) {
+  var overlay = $('#loading-overlay');
+  if (overlay) {
+    var textEl = overlay.querySelector('.loading-text');
+    if (textEl && message) {
+      textEl.textContent = message;
+    }
+    overlay.classList.remove('hidden');
+  }
+}
+
+function hideLoading() {
+  var overlay = $('#loading-overlay');
+  if (overlay) {
+    overlay.classList.add('hidden');
+  }
+}
+
 function handleDataLoaded(data) {
   // Validate data structure
   if (!isValidData(data)) {
+    hideLoading();
     return false;
   }
   
@@ -16,6 +35,11 @@ function handleDataLoaded(data) {
   
   // Initialize the UI components
   initializeUI();
+  
+  // Hide loading indicator after a short delay to ensure smooth transition
+  TimerManager.setTimeout(function() {
+    hideLoading();
+  }, 100, 'hide_loading');
   
   return true;
 }
@@ -106,13 +130,18 @@ function handleUpdateSuccess(response) {
 
 // --- SERVER-CALLING FUNCTIONS ---
 function refreshData() {
+  showLoading('Loading project data...');
   google.script.run
     .withSuccessHandler(handleDataLoaded)
-    .withFailureHandler(handleFailure)
+    .withFailureHandler(function(error) {
+      hideLoading();
+      handleFailure(error);
+    })
     .getProjectData();
 }
 
 function forceRefreshData() {
+  showLoading('Fetching latest data from sheet...');
   showToast('Fetching latest data from sheet...');
   var btn = $('#forceRefreshBtn');
   if(btn) btn.disabled = true;
@@ -123,6 +152,7 @@ function forceRefreshData() {
         if(btn) btn.disabled = false;
     })
     .withFailureHandler(function(error) {
+        hideLoading();
         handleFailure(error);
         if(btn) btn.disabled = false;
     })

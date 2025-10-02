@@ -586,7 +586,8 @@ function getProjectData_() {
       // Don't let logging errors affect the main operation
     }
     
-    setCacheInChunks(cache, cacheKey, JSON.stringify(finalData), 600);
+    // Cache for 30 minutes (1800 seconds) instead of 10 minutes for better performance
+    setCacheInChunks(cache, cacheKey, JSON.stringify(finalData), 1800);
     return finalData;
 
   } catch (e) {

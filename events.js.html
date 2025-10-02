@@ -2163,6 +2163,15 @@ function setupEventListeners() {
   $('#modalSave').addEventListener('click', handleSaveTask);
   $('#importModalClose').addEventListener('click', function() { closeModal('import'); });
   
+  // CSV Upload button handler
+  $('#uploadBtn').addEventListener('click', handleFileUpload);
+  
+  // Cancel upload button handler
+  $('#cancelUploadBtn').addEventListener('click', function() {
+    hideUploadProgress();
+    closeModal('import');
+  });
+  
   // Story Info Modal handlers
   $('#storyInfoClose').addEventListener('click', closeStoryInfoModal);
   $('#storyInfoModal').addEventListener('click', function(e) {

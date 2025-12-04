@@ -181,13 +181,30 @@ function _loadConfiguration(configSheet) {
  */
 function _loadHelpfulLinks(configSheet) {
   var helpfulLinks = [];
-  try {
-    var linksData = configSheet.getRange("D2").getValue();
-    if (linksData && typeof linksData === 'string') {
-      helpfulLinks = JSON.parse(linksData);
+  if (configSheet.getLastRow() > 1) {
+    try {
+      var values = configSheet.getRange("D2:D" + configSheet.getLastRow()).getValues();
+      values.forEach(function(row) {
+        var cellValue = row[0];
+        if (cellValue) {
+          try {
+            var parsed = JSON.parse(cellValue);
+            if (Array.isArray(parsed)) {
+              // Handle legacy format where D2 contained the entire array
+              helpfulLinks = helpfulLinks.concat(parsed);
+            } else if (typeof parsed === 'object') {
+              // Handle new format where each row is a link object
+              helpfulLinks.push(parsed);
+            }
+          } catch (e) {
+            // Handle plain text (fallback)
+            helpfulLinks.push({ title: cellValue, url: cellValue });
+          }
+        }
+      });
+    } catch (e) {
+      console.error("Error loading helpful links: " + e);
     }
-  } catch (e) {
-    helpfulLinks = [];
   }
   return helpfulLinks;
 }

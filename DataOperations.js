@@ -74,8 +74,13 @@ function saveConfiguration_(optionsData) {
     // Set Past Due Exempt Stages in O (column 15)
     if (pastDueExemptData.length > 0) sheet.getRange(2, 15, pastDueExemptData.length, 1).setValues(pastDueExemptData);
     
-    // Set Helpful Links JSON blob
-    sheet.getRange("D2").setValue(JSON.stringify(optionsData.helpfulLinks || []));
+    // Set Helpful Links in D (column 4) - write as individual JSON objects per row
+    var helpfulLinksData = (optionsData.helpfulLinks || []).map(function(link) {
+      return [JSON.stringify(link)];
+    });
+    if (helpfulLinksData.length > 0) {
+      sheet.getRange(2, 4, helpfulLinksData.length, 1).setValues(helpfulLinksData);
+    }
     
     // Write mappings as multi-row lists (H and I) - restored original positions
     var closedStagesData = (optionsData.closedProjectStages || []).map(function(o) { return [o]; });

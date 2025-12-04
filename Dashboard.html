@@ -75,7 +75,6 @@
     </div>
 
     <div class="flex items-center gap-3">
-      <span class="version-badge">v7.2</span>
       <div id="actions-container" class="dropdown">
           <button id="actions-toggle-btn" class="btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -117,17 +116,8 @@
                 </svg>
                 Configuration
               </a>
-          </div>
-      </div>
-      <div id="links-container" class="dropdown">
-          <button id="links-toggle-btn" class="btn">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-            </svg>
-            Links
-          </button>
-          <div id="links-popup" class="dropdown-menu">
+              <div class="dropdown-divider"></div>
+              <div class="px-4 py-2 text-xs text-gray-500 font-semibold">RESOURCES</div>
               <a href="https://urldefense.proofpoint.com/v2/url?u=https-3A__jira.yourdomain.com&amp;d=DwMGAA&amp;c=udBTRvFvXC5Dhqg7UHpJlPps3mZ3LRxpb6__0PomBTQ&amp;r=lubiUSj_n6F4EbuRdQZeQ066IoaCxSHVqLbAMbXjaGbpFRKowFmmGVRNtiVb0XMD&amp;m=xKMh4d3cdaqx23qaBd7wQ6o1JLBdMp8bQmfmtFRLr-7dQV8FqFxFjqd3A51q0HWO&amp;s=JiN3zvSHJhXGxmT8dC9blyuBetv2Gy8B1SKt-R-7VRw&amp;e=" target="_blank" class="dropdown-item">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
@@ -233,13 +223,6 @@
             <div class="kpi-number" id="current-sprint-count">-</div>
             <div class="kpi-label">Current Sprint <span id="current-sprint-number"></span></div>
           </div>
-          <div class="kpi-trend kpi-trend-up">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="19" x2="12" y2="5"></line>
-              <polyline points="5 12 12 5 19 12"></polyline>
-            </svg>
-            <span>12% from last sprint</span>
-          </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -259,12 +242,6 @@
             <div class="kpi-number" id="past-sprint-count">-</div>
             <div class="kpi-label">Past Sprint</div>
           </div>
-          <div class="kpi-trend kpi-trend-neutral">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>No change from previous</span>
-          </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -281,13 +258,6 @@
           <div class="kpi-content">
             <div class="kpi-number" id="needs-review-count">-</div>
             <div class="kpi-label">Needs Review</div>
-          </div>
-          <div class="kpi-trend kpi-trend-down">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"></line>
-              <polyline points="19 12 12 19 5 12"></polyline>
-            </svg>
-            <span>5% less than last week</span>
           </div>
           <div class="kpi-icon">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

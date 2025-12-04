@@ -1107,7 +1107,7 @@ function saveManualData_(jiraId, field, value) {
  * @param {string} driveLink - The Drive Link URL
  * @returns {Object} Result object with success status
  */
-function updateDriveLink(jiraId, driveLink) {
+function updateDriveLink_(jiraId, driveLink) {
   try {
     var result = saveManualData_(jiraId, 'Drive Link', driveLink);
     if (result.status === 'success') {

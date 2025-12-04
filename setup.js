@@ -20,6 +20,7 @@ function onOpen() {
     .addItem('Migrate: Add Priority Column', 'addPriorityColumnToManualData')
     .addItem('Migrate: Add New Jira Fields', 'addNewJiraFields')
     .addItem('Migrate: Clean Column Headers', 'cleanupColumnHeaders')
+    .addItem('Migrate: Upgrade Users Sheet', 'upgradeUsersSheet')
     .addToUi();
 }
 
@@ -32,7 +33,10 @@ function setupSheets() {
     [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
-    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description']
+    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description'],
+    [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At'],
+    [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration'],
+    [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']
   };
 
   for (const sheetName in sheets) {
@@ -76,6 +80,15 @@ function setupSheets() {
         }
       }
       SpreadsheetApp.getUi().alert(`Sheet "${sheetName}" already exists.`);
+    }
+    
+    // Create default admin user if Users sheet is empty
+    if (sheetName === USERS_SHEET) {
+      const userSheet = ss.getSheetByName(USERS_SHEET);
+      if (userSheet && userSheet.getLastRow() === 1) {
+        userSheet.appendRow(['admin', 'admin123', 'admin', 'admin@example.com']);
+        SpreadsheetApp.getUi().alert('Default admin user created (admin/admin123).');
+      }
     }
   }
 }
@@ -349,4 +362,65 @@ function createMockData() {
 
 
   SpreadsheetApp.getUi().alert('Successfully generated 100 mock rows of data!');
+}
+
+/**
+ * Upgrades the Users sheet to the new format (v2).
+ * Old: Username, Password, Role, Email
+ * New: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
+ */
+function upgradeUsersSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USERS_SHEET);
+  
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('Users sheet not found. Run "Create Backend Sheets" first.');
+    return;
+  }
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // Check if already upgraded (check for 'ID' column)
+  if (headers[0] === 'ID') {
+    SpreadsheetApp.getUi().alert('Users sheet appears to be already upgraded.');
+    return;
+  }
+  
+  const data = sheet.getDataRange().getValues();
+  // Remove header
+  data.shift();
+  
+  // Map old data to new structure
+  const newRows = data.map(row => {
+    const username = row[0];
+    const password = row[1];
+    const role = row[2];
+    const email = row[3];
+    
+    return [
+      Utilities.getUuid(), // ID
+      username,            // Username
+      email,               // Email
+      username,            // Display Name (default to username)
+      role,                // Role
+      true,                // Is Active
+      password,            // Password
+      new Date(),          // Created At
+      ''                   // Last Login At
+    ];
+  });
+  
+  // Clear and reset sheet
+  sheet.clear();
+  
+  // Set new headers
+  const newHeaders = ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At'];
+  sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]).setFontWeight('bold');
+  
+  // Write new data
+  if (newRows.length > 0) {
+    sheet.getRange(2, 1, newRows.length, newHeaders.length).setValues(newRows);
+  }
+  
+  SpreadsheetApp.getUi().alert('Users sheet upgraded successfully.');
 }

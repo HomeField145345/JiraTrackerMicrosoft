@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Login - Project Tracker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+</head>
+<body class="bg-gray-100 h-screen flex items-center justify-center">
+
+  <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+    <div class="text-center">
+      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p class="text-gray-600 font-medium">Checking authentication...</p>
+    </div>
+  </div>
+
+  <div id="login-container" class="bg-white p-8 rounded-lg shadow-md w-full max-w-md hidden">
+    <div class="text-center mb-8">
+      <div class="text-4xl font-bold text-blue-600 mb-2">P</div>
+      <h1 class="text-2xl font-bold text-gray-800">ProjectHub Login</h1>
+      <p class="text-gray-500">Please sign in to continue</p>
+    </div>
+
+    <div id="successMessage" class="hidden text-center">
+      <div class="text-green-500 text-5xl mb-4">✓</div>
+      <h2 class="text-2xl font-bold text-gray-800 mb-4">Login Successful</h2>
+      <p class="text-gray-600 mb-6">You are now logged in.</p>
+      <button id="continueBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition duration-150">
+        Continue to Dashboard
+      </button>
+    </div>
+
+    <form id="loginForm" onsubmit="handleLogin(event)">
+      <div class="mb-4">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
+          Username
+        </label>
+        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+               id="username" type="text" placeholder="Username" required>
+      </div>
+      
+      <div class="mb-6">
+        <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
+          Password
+        </label>
+        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" 
+               id="password" type="password" placeholder="******************" required>
+      </div>
+      
+      <div id="errorMessage" class="hidden mb-4 text-red-500 text-sm text-center"></div>
+
+      <div class="flex items-center justify-between">
+        <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full transition duration-150" 
+                type="submit">
+          Sign In
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    // Auto-login on load
+    document.addEventListener('DOMContentLoaded', function() {
+      tryGoogleLogin();
+    });
+
+    function tryGoogleLogin() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            handleLoginSuccess(result);
+          } else {
+            // Show login form
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('login-container').classList.remove('hidden');
+          }
+        })
+        .withFailureHandler(function(error) {
+          // Show login form on error
+          document.getElementById('loading-overlay').classList.add('hidden');
+          document.getElementById('login-container').classList.remove('hidden');
+        })
+        .loginWithGoogle();
+    }
+
+    function handleLogin(e) {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('submitBtn');
+      const errorDiv = document.getElementById('errorMessage');
+      
+      // Reset UI
+      btn.disabled = true;
+      btn.textContent = "Signing in...";
+      errorDiv.classList.add('hidden');
+      
+      google.script.run
+        .withSuccessHandler(function(result) {
+          if (result.success) {
+            handleLoginSuccess(result);
+          } else {
+            showError(result.message);
+            btn.disabled = false;
+            btn.textContent = "Sign In";
+          }
+        })
+        .withFailureHandler(function(error) {
+          showError("Connection failed. Please try again.");
+          btn.disabled = false;
+          btn.textContent = "Sign In";
+        })
+        .authenticateUser(username, password);
+    }
+
+    function handleLoginSuccess(result) {
+        // Store session info
+        localStorage.setItem('projectHubUser', JSON.stringify({
+          username: result.username,
+          role: result.role,
+          token: result.token,
+          user: result.user // Store full user object
+        }));
+        
+        // Show success message and button
+        document.getElementById('loading-overlay').classList.add('hidden');
+        document.getElementById('login-container').classList.remove('hidden'); // Ensure container is visible
+        document.getElementById('loginForm').classList.add('hidden');
+        document.getElementById('successMessage').classList.remove('hidden');
+        
+        // Set up the continue button
+        var appUrl = "<?= url ?>";
+        document.getElementById('continueBtn').onclick = function() {
+            window.top.location.href = appUrl + "?page=dashboard";
+        };
+    }
+
+    function showError(msg) {
+      const errorDiv = document.getElementById('errorMessage');
+      errorDiv.textContent = msg;
+      errorDiv.classList.remove('hidden');
+    }
+  </script>
+</body>
+</html>

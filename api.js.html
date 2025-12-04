@@ -4,6 +4,62 @@
  * @description Handles all server communication with Google Apps Script.
  */
 
+// --- AUTHENTICATION ---
+function getToken() {
+  const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  return user.token;
+}
+
+function checkAuth() {
+  const token = getToken();
+  if (!token) {
+    // Show session expired modal instead of auto-redirecting
+    showSessionExpiredModal();
+    return null;
+  }
+  return token;
+}
+
+function showSessionExpiredModal() {
+    // Hide loading overlay if it's visible
+    hideLoading();
+
+    // Create modal if it doesn't exist
+    let modal = document.getElementById('session-expired-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'session-expired-modal';
+        // Increased z-index to ensure it's above everything including loading overlay
+        modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900 bg-opacity-75';
+        modal.innerHTML = `
+            <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
+                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Session Expired</h3>
+                <p class="text-sm text-gray-500 mb-6">Your session has expired. Please log in again to continue.</p>
+                <button onclick="redirectToLogin()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
+                    Log In
+                </button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    modal.classList.remove('hidden');
+}
+
+window.redirectToLogin = function() {
+    if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
+        window.top.location.href = SCRIPT_URL + "?page=login";
+    } else {
+        google.script.run.withSuccessHandler(function(url) {
+            window.top.location.href = url + "?page=login";
+        }).getScriptUrl();
+    }
+};
+
 // --- DATA FETCHING & CALLBACKS ---
 function showLoading(message) {
   var overlay = $('#loading-overlay');
@@ -130,6 +186,9 @@ function handleUpdateSuccess(response) {
 
 // --- SERVER-CALLING FUNCTIONS ---
 function refreshData() {
+  const token = checkAuth();
+  if (!token) return;
+
   showLoading('Loading project data...');
   google.script.run
     .withSuccessHandler(handleDataLoaded)
@@ -137,10 +196,13 @@ function refreshData() {
       hideLoading();
       handleFailure(error);
     })
-    .getProjectData();
+    .getProjectData(token);
 }
 
 function forceRefreshData() {
+  const token = checkAuth();
+  if (!token) return;
+
   showLoading('Fetching latest data from sheet...');
   showToast('Fetching latest data from sheet...');
   var btn = $('#forceRefreshBtn');
@@ -156,10 +218,13 @@ function forceRefreshData() {
         handleFailure(error);
         if(btn) btn.disabled = false;
     })
-    .forceGetProjectData();
+    .forceGetProjectData(token);
 }
 
 function saveTask(taskData) {
+  const token = checkAuth();
+  if (!token) return;
+
   google.script.run
     .withSuccessHandler(function(response) {
       handleUpdateSuccess(response);
@@ -169,10 +234,13 @@ function saveTask(taskData) {
       }
     })
     .withFailureHandler(handleFailure)
-    .saveIndependentTask(taskData);
+    .saveIndependentTask(token, taskData);
 }
 
 function saveManualField(jiraId, field, value) {
+  const token = checkAuth();
+  if (!token) return;
+
   google.script.run
     .withSuccessHandler(function(response) {
       handleUpdateSuccess(response);
@@ -182,10 +250,13 @@ function saveManualField(jiraId, field, value) {
       }
     })
     .withFailureHandler(handleFailure)
-    .saveManualData(jiraId, field, value);
+    .saveManualData(token, jiraId, field, value);
 }
 
 function updateLastChecked(jiraId, element) {
+  const token = checkAuth();
+  if (!token) return;
+
   // Element can be either a button or a validation badge
   var isButton = element && element.tagName === 'BUTTON';
   var isBadge = element && element.classList && element.classList.contains('validation-clickable');
@@ -245,10 +316,13 @@ function updateLastChecked(jiraId, element) {
         }
       }
     })
-    .updateLastChecked(jiraId);
+    .updateLastChecked(token, jiraId);
 }
 
 function uploadCsvData(fileData) {
+    const token = checkAuth();
+    if (!token) return;
+
     updateProgress(75, 'Processing data on server...');
     
     google.script.run
@@ -309,6 +383,6 @@ function uploadCsvData(fileData) {
             });
             handleFailure(error);
         })
-        .importJiraFile(fileData);
+        .importJiraFile(token, fileData);
 }
 </script>

@@ -1989,10 +1989,62 @@ function setupMultiSelectDropdowns() {
   });
 }
 
+function initUserDropdown() {
+    const storedData = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+    if (storedData.username) {
+        const displayEl = document.getElementById('currentUserDisplay');
+        const emailEl = document.getElementById('currentUserEmail');
+        
+        if (displayEl) displayEl.textContent = storedData.username;
+        
+        // Handle email location (top level or nested in user object)
+        const email = storedData.email || (storedData.user && storedData.user.email) || storedData.username;
+        if (emailEl) emailEl.textContent = email;
+    }
+}
+
+function handleLogout() {
+    if (!confirm('Are you sure you want to sign out?')) return;
+    
+    const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+    const token = user.token;
+    
+    // Clear local storage immediately
+    localStorage.removeItem('projectHubUser');
+    
+    // Call backend to invalidate session (optional but good practice)
+    if (token) {
+        google.script.run.logout(token);
+    }
+    
+    // Redirect immediately using the global SCRIPT_URL
+    if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
+        window.top.location.href = SCRIPT_URL + "?page=login";
+    } else {
+        // Fallback if SCRIPT_URL is missing (shouldn't happen)
+        google.script.run
+            .withSuccessHandler(function(url) {
+                window.top.location.href = url + "?page=login";
+            })
+            .getScriptUrl();
+    }
+}
+
 function setupEventListeners() {
   setupDropdown('filter-toggle-btn', 'filter-popup', 'filter-container');
   setupDropdown('actions-toggle-btn', 'actions-popup', 'actions-container');
   setupDropdown('links-toggle-btn', 'links-popup', 'links-container');
+  setupDropdown('user-toggle-btn', 'user-popup', 'user-container');
+  
+  initUserDropdown();
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+      logoutBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          handleLogout();
+      });
+  }
   
   // Note: setupMultiSelectDropdowns() is now called after data is loaded in handleDataLoaded()
   
@@ -2218,6 +2270,9 @@ function setupEventListeners() {
     $('#storyInfoDriveLinkSave').disabled = true;
     $('#storyInfoDriveLinkSave').textContent = 'Saving...';
     
+    const token = checkAuth();
+    if (!token) return;
+
     // Call the API to update the Drive Link
     google.script.run
       .withSuccessHandler(function(result) {
@@ -2274,7 +2329,7 @@ function setupEventListeners() {
         $('#storyInfoDriveLinkSave').disabled = false;
         $('#storyInfoDriveLinkSave').textContent = 'Save';
       })
-      .updateDriveLink(jiraId, newLink);
+      .updateDriveLink(token, jiraId, newLink);
   });
 }
 </script>

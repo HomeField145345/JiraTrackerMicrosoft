@@ -25,8 +25,8 @@ function getProjectData_(user) {
   
   if (data.error) return data;
   
-  // Filter data based on user ownership if not admin
-  if (user && user.role !== 'admin') {
+  // Filter data based on user ownership (Applies to ALL users, including Admins)
+  if (user) {
     // Filter projects: include ONLY if owner matches
     data.projects = data.projects.filter(function(p) {
       return p.Owner === user.username;

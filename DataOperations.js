@@ -38,11 +38,12 @@ function saveConfiguration_(optionsData) {
       "Stage→Status (JSON)",
       "Stage→Status Keywords",
       "Past Sprint Closed Project Stages",
-      "Priority Options"
+      "Priority Options",
+      "Past Due Exempt Stages"
     ]]);
     
     // Clear existing data
-    sheet.getRange("A2:M" + sheet.getMaxRows()).clearContent();
+    sheet.getRange("A2:N" + sheet.getMaxRows()).clearContent();
     
     // Prepare data
     var actData = optionsData.actPctOptions.map(function(o) { return [o]; });
@@ -52,6 +53,7 @@ function saveConfiguration_(optionsData) {
     var storyProjData = (optionsData.storyProjectStageOptions || []).map(function(o) { return [o]; });
     var bugProjData = (optionsData.bugProjectStageOptions || []).map(function(o) { return [o]; });
     var priorityData = (optionsData.priorityOptions || []).map(function(o) { return [o]; });
+    var pastDueExemptData = (optionsData.pastDueExemptStages || []).map(function(o) { return [o]; });
     
     // Set option data
     if (actData.length > 0) sheet.getRange(2, 1, actData.length, 1).setValues(actData);
@@ -65,6 +67,9 @@ function saveConfiguration_(optionsData) {
     
     // Set priority options in M (column 13)
     if (priorityData.length > 0) sheet.getRange(2, 13, priorityData.length, 1).setValues(priorityData);
+
+    // Set Past Due Exempt Stages in N (column 14)
+    if (pastDueExemptData.length > 0) sheet.getRange(2, 14, pastDueExemptData.length, 1).setValues(pastDueExemptData);
     
     // Set Helpful Links JSON blob
     sheet.getRange("D2").setValue(JSON.stringify(optionsData.helpfulLinks || []));

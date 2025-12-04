@@ -155,6 +155,7 @@ function _loadConfiguration(configSheet) {
   var closedProjectStages = _loadClosedProjectStages(configSheet);
   var closedStatuses = _loadClosedStatuses(configSheet);
   var pastSprintClosedStages = _loadPastSprintClosedStages(configSheet);
+  var pastDueExemptStages = _loadPastDueExemptStages(configSheet);
   var stageStatusMappings = _loadStageStatusMappings(configSheet);
   
   return { 
@@ -169,7 +170,8 @@ function _loadConfiguration(configSheet) {
     closedProjectStages: closedProjectStages,
     closedStatuses: closedStatuses, // Kept for backward compatibility; not used for sync
     stageStatusMappings: stageStatusMappings,
-    pastSprintClosedStages: pastSprintClosedStages
+    pastSprintClosedStages: pastSprintClosedStages,
+    pastDueExemptStages: pastDueExemptStages
   };
 }
 
@@ -270,6 +272,25 @@ function _loadPastSprintClosedStages(configSheet) {
   }
   
   return pastSprintClosedStages;
+}
+
+/**
+ * Load past due exempt stages configuration
+ * @private
+ */
+function _loadPastDueExemptStages(configSheet) {
+  var pastDueExemptStages = [];
+  
+  if (configSheet.getLastRow() > 1) {
+    try {
+      var flatten = function(arr) { return arr.reduce(function(acc, val) { return acc.concat(val); }, []); };
+      pastDueExemptStages = flatten(configSheet.getRange("N2:N" + configSheet.getLastRow()).getValues()).filter(String);
+    } catch (e) {
+      pastDueExemptStages = [];
+    }
+  }
+  
+  return pastDueExemptStages;
 }
 
 /**

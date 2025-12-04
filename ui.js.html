@@ -16,6 +16,12 @@ function getClosedMappings() {
     };
 }
 
+function getPastDueExemptStages() {
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var stages = Array.isArray(cfg.pastDueExemptStages) ? cfg.pastDueExemptStages : [];
+    return stages.map(function(s){ return (s||'').toLowerCase().trim(); });
+}
+
 function isStoryObjectClosed(story) {
     var projectStage = (story['Project Stage'] || '').toLowerCase().trim();
     var status = (story['Status'] || '').toLowerCase().trim();
@@ -170,18 +176,22 @@ function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage
     // Check for Past Due - only if target date exists and is valid
     // Skip if targetDateStr is null, undefined, empty, or whitespace
     if (targetDateStr && targetDateStr.toString().trim() !== '') {
-        const targetDate = parseServerDate(targetDateStr);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0); // Compare dates only, not times
-        
-        if (targetDate && !isNaN(targetDate.getTime()) && targetDate < today) {
-            // Target date exists, is valid, and is in the past
-            return { 
-                text: APP_CONSTANTS.VALIDATION.PAST_DUE, 
-                className: 'status-overdue', 
-                updatedClassName: '', 
-                checkedClassName: '' 
-            };
+        // Check if this stage is exempt from Past Due checks
+        const exemptStages = getPastDueExemptStages();
+        if (exemptStages.indexOf(projectStageStatus) === -1) {
+            const targetDate = parseServerDate(targetDateStr);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Compare dates only, not times
+            
+            if (targetDate && !isNaN(targetDate.getTime()) && targetDate < today) {
+                // Target date exists, is valid, and is in the past
+                return { 
+                    text: APP_CONSTANTS.VALIDATION.PAST_DUE, 
+                    className: 'status-overdue', 
+                    updatedClassName: '', 
+                    checkedClassName: '' 
+                };
+            }
         }
     }
 

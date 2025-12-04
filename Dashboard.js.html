@@ -10,7 +10,9 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Check user role and setup workspace selector if needed
   const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
-  if (user.role === 'QA Tester' || user.role === 'View Only') {
+  const userRole = (user.role || '').toLowerCase();
+  
+  if (userRole.includes('qa') || userRole.includes('tester') || userRole.includes('view')) {
     setupWorkspaceSelector();
   } else {
     refreshData();       // Fetch the initial data from the server

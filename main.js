@@ -112,9 +112,11 @@ function getWorkspaceOwners(token) {
   const auth = requireAuth(token);
   // Allow all authenticated users to see the list of workspace owners
   const allUsers = getUsers();
-  // Filter for Admins and Project Managers
-  return allUsers.filter(u => u.role === 'Admin' || u.role === 'Project Manager')
-                 .map(u => ({ username: u.username, displayName: u.displayName }));
+  // Filter for Admins and Project Managers (Case Insensitive)
+  return allUsers.filter(u => {
+    const r = String(u.role || '').toLowerCase();
+    return r === 'admin' || r === 'project manager';
+  }).map(u => ({ username: u.username, displayName: u.displayName }));
 }
 
 function saveUser(token, user) {

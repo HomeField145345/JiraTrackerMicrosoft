@@ -284,7 +284,7 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   // Archive remaining items (removed from Jira) - only if archiveMissing is true
   var shouldArchiveMissing = fileData.archiveMissing !== false; // Default to true if not specified
   if (shouldArchiveMissing) {
-    archivedItems = _archiveRemainingItems(existingDataMap, sheet, headerMap);
+    archivedItems = _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user);
   }
   
   // Apply all updates to the sheet
@@ -466,8 +466,9 @@ function _createNewRowData(uploadedRow, headerMap, headers, user) {
  * Archive items that are no longer in the upload
  * @private
  */
-function _archiveRemainingItems(existingDataMap, sheet, headerMap) {
+function _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user) {
   var archivedItems = [];
+  var ownerIndex = headers ? headers.indexOf('Owner') : -1;
   
   existingDataMap.forEach(function(staleRecord, jiraId) {
     // Check if the item is already archived (has 📁 icon in first column)
@@ -475,13 +476,49 @@ function _archiveRemainingItems(existingDataMap, sheet, headerMap) {
     var isAlreadyArchived = currentIcon === '📁';
     
     if (!isAlreadyArchived) {
-      // Only archive if not already archived
-      sheet.getRange(staleRecord.sheetRowIndex, 1).setValue('📁');
-      archivedItems.push({
-        jiraId: jiraId,
-        summary: staleRecord.data[headerMap['Summary'].sheetIndex] || ''
-      });
-      console.log('DEBUG: Archiving item ' + jiraId + ' (was not already archived)');
+      // Check ownership before archiving
+      var shouldArchive = true;
+      var updateOwner = false;
+      var newOwnerValue = '';
+
+      if (user && ownerIndex !== -1) {
+        var currentOwnerVal = staleRecord.data[ownerIndex];
+        var owners = String(currentOwnerVal || '').split(',').map(function(s) { return s.trim(); });
+        var userIndex = owners.indexOf(user.username);
+        
+        if (userIndex === -1) {
+          // User is NOT an owner, so do NOT archive (it belongs to someone else)
+          shouldArchive = false;
+          console.log('DEBUG: Skipping archive for ' + jiraId + ' (User ' + user.username + ' is not an owner)');
+        } else {
+          // User IS an owner
+          if (owners.length > 1) {
+            // Multiple owners: Remove current user, but do NOT archive
+            shouldArchive = false;
+            owners.splice(userIndex, 1);
+            newOwnerValue = owners.join(', ');
+            updateOwner = true;
+            console.log('DEBUG: Removing ' + user.username + ' from owners of ' + jiraId + '. Remaining: ' + newOwnerValue);
+          } else {
+            // User is the ONLY owner: Archive it
+            shouldArchive = true;
+          }
+        }
+      }
+
+      if (shouldArchive) {
+        // Only archive if not already archived
+        sheet.getRange(staleRecord.sheetRowIndex, 1).setValue('📁');
+        archivedItems.push({
+          jiraId: jiraId,
+          summary: staleRecord.data[headerMap['Summary'].sheetIndex] || ''
+        });
+        console.log('DEBUG: Archiving item ' + jiraId + ' (was not already archived)');
+      } else if (updateOwner) {
+        // Update the owner field to remove the current user
+        // ownerIndex is 0-based index in data array. Sheet column is index + 1
+        sheet.getRange(staleRecord.sheetRowIndex, ownerIndex + 1).setValue(newOwnerValue);
+      }
     } else {
       console.log('DEBUG: Skipping already archived item ' + jiraId);
     }

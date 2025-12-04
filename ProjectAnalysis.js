@@ -284,7 +284,7 @@ function _loadPastDueExemptStages(configSheet) {
   if (configSheet.getLastRow() > 1) {
     try {
       var flatten = function(arr) { return arr.reduce(function(acc, val) { return acc.concat(val); }, []); };
-      pastDueExemptStages = flatten(configSheet.getRange("N2:N" + configSheet.getLastRow()).getValues()).filter(String);
+      pastDueExemptStages = flatten(configSheet.getRange("O2:O" + configSheet.getLastRow()).getValues()).filter(String);
     } catch (e) {
       pastDueExemptStages = [];
     }

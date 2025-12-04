@@ -267,7 +267,14 @@ function validateSession(token) {
     if (data[i][0] === token) {
       const expiration = new Date(data[i][3]);
       if (expiration > now) {
-        return { valid: true, username: data[i][1], role: data[i][2] };
+        // Normalize role to lowercase for consistent checking
+        const role = String(data[i][2]).toLowerCase();
+        return { 
+            valid: true, 
+            username: data[i][1], 
+            role: role,
+            user: { username: data[i][1], role: role } // Add user object for convenience
+        };
       } else {
         // Expired
         return { valid: false, reason: 'expired' };

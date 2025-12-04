@@ -18,9 +18,10 @@
 /**
  * Import Jira data from uploaded CSV file
  * @param {Object} fileData - File data object containing base64Data, fileName, mimeType, and options
+ * @param {Object} user - The user object performing the import
  * @returns {Object} Import results with status, message, and detailed statistics
  */
-function importJiraCsv_(fileData) {
+function importJiraCsv_(fileData, user) {
   if (!fileData || !fileData.base64Data) {
     return { status: 'error', message: 'No file data received to import.' };
   }
@@ -118,7 +119,7 @@ function importJiraCsv_(fileData) {
       return { status: 'error', message: 'Could not find a Jira key column in the uploaded CSV file. Detected headers: ' + uploadedHeaders.join(', ') };
     }
 
-    var results = _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers, existingDataMap, sheet, fileData);
+    var results = _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers, existingDataMap, sheet, fileData, user);
     
     // Clear cache after successful import
     clearProjectCache();
@@ -242,7 +243,7 @@ function _buildHeaderMapping(headers, uploadedHeaders) {
  * Process uploaded rows and handle add/update/archive operations
  * @private
  */
-function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers, existingDataMap, sheet, fileData) {
+function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers, existingDataMap, sheet, fileData, user) {
   var rowsToAdd = [];
   var rowsToUpdate = [];
   var addedItems = [];
@@ -270,7 +271,7 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
       }
       existingDataMap.delete(jiraId);
     } else if (jiraId) {
-      var newRowData = _createNewRowData(uploadedRow, headerMap, headers);
+      var newRowData = _createNewRowData(uploadedRow, headerMap, headers, user);
       rowsToAdd.push(newRowData);
       addedItems.push({
         jiraId: jiraId,
@@ -406,11 +407,13 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
  * Create new row data for a new item
  * @private
  */
-function _createNewRowData(uploadedRow, headerMap, headers) {
+function _createNewRowData(uploadedRow, headerMap, headers, user) {
   var newRowData = [];
   headers.forEach(function(header) {
     if (header === 'Sync Status') {
       newRowData.push('🔄');
+    } else if (header === 'Owner') {
+      newRowData.push(user ? user.username : '');
     } else if (headerMap[header].uploadIndex !== -1) {
       newRowData.push(uploadedRow[headerMap[header].uploadIndex]);
     } else {

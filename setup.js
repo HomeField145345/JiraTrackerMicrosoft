@@ -19,9 +19,37 @@ function onOpen() {
     .addItem('Migrate: Resolution → Project Stage', 'migrateResolutionToProjectStage')
     .addItem('Migrate: Add Priority Column', 'addPriorityColumnToManualData')
     .addItem('Migrate: Add New Jira Fields', 'addNewJiraFields')
+    .addItem('Migrate: Add Owner Column', 'addOwnerColumn')
     .addItem('Migrate: Clean Column Headers', 'cleanupColumnHeaders')
     .addItem('Migrate: Upgrade Users Sheet', 'upgradeUsersSheet')
     .addToUi();
+}
+
+/**
+ * Adds the 'Owner' column to JiraData and IndependentTasks sheets if missing.
+ */
+function addOwnerColumn() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 1. JiraData
+  const jiraSheet = ss.getSheetByName(JIRA_DATA_SHEET);
+  if (jiraSheet) {
+    const headers = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+    if (!headers.includes('Owner')) {
+      jiraSheet.getRange(1, headers.length + 1).setValue('Owner').setFontWeight('bold');
+      SpreadsheetApp.getUi().alert('Added Owner column to JiraData.');
+    }
+  }
+  
+  // 2. IndependentTasks
+  const tasksSheet = ss.getSheetByName(INDEPENDENT_TASKS_SHEET);
+  if (tasksSheet) {
+    const headers = tasksSheet.getRange(1, 1, 1, tasksSheet.getLastColumn()).getValues()[0];
+    if (!headers.includes('Owner')) {
+      tasksSheet.getRange(1, headers.length + 1).setValue('Owner').setFontWeight('bold');
+      SpreadsheetApp.getUi().alert('Added Owner column to IndependentTasks.');
+    }
+  }
 }
 
 /**
@@ -30,10 +58,10 @@ function onOpen() {
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
-    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description'],
+    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],
     [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At'],
     [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']

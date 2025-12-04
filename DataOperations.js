@@ -183,13 +183,19 @@ function updateDriveLink_(jiraId, driveLink) {
 /**
  * Save or update an independent task
  * @param {Object} taskData - Task data to save
+ * @param {Object} user - The user performing the save
  * @returns {Object} Result object with status and message
  */
-function saveIndependentTask_(taskData) {
+function saveIndependentTask_(taskData, user) {
   try {
     var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), INDEPENDENT_TASKS_SHEET);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var idIndex = headers.indexOf('ID');
+    
+    // If new task, set Owner
+    if (!taskData.ID && user) {
+      taskData.Owner = user.username;
+    }
+    
     var newRow = headers.map(function(header) { 
       return taskData[header] || ''; 
     });
@@ -200,18 +206,32 @@ function saveIndependentTask_(taskData) {
       var rowIndex = -1;
       
       for (var i = 0; i < data.length; i++) {
-        if (data[i][idIndex] === taskData.ID) {
+        if (data[i][idIndex] == taskData.ID) {
           rowIndex = i + 2;
+          // Preserve existing Owner if not provided in update
+          var ownerIndex = headers.indexOf('Owner');
+          if (ownerIndex > -1 && !taskData.Owner) {
+             newRow[ownerIndex] = data[i][ownerIndex];
+          }
           break;
         }
       }
       
-      if (rowIndex !== -1) {
+      if (rowIndex > 0) {
         sheet.getRange(rowIndex, 1, 1, newRow.length).setValues([newRow]);
+      } else {
+        // ID provided but not found? Treat as new? Or error?
+        // For now, append as new if ID not found is safer to avoid data loss
+        sheet.appendRow(newRow);
       }
     } else {
       // Create new task
-      newRow[idIndex] = Utilities.getUuid();
+      var idIndex = headers.indexOf('ID');
+      if (idIndex > -1) {
+         // Generate ID if not present
+         var newId = 'TASK-' + new Date().getTime();
+         newRow[idIndex] = newId;
+      }
       sheet.appendRow(newRow);
     }
     

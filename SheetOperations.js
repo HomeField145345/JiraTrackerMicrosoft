@@ -183,26 +183,40 @@ function readManualData(manualDataSheet) {
 function readIndependentTasks(independentTasksSheet) {
   var independentTasks = [];
   if (independentTasksSheet.getLastRow() >= 2) {
-    var independentTasksValues = independentTasksSheet.getRange(2, 1, independentTasksSheet.getLastRow() - 1, 6).getValues();
+    var numRows = independentTasksSheet.getLastRow() - 1;
+    var numCols = independentTasksSheet.getLastColumn();
+    var dataValues = independentTasksSheet.getRange(2, 1, numRows, numCols).getValues();
+    var headers = independentTasksSheet.getRange(1, 1, 1, numCols).getValues()[0];
     
-    for (var i = 0; i < independentTasksValues.length; i++) {
-      var row = independentTasksValues[i];
-      if (row[0]) { // Check if first column (Task Name) is not empty
-        var parseDate = function(dateValue) {
-          if (dateValue instanceof Date) {
-            return dateValue.toISOString();
+    for (var i = 0; i < dataValues.length; i++) {
+      var row = dataValues[i];
+      // Use ID or Title as the check for existence
+      var idIndex = headers.indexOf('ID');
+      var titleIndex = headers.indexOf('Title');
+      
+      if ((idIndex > -1 && row[idIndex]) || (titleIndex > -1 && row[titleIndex])) {
+        var task = {};
+        for (var j = 0; j < headers.length; j++) {
+          var header = headers[j];
+          var value = row[j];
+          
+          // Handle dates
+          if (header === 'Due' || header === 'Start Date' || header === 'End Date') {
+             if (value instanceof Date) {
+               task[header] = value.toISOString();
+             } else {
+               task[header] = value;
+             }
+          } else {
+            task[header] = value;
           }
-          return null;
-        };
+        }
         
-        independentTasks.push({
-          'Task Name': row[0],
-          'Description': row[1],
-          'Status': row[2],
-          'Priority': row[3],
-          'Start Date': parseDate(row[4]),
-          'End Date': parseDate(row[5])
-        });
+        // Map legacy fields if needed or ensure standard fields exist
+        if (!task['Task Name'] && task['Title']) task['Task Name'] = task['Title'];
+        if (!task['ID']) task['ID'] = 'TASK-' + (i + 1); // Fallback ID
+        
+        independentTasks.push(task);
       }
     }
   }

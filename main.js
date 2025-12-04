@@ -43,23 +43,23 @@ function requireAuth(token) {
 }
 
 function forceGetProjectData(token) {
-  requireAuth(token);
-  return forceGetProjectData_();
+  const auth = requireAuth(token);
+  return forceGetProjectData_(auth.user);
 }
 
 function getProjectData(token) {
-  requireAuth(token);
-  return getProjectData_();
+  const auth = requireAuth(token);
+  return getProjectData_(auth.user);
 }
 
 function importJiraCsv(token, csvData) {
-  requireAuth(token);
-  return importJiraCsv_(csvData);
+  const auth = requireAuth(token);
+  return importJiraCsv_(csvData, auth.user);
 }
 
 function importJiraFile(token, fileData) {
-  requireAuth(token);
-  return importJiraCsv_(fileData);
+  const auth = requireAuth(token);
+  return importJiraCsv_(fileData, auth.user);
 }
 
 function saveConfiguration(token, optionsData) {
@@ -73,8 +73,8 @@ function saveManualData(token, jiraId, field, value) {
 }
 
 function saveIndependentTask(token, taskData) {
-  requireAuth(token);
-  return saveIndependentTask_(taskData);
+  const auth = requireAuth(token);
+  return saveIndependentTask_(taskData, auth.user);
 }
 
 function updateLastChecked(token, jiraId) {

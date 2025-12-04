@@ -17,9 +17,40 @@
 
 /**
  * Main function to get aggregated project data with caching
+ * @param {Object} user - The user requesting the data
  * @returns {Object} Complete project data including projects, config, and sprint stats
  */
-function getProjectData_() {
+function getProjectData_(user) {
+  var data = _getRawProjectData();
+  
+  if (data.error) return data;
+  
+  // Filter data based on user ownership if not admin
+  if (user && user.role !== 'admin') {
+    // Filter projects: include ONLY if owner matches
+    data.projects = data.projects.filter(function(p) {
+      return p.Owner === user.username;
+    });
+    
+    // Filter independent tasks: include ONLY if owner matches
+    data.independentTasks = data.independentTasks.filter(function(t) {
+      return t.Owner === user.username;
+    });
+    
+    // Re-analyze sprint stats based on filtered data
+    var allItems = data.projects.concat(data.independentTasks);
+    data.sprintStats = analyzeSprintData(allItems);
+  }
+  
+  return data;
+}
+
+/**
+ * Internal function to get raw aggregated project data with caching (unfiltered)
+ * @private
+ * @returns {Object} Complete project data
+ */
+function _getRawProjectData() {
   try {
     // Check cache first
     var cache = CacheService.getScriptCache();
@@ -72,11 +103,12 @@ function getProjectData_() {
 
 /**
  * Force refresh project data by clearing cache
+ * @param {Object} user - The user requesting the data
  * @returns {Object} Fresh project data
  */
-function forceGetProjectData_() {
+function forceGetProjectData_(user) {
   clearProjectCache();
-  return getProjectData_();
+  return getProjectData_(user);
 }
 
 /**

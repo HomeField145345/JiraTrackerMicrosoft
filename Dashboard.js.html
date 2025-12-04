@@ -7,7 +7,14 @@
 // --- INITIALIZATION ---
 document.addEventListener('DOMContentLoaded', function() {
   setupEventListeners(); // Set up all user interaction listeners
-  refreshData();       // Fetch the initial data from the server
+  
+  // Check user role and setup workspace selector if needed
+  const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  if (user.role === 'QA Tester' || user.role === 'View Only') {
+    setupWorkspaceSelector();
+  } else {
+    refreshData();       // Fetch the initial data from the server
+  }
   
   // Add event listener to save filter state and perform cleanup before leaving the page
   EventManager.addEventListener(window, 'beforeunload', function() {
@@ -18,4 +25,62 @@ document.addEventListener('DOMContentLoaded', function() {
     AppCleanup.fullCleanup();
   }, false, 'beforeunload_handler');
 });
+
+function setupWorkspaceSelector() {
+  const token = checkAuth();
+  if (!token) return;
+
+  const container = document.getElementById('workspace-selector-container');
+  const selector = document.getElementById('workspace-select');
+  
+  if (container && selector) {
+    container.classList.remove('hidden');
+    
+    // Fetch workspace owners
+    google.script.run
+      .withSuccessHandler(function(owners) {
+        // Populate dropdown
+        owners.forEach(function(owner) {
+          const option = document.createElement('option');
+          option.value = owner.username;
+          option.textContent = owner.displayName + ' (' + owner.username + ')';
+          selector.appendChild(option);
+        });
+        
+        // Add change listener
+        selector.addEventListener('change', function() {
+          const selectedUser = this.value;
+          if (selectedUser) {
+            refreshData(selectedUser);
+          }
+        });
+        
+        // Automatically select the first owner and load data
+        if (owners.length > 0) {
+            selector.selectedIndex = 0; // Select first option (after the disabled one if present, but here I appended directly. Wait, I have a disabled option in HTML)
+            // The HTML has <option value="" disabled selected>Select Workspace</option>
+            // So owners are appended after.
+            // Let's select the first actual owner (index 1)
+            if (selector.options.length > 1) {
+                selector.selectedIndex = 1;
+                refreshData(selector.value);
+            } else {
+                 // No owners found?
+                 hideLoading();
+                 alert("No workspaces found to view.");
+            }
+        } else {
+             hideLoading();
+             alert("No workspaces found to view.");
+        }
+        
+      })
+      .withFailureHandler(function(err) {
+        console.error("Failed to load workspace owners", err);
+        hideLoading();
+        alert("Failed to load workspace list.");
+      })
+      .getWorkspaceOwners(token);
+  }
+}
 </script>

@@ -18,23 +18,38 @@
 /**
  * Main function to get aggregated project data with caching
  * @param {Object} user - The user requesting the data
+ * @param {string} [targetUsername] - Optional username to view data for (if allowed)
  * @returns {Object} Complete project data including projects, config, and sprint stats
  */
-function getProjectData_(user) {
+function getProjectData_(user, targetUsername) {
   var data = _getRawProjectData();
   
   if (data.error) return data;
   
-  // Filter data based on user ownership (Applies to ALL users, including Admins)
-  if (user) {
-    // Filter projects: include ONLY if owner matches
+  // Determine which user to filter by
+  // Default to the logged-in user
+  var filterUser = user.username;
+  
+  // If a target is specified, use it.
+  // This allows QA/View Only users to view PM/Admin workspaces.
+  if (targetUsername) {
+    filterUser = targetUsername;
+  }
+  
+  // Filter data based on user ownership
+  if (filterUser) {
+    // Filter projects: include ONLY if owner matches (supports multiple owners comma-separated)
     data.projects = data.projects.filter(function(p) {
-      return p.Owner === user.username;
+      if (!p.Owner) return false;
+      var owners = String(p.Owner).split(',').map(function(s) { return s.trim(); });
+      return owners.indexOf(filterUser) !== -1;
     });
     
     // Filter independent tasks: include ONLY if owner matches
     data.independentTasks = data.independentTasks.filter(function(t) {
-      return t.Owner === user.username;
+      if (!t.Owner) return false;
+      var owners = String(t.Owner).split(',').map(function(s) { return s.trim(); });
+      return owners.indexOf(filterUser) !== -1;
     });
     
     // Re-analyze sprint stats based on filtered data

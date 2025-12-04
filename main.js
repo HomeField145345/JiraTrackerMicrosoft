@@ -47,9 +47,9 @@ function forceGetProjectData(token) {
   return forceGetProjectData_(auth.user);
 }
 
-function getProjectData(token) {
+function getProjectData(token, targetUsername) {
   const auth = requireAuth(token);
-  return getProjectData_(auth.user);
+  return getProjectData_(auth.user, targetUsername);
 }
 
 function importJiraCsv(token, csvData) {
@@ -106,6 +106,15 @@ function getUsersList(token) {
     throw new Error("Access denied: Admin rights required.");
   }
   return getUsers();
+}
+
+function getWorkspaceOwners(token) {
+  const auth = requireAuth(token);
+  // Allow all authenticated users to see the list of workspace owners
+  const allUsers = getUsers();
+  // Filter for Admins and Project Managers
+  return allUsers.filter(u => u.role === 'Admin' || u.role === 'Project Manager')
+                 .map(u => ({ username: u.username, displayName: u.displayName }));
 }
 
 function saveUser(token, user) {

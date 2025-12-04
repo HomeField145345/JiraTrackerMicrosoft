@@ -262,7 +262,7 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
     var jiraId = uploadedRow[uploadJiraId] ? String(uploadedRow[uploadJiraId]).trim() : null;
 
     if (jiraId && existingDataMap.has(jiraId)) {
-      var updateResult = _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers);
+      var updateResult = _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user);
       if (updateResult.shouldUpdate) {
         rowsToUpdate.push({ sheetRowIndex: updateResult.sheetRowIndex, data: updateResult.data });
         if (updateResult.hasChanges) {
@@ -319,7 +319,7 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
  * Process an existing item to determine if it needs updating
  * @private
  */
-function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers) {
+function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user) {
   var existingRecord = existingDataMap.get(jiraId);
   
   // Check if this item was previously archived
@@ -335,9 +335,39 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
     changedFields.push('Unarchived');
     console.log('UNARCHIVING item ' + jiraId + ' - was archived but now appears in upload');
   }
+
+  // Handle Owner field specifically (Append new owner if needed)
+  var ownerIndex = headers.indexOf('Owner');
+  var newOwnerValue = ownerIndex !== -1 ? existingRecord.data[ownerIndex] : null;
+  
+  if (ownerIndex !== -1) {
+      // If CSV has Owner, start with that (overwrite existing)
+      if (headerMap['Owner'] && headerMap['Owner'].uploadIndex !== -1) {
+          newOwnerValue = uploadedRow[headerMap['Owner'].uploadIndex];
+      }
+      
+      // Append current user if not present
+      if (user) {
+          var owners = String(newOwnerValue || '').split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+          if (owners.indexOf(user.username) === -1) {
+              owners.push(user.username);
+              newOwnerValue = owners.join(', ');
+          }
+      }
+      
+      // Check if it changed from existing
+      if (newOwnerValue !== existingRecord.data[ownerIndex]) {
+          hasChanged = true;
+          changedFields.push('Owner');
+          console.log('OWNER UPDATE for ' + jiraId + ': ' + existingRecord.data[ownerIndex] + ' -> ' + newOwnerValue);
+      }
+  }
   
   for (var j = 0; j < headers.length; j++) {
     var header = headers[j];
+    // Skip Owner here as we handled it above
+    if (header === 'Owner') continue;
+
     if (headerMap[header].uploadIndex !== -1 && header !== 'Sync Status') {
       // Field-aware comparison to minimize false positives
       var existingRaw = existingRecord.data[j];
@@ -366,6 +396,8 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
         updatedRowData.push('🔄');
       } else if (header === 'Sync Status') {
         updatedRowData.push('🔄'); // Mark as changed
+      } else if (header === 'Owner') {
+        updatedRowData.push(newOwnerValue);
       } else if (headerMap[header].uploadIndex !== -1) {
         updatedRowData.push(uploadedRow[headerMap[header].uploadIndex]);
       } else {
@@ -413,7 +445,14 @@ function _createNewRowData(uploadedRow, headerMap, headers, user) {
     if (header === 'Sync Status') {
       newRowData.push('🔄');
     } else if (header === 'Owner') {
-      newRowData.push(user ? user.username : '');
+      var csvOwner = (headerMap['Owner'] && headerMap['Owner'].uploadIndex !== -1) 
+                     ? uploadedRow[headerMap['Owner'].uploadIndex] 
+                     : '';
+      var owners = String(csvOwner || '').split(',').map(function(s) { return s.trim(); }).filter(function(s) { return s !== ''; });
+      if (user && owners.indexOf(user.username) === -1) {
+        owners.push(user.username);
+      }
+      newRowData.push(owners.join(', '));
     } else if (headerMap[header].uploadIndex !== -1) {
       newRowData.push(uploadedRow[headerMap[header].uploadIndex]);
     } else {

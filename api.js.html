@@ -185,18 +185,27 @@ function handleUpdateSuccess(response) {
 }
 
 // --- SERVER-CALLING FUNCTIONS ---
-function refreshData() {
+function refreshData(targetUsername) {
   const token = checkAuth();
   if (!token) return;
 
   showLoading('Loading project data...');
+  
+  // If no target specified, try to get from selector if it exists
+  if (!targetUsername) {
+    const selector = document.getElementById('workspace-select');
+    if (selector && selector.value) {
+      targetUsername = selector.value;
+    }
+  }
+
   google.script.run
     .withSuccessHandler(handleDataLoaded)
     .withFailureHandler(function(error) {
       hideLoading();
       handleFailure(error);
     })
-    .getProjectData(token);
+    .getProjectData(token, targetUsername);
 }
 
 function forceRefreshData() {

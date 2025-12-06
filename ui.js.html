@@ -396,7 +396,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
           else if (type === 'bug' && Array.isArray(cfg.bugProjectStageOptions) && cfg.bugProjectStageOptions.length) opts = cfg.bugProjectStageOptions;
           return createCellWithDropdown(opts, item['Project Stage'], item['Jira #'], 'Project Stage');
       })() +
-      '<td>' + (item.Summary || item.Title || 'Untitled') + '</td>' +
+      '<td class="col-summary">' + (item.Summary || item.Title || 'Untitled') + '</td>' +
       '<td><span class="validation-pill-container">' + 
         '<span class="status-pill validation-clickable ' + validation.className + '" ' + 
         (isJiraItem ? 'data-jira-id="' + item['Jira #'] + '" data-clickable="true"' : '') + '>' + 

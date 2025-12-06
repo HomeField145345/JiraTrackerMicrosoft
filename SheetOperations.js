@@ -293,10 +293,18 @@ function analyzeSprintData(allItems) {
     }
 
     // Check for past due open items
-    var isInPastSprint = itemSprints.some(function(sprint) {
+    // Use the most recent sprint (latest end date) to determine if it's past due
+    var latestSprintEnd = null;
+    itemSprints.forEach(function(sprint) {
       var sprintInfo = sprints[sprint];
-      return sprintInfo && sprintInfo.end && sprintInfo.end < today;
+      if (sprintInfo && sprintInfo.end) {
+        if (!latestSprintEnd || sprintInfo.end > latestSprintEnd) {
+          latestSprintEnd = sprintInfo.end;
+        }
+      }
     });
+    
+    var isInPastSprint = latestSprintEnd && latestSprintEnd < today;
 
     if (isInPastSprint && !isItemClosed) {
       pastSprintOpenItems++;

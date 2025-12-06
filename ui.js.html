@@ -473,7 +473,21 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
                     var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
                     return '<td>' + statusText + dot + '</td>';
       })() +
-    '<td>' + (item['UAT Status'] || '—') + '</td>' +
+    (function() {
+        var uat = item['UAT Status'] || '';
+        if (!uat || uat === '—') return '<td>—</td>';
+        
+        var s = uat.toLowerCase().trim();
+        var cls = 'uat-default';
+        
+        if (s === 'pass' || s === 'passed' || s === 'approved' || s === 'complete' || s === 'completed') cls = 'uat-pass';
+        else if (s === 'fail' || s === 'failed' || s === 'rejected' || s === 'defect') cls = 'uat-fail';
+        else if (s === 'pending' || s === 'in progress' || s === 'testing' || s === 'review') cls = 'uat-pending';
+        else if (s === 'blocked' || s === 'hold' || s === 'on hold') cls = 'uat-blocked';
+        else if (s === 'n/a' || s === 'na' || s === 'none' || s === 'not required') cls = 'uat-na';
+        
+        return '<td><span class="uat-badge ' + cls + '">' + uat + '</span></td>';
+    })() +
     typeCellHtml + 
     createCellWithDropdown(APP_STATE.allData.config.priorityOptions, item['Priority'], item['Jira #'], 'Priority') +
     '<td>' + storyPoints + '</td>' +

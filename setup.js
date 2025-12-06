@@ -58,7 +58,7 @@ function addOwnerColumn() {
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],

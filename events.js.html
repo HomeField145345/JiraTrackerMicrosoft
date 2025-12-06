@@ -317,6 +317,10 @@ function updateActiveFiltersIndicator() {
 function handleClearFilters() {
   $('#q').value = '';
   
+  // Clear active state from KPI cards
+  var allCards = document.querySelectorAll('.stat-card');
+  allCards.forEach(function(c) { c.classList.remove('active-filter'); });
+  
     // Reset any per-epic "show all" overrides so filters apply strictly
     $$('.row-epic').forEach(function(epicRow){
         epicRow.dataset.showingAll = 'false';
@@ -419,7 +423,7 @@ function handleExpandCollapseAll(shouldExpand) {
 }
 
 function handleKPICardClick(card) {
-    var kpiType = card.getAttribute('data-kpi');
+    var filterType = card.getAttribute('data-filter');
     
     // Switch to table view if not already there
     if (APP_STATE.currentView !== 'table') {
@@ -429,21 +433,97 @@ function handleKPICardClick(card) {
     // Clear existing filters
     handleClearFilters();
     
-    // Apply specific filter based on KPI type
-    switch(kpiType) {
+    // Re-apply active class because handleClearFilters might have cleared it (if it resets UI)
+    // Actually handleClearFilters usually resets dropdowns. We want to keep the card active visually.
+    var allCards = document.querySelectorAll('.stat-card');
+    allCards.forEach(function(c) { c.classList.remove('active-filter'); });
+    card.classList.add('active-filter');
+
+    // Apply specific filter based on type
+    switch(filterType) {
         case 'current-sprint':
             handleCurrentSprintFilter();
             break;
-        case 'past-sprint':
-            handlePastSprintClick();
+        case 'past-due':
+            handlePastDueFilter();
+            break;
+        case 'stale':
+            handleStaleFilter();
             break;
         case 'needs-review':
             handleNeedsReviewFilter();
             break;
-        case 'total-tasks':
-            // Show all tasks by just clearing filters
-            // We've already cleared filters above
-            break;
+    }
+}
+
+function handlePastDueFilter() {
+    filterByValidationStatus(APP_CONSTANTS.VALIDATION.PAST_DUE);
+}
+
+function handleStaleFilter() {
+    filterByValidationStatus(APP_CONSTANTS.VALIDATION.STALE);
+}
+
+function handleNeedsReviewFilter() {
+    filterByValidationStatus(APP_CONSTANTS.VALIDATION.NEEDS_REVIEW);
+}
+
+function filterByValidationStatus(statusText) {
+    var rows = document.querySelectorAll('#list-body tr');
+    var visibleCount = 0;
+
+    rows.forEach(function(row) {
+        if (row.classList.contains('row-epic')) {
+            row.style.display = 'none';
+            return;
+        }
+
+        var rowJiraId = row.dataset.jiraId;
+        if (!rowJiraId) {
+             row.style.display = 'none';
+             return;
+        }
+
+        var projectData = APP_STATE.allData.projects.find(function(p) { 
+            return String(p['Jira #'] || p.ID).toLowerCase() === rowJiraId; 
+        });
+
+        if (!projectData) {
+            row.style.display = 'none';
+            return;
+        }
+        
+        var validationStatus = getValidationStatus(
+            projectData['Planning Stage'], 
+            projectData['Updated'], 
+            projectData['Last Checked'], 
+            projectData['Project Stage'],
+            projectData['Target Date']
+        );
+
+        if (validationStatus.text === statusText) {
+            row.style.display = '';
+            visibleCount++;
+            // Show parent epic
+            var epicId = row.dataset.parentEpic;
+            if (epicId) {
+                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
+                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
+                if (epicRow) epicRow.style.display = '';
+            }
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update counts
+    var filteredCount = $('#filtered-count');
+    if (filteredCount) filteredCount.textContent = visibleCount;
+    
+    // Show/hide no matches
+    var noMatches = $('#no-matches-indicator');
+    if (noMatches) {
+        noMatches.classList.toggle('hidden', visibleCount > 0);
     }
 }
 
@@ -524,128 +604,9 @@ function handleCurrentSprintFilter() {
     }
 }
 
-function handlePastSprintFilter() {
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    var today = new Date();
-    var sprints = {}; // Cache for parsed sprint dates
-    
-    var parseSprintDates = function(sprintString) {
-        try {
-            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
-            var normalized = sprintString.replace(/[–—]/g, '-');
-            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
-            var m = normalized.match(re);
-            if (!m) return { start: null, end: null };
-            var currentYear = today.getFullYear();
-            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
-            var sy = m[3] ? parseInt(m[3],10) : currentYear;
-            if (sy < 100) sy += 2000;
-            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
-            var ey = m[6] ? parseInt(m[6],10) : sy;
-            if (ey < 100) ey += 2000;
-            var start = new Date(sy, sm - 1, sd);
-            var end = new Date(ey, em - 1, ed);
-            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
-            end.setHours(23,59,59,999);
-            return { start: start, end: end };
-        } catch(e) { return { start: null, end: null }; }
-    };
 
-    // First, parse all sprint dates to determine which ones are past sprints
-    var allProjects = APP_STATE.allData.projects || [];
-    allProjects.forEach(function(project) {
-        var sprintString = project.sprint || project.Sprint || '';
-        if (sprintString && typeof sprintString === 'string') {
-            sprintString.split(',').forEach(function(sprintStr) {
-                var trimmedSprint = sprintStr.trim();
-                if (trimmedSprint && !sprints[trimmedSprint]) {
-                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
-                }
-            });
-        }
-    });
 
-    // Determine current sprint end date for comparison
-    var currentSprintEndDate = null;
-    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
-        for (var sprintFullName in sprints) {
-            if (sprints.hasOwnProperty(sprintFullName)) {
-                var dates = sprints[sprintFullName];
-                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
-                    currentSprintEndDate = dates.end;
-                    break;
-                }
-            }
-        }
-    }
 
-    // Now select sprint filters for sprints that ended before current sprint/today
-    var sprintDropdown = $('[data-filter="sprint"]');
-    if (sprintDropdown) {
-        var checkboxes = sprintDropdown.querySelectorAll('.filter-checkbox');
-        checkboxes.forEach(function(checkbox) {
-            var sprintValue = checkbox.value;
-            if (sprintValue === 'Select All') {
-                checkbox.checked = false;
-                return;
-            }
-            
-            // Check if this sprint value corresponds to a past sprint
-            var isPastSprint = false;
-            for (var sprintFullName in sprints) {
-                if (sprints.hasOwnProperty(sprintFullName)) {
-                    var dates = sprints[sprintFullName];
-                    // Check if the checkbox value matches this sprint (by name or contains sprint number)
-                    var sprintMatches = sprintValue.indexOf(sprintFullName) !== -1 || 
-                                       sprintFullName.indexOf(sprintValue) !== -1;
-                    
-                    if (sprintMatches && dates.end) {
-                        var compareDate = currentSprintEndDate || today;
-                        if (dates.end < compareDate) {
-                            isPastSprint = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            checkbox.checked = isPastSprint;
-        });
-        updateFilterSelection('sprint');
-        updateActiveFiltersIndicator(); // Update filter indicator
-    }
-}
-
-function handleNeedsReviewFilter() {
-    var validationDropdown = $('[data-filter="validation"]');
-    if (validationDropdown) {
-        var needsReviewCheckbox = validationDropdown.querySelector('input[value="Needs Review"]');
-        var staleCheckbox = validationDropdown.querySelector('input[value="Stale"]');
-        
-        if (needsReviewCheckbox) needsReviewCheckbox.checked = true;
-        if (staleCheckbox) staleCheckbox.checked = true;
-        
-        updateFilterSelection('validation');
-        updateActiveFiltersIndicator(); // Update filter indicator
-    }
-}
-
-function handleKpiCardClick(filter, value) {
-    if (APP_STATE.currentView !== 'table') {
-        switchView('table');
-    }
-    handleClearFilters();
-
-    if (filter === 'validation') {
-        $('#f-validation').value = value;
-    }
-    if (filter === 'sprint') {
-        $('#f-sprint').value = value;
-    }
-    
-    applyFilters();
-}
 
 function handleCurrentSprintClick() {
     if (APP_STATE.currentView !== 'table') {
@@ -1577,32 +1538,42 @@ function applyFilters() {
 // Update KPI card values
 function updateKPICards() {
     updateCurrentSprintKPI();
-    updatePastSprintKPI();
+    updatePastDueKPI();
+    updateStaleKPI();
     updateNeedsReviewKPI();
-    updateTotalTasksKPI();
 }
 
 function updateCurrentSprintKPI() {
     var currentSprintItems = 0;
+    var completedItems = 0;
     var allProjects = APP_STATE.allData.projects || [];
     var sprintStats = APP_STATE.allData.sprintStats || {};
     var currentSprintName = sprintStats.currentSprintName;
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var closedList = Array.isArray(cfg.closedStages) ? cfg.closedStages : ['Done', 'Closed', 'Complete', 'Released'];
+    var closedSet = new Set(closedList.map(function(s){ return String(s).trim().toLowerCase(); }));
 
     if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
         allProjects.forEach(function(project) {
-            // Count any non-epic work item in the current sprint, regardless of status
+            // Count any non-epic work item in the current sprint
             var issueType = (project['Issue Type'] || '').toLowerCase();
             if (issueType === 'epic') return;
 
             var sprints = project.sprint || project.Sprint || '';
             if (typeof sprints === 'string' && sprints.indexOf(currentSprintName) !== -1) {
                 currentSprintItems++;
+                
+                var stage = (project['Project Stage'] || '').trim().toLowerCase();
+                if (closedSet.has(stage)) {
+                    completedItems++;
+                }
             }
         });
     }
     
     var countCard = $('#current-sprint-count');
     var numberSpan = $('#current-sprint-number');
+    var progressBar = $('#current-sprint-progress');
     
     if (countCard) {
         countCard.textContent = currentSprintItems;
@@ -1616,131 +1587,22 @@ function updateCurrentSprintKPI() {
             numberSpan.textContent = '';
         }
     }
+
+    if (progressBar) {
+        var percentage = currentSprintItems > 0 ? (completedItems / currentSprintItems) * 100 : 0;
+        progressBar.style.width = percentage + '%';
+    }
 }
 
-function updatePastSprintKPI() {
-    var pastSprintItems = 0;
+function updatePastDueKPI() {
+    var pastDueCount = 0;
     var allProjects = APP_STATE.allData.projects || [];
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
-    var pastClosedList = Array.isArray(cfg.pastSprintClosedStages) ? cfg.pastSprintClosedStages : [];
-    var pastClosedSet = new Set(pastClosedList.map(function(s){ return String(s).trim().toLowerCase(); }));
-    var today = new Date();
-    var sprints = {}; // Cache for parsed sprint dates
     
-    var parseSprintDates = function(sprintString) {
-        try {
-            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
-            var normalized = sprintString.replace(/[–—]/g, '-');
-            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
-            var m = normalized.match(re);
-            if (!m) return { start: null, end: null };
-            var currentYear = today.getFullYear();
-            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
-            var sy = m[3] ? parseInt(m[3],10) : currentYear;
-            if (sy < 100) sy += 2000;
-            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
-            var ey = m[6] ? parseInt(m[6],10) : sy;
-            if (ey < 100) ey += 2000;
-            var start = new Date(sy, sm - 1, sd);
-            var end = new Date(ey, em - 1, ed);
-            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
-            end.setHours(23,59,59,999);
-            return { start: start, end: end };
-        } catch(e) { return { start: null, end: null }; }
-    };
-
-    // First pass: Parse all unique sprints and cache their dates
     allProjects.forEach(function(project) {
-        var sprintString = project.sprint || project.Sprint || '';
-        if (sprintString && typeof sprintString === 'string') {
-            sprintString.split(',').forEach(function(sprintStr) {
-                var trimmedSprint = sprintStr.trim();
-                if (trimmedSprint && !sprints[trimmedSprint]) {
-                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
-                }
-            });
-        }
-    });
-
-    // Determine current sprint end date for comparison
-    var currentSprintEndDate = null;
-    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
-        // Find the current sprint in our parsed sprints
-        for (var sprintFullName in sprints) {
-            if (sprints.hasOwnProperty(sprintFullName)) {
-                var dates = sprints[sprintFullName];
-                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
-                    currentSprintEndDate = dates.end;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Count items in past sprints (sprints that ended before the current sprint)
-    allProjects.forEach(function(project) {
-        var sprintString = project.sprint || project.Sprint || '';
-        var rawProjectStage = project['Project Stage'] || '';
-        var projectStage = rawProjectStage.trim().toLowerCase();
         var issueType = (project['Issue Type'] || '').toLowerCase();
-        var jiraId = project['Jira #'] || project.ID || 'Unknown';
+        if (issueType === 'epic') return;
 
-        if (issueType === 'epic') return; // exclude epics
-
-        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
-
-        if (sprintString && typeof sprintString === 'string') {
-            var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
-            var isInPastSprint = false;
-
-            // Check if item is in any sprint that ended before today
-            // (or before current sprint if we have a current sprint)
-            for (var i = 0; i < itemSprints.length; i++) {
-                var sprintInfo = sprints[itemSprints[i]];
-                if (sprintInfo && sprintInfo.end) {
-                    // If we have a current sprint, compare to its end date
-                    // Otherwise, just check if sprint ended before today
-                    var compareDate = currentSprintEndDate || today;
-                    if (sprintInfo.end < compareDate) {
-                        isInPastSprint = true;
-                        break;
-                    }
-                }
-            }
-
-            if (isInPastSprint) {
-                if (!isClosedForPast) {
-                    pastSprintItems++;
-                }
-            }
-        }
-    });
-    
-    var card = $('#past-sprint-count');
-    if (card) {
-        card.textContent = pastSprintItems;
-    }
-}
-
-/**
- * Updates the Needs Review KPI card with current counts
- * Counts items that need review, stale items, and breaks down by issue type
- */
-function updateNeedsReviewKPI() {
-    const counts = {
-        needsReview: 0,
-        bugs: 0,
-        stories: 0,
-        stale: 0
-    };
-    
-    const allProjects = APP_STATE.allData.projects || [];
-    
-    // Count all items by validation status
-    allProjects.forEach(function(project) {
-        const validationStatus = getValidationStatus(
+        var validationStatus = getValidationStatus(
             project['Planning Stage'], 
             project['Updated'], 
             project['Last Checked'], 
@@ -1748,65 +1610,74 @@ function updateNeedsReviewKPI() {
             project['Target Date']
         );
         
-        const issueType = (project['Issue Type'] || '').toLowerCase();
-        
-        // Count by validation status - Past Due and Needs Review both count for "needs review"
-        if (validationStatus.text === APP_CONSTANTS.VALIDATION.PAST_DUE || validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
-            counts.needsReview++;
-            
-            // Count by issue type
-            if (issueType === 'bug') {
-                counts.bugs++;
-            } else if (issueType === 'story') {
-                counts.stories++;
-            }
-        } else if (validationStatus.text === APP_CONSTANTS.VALIDATION.STALE) {
-            counts.stale++;
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.PAST_DUE) {
+            pastDueCount++;
         }
     });
-    
-    // Update UI elements
-    updateKpiCounters('needs-review', counts);
-}
 
-/**
- * Helper function to update KPI counters
- * @param {string} kpiId - Base ID of the KPI element
- * @param {Object} counts - Object containing count values
- */
-function updateKpiCounters(kpiId, counts) {
-    setText(`#${kpiId}-count`, counts.needsReview);
-    
-    if ('bugs' in counts) {
-        setText(`#${kpiId}-bugs`, counts.bugs);
-    }
-    
-    if ('stories' in counts) {
-        setText(`#${kpiId}-stories`, counts.stories);
-    }
-    
-    if ('stale' in counts) {
-        setText(`#${kpiId}-stale`, counts.stale);
+    var card = $('#past-due-count');
+    if (card) {
+        card.textContent = pastDueCount;
     }
 }
 
-function updateTotalTasksKPI() {
-    var totalTasks = 0;
+function updateStaleKPI() {
+    var staleCount = 0;
     var allProjects = APP_STATE.allData.projects || [];
     
-    // Count all non-epic items
     allProjects.forEach(function(project) {
         var issueType = (project['Issue Type'] || '').toLowerCase();
-        if (issueType !== 'epic') {
-            totalTasks++;
+        if (issueType === 'epic') return;
+
+        var validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage'],
+            project['Target Date']
+        );
+        
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.STALE) {
+            staleCount++;
+        }
+    });
+
+    var card = $('#stale-count');
+    if (card) {
+        card.textContent = staleCount;
+    }
+}
+
+
+
+function updateNeedsReviewKPI() {
+    var needsReviewCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage'],
+            project['Target Date']
+        );
+        
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
+            needsReviewCount++;
         }
     });
     
-    var card = $('#total-tasks-count');
+    var card = $('#needs-review-count');
     if (card) {
-        card.textContent = totalTasks;
+        card.textContent = needsReviewCount;
     }
 }
+
+
 
 function getCurrentSprintNumber() {
     var allProjects = APP_STATE.allData.projects || [];
@@ -2159,10 +2030,15 @@ function setupEventListeners() {
     }
   });
 
-  $('.kpi-header').addEventListener('click', function(e) {
-      var kpiCard = e.target.closest('.kpi-card');
-      if (kpiCard) {
-          handleKPICardClick(kpiCard);
+  $('.kpi-stat-bar').addEventListener('click', function(e) {
+      var card = e.target.closest('.stat-card.clickable');
+      if (card) {
+          // Toggle active state
+          var allCards = document.querySelectorAll('.stat-card');
+          allCards.forEach(function(c) { c.classList.remove('active-filter'); });
+          card.classList.add('active-filter');
+          
+          handleKPICardClick(card);
       }
   });
   

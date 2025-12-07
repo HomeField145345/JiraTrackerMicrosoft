@@ -12,6 +12,12 @@ document.addEventListener('DOMContentLoaded', function() {
   const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
   const userRole = (user.role || '').toLowerCase();
   
+  // Hide Config button for non-admins
+  if (userRole !== 'admin') {
+      const configBtn = document.getElementById('configBtn');
+      if (configBtn) configBtn.style.display = 'none';
+  }
+
   if (userRole.includes('qa') || userRole.includes('tester') || userRole.includes('view')) {
     setupWorkspaceSelector();
   } else {

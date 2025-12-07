@@ -1639,4 +1639,45 @@ function updateEpicValidationBadges() {
         }
     } catch (e) { /* no-op */ }
 }
+
+// --- IMPERSONATION LOGIC ---
+
+function checkImpersonationStatus() {
+    const originalAdmin = localStorage.getItem('originalAdmin');
+    const banner = document.getElementById('impersonation-banner');
+    const bannerText = document.getElementById('impersonation-text');
+    
+    if (originalAdmin && banner) {
+        const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+        if (bannerText) {
+            bannerText.innerHTML = '<i class="ph-fill ph-mask-happy text-lg"></i> You are viewing as: ' + (currentUser.displayName || currentUser.username);
+        }
+        // Adjust body padding and header position
+        document.body.style.paddingTop = '40px';
+        const header = document.querySelector('.app-header');
+        if (header) {
+            header.style.top = '40px';
+        }
+    }
+}
+
+function stopImpersonation() {
+    const originalAdmin = localStorage.getItem('originalAdmin');
+    if (originalAdmin) {
+        localStorage.setItem('projectHubUser', originalAdmin);
+        localStorage.removeItem('originalAdmin');
+        location.reload();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    checkImpersonationStatus();
+    
+    const stopBtn = document.getElementById('stop-impersonation-btn');
+    if (stopBtn) {
+        stopBtn.addEventListener('click', stopImpersonation);
+    }
+});
 </script>

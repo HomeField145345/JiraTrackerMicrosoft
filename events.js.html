@@ -365,6 +365,11 @@ function handleClearFilters() {
       APP_STATE.multiSelectFilters[filterType] = [];
     }
   });
+
+  // Explicitly clear projectStage filter in case the dropdown loop missed it (e.g. if hidden/removed)
+  if (APP_STATE.multiSelectFilters.projectStage) {
+      APP_STATE.multiSelectFilters.projectStage = [];
+  }
   
   // Reset toggle buttons to their default states
   // Default state: closed filter OFF (hide closed items), stories ON, bugs ON
@@ -1780,8 +1785,16 @@ function updateProjectStageKPIs() {
         var count = counts[stage.toLowerCase()] || 0;
         var cardId = 'project-stage-' + stage.replace(/\s+/g, '-').toLowerCase();
         
+        // Check if this stage is currently filtered
+        var isActive = false;
+        if (APP_STATE.multiSelectFilters && APP_STATE.multiSelectFilters.projectStage) {
+            isActive = APP_STATE.multiSelectFilters.projectStage.includes(stage);
+        }
+        
+        var activeClass = isActive ? ' active-filter' : '';
+        
         var cardHtml = 
-            '<div class="stat-card clickable" data-filter="project-stage:' + stage + '">' +
+            '<div class="stat-card clickable' + activeClass + '" data-filter="project-stage:' + stage + '">' +
                 '<div class="stat-icon bg-indigo-100 text-indigo-600">' +
                     '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
                         '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>' +

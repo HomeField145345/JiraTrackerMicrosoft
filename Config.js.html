@@ -82,44 +82,60 @@
             .getConfigData(token);
     };
 
-    function renderKpiStageSelector(allStages, selectedStages) {
+    function renderKpiStageSelector(groupedStages, selectedStages) {
         var container = document.getElementById('kpiStageSelector');
         if (!container) {
             console.error('KPI Stage Selector container not found!');
-            // Try to find it again in case DOM wasn't ready? Unlikely if called from onConfigDataLoaded
             return;
         }
         
         container.innerHTML = '';
         // Reset class to ensure it matches the new layout if needed, but keep the grid
-        container.className = 'grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 h-full overflow-y-auto p-2 bg-white';
+        // Use fixed height to match textareas (approx h-60) and ensure scrolling
+        container.className = 'mt-1 w-full rounded-md border border-gray-300 shadow-sm p-2 h-60 overflow-y-auto bg-white';
         
-        if (!allStages || allStages.length === 0) {
-            container.innerHTML = '<p class="text-sm text-gray-500 col-span-full p-2">No Project Stages defined. Please add options to any of the "Project Stage Options" lists below.</p>';
-            return;
-        }
-
         var selectedSet = new Set(selectedStages || []);
-        
-        (allStages || []).forEach(function(stage) {
-            var label = document.createElement('label');
-            label.className = 'flex items-center space-x-2 p-1 hover:bg-gray-100 rounded cursor-pointer';
-            
-            var checkbox = document.createElement('input');
-            checkbox.type = 'checkbox';
-            checkbox.value = stage;
-            checkbox.checked = selectedSet.has(stage);
-            checkbox.className = 'form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500';
-            
-            var span = document.createElement('span');
-            span.textContent = stage;
-            span.className = 'text-sm text-gray-700 truncate';
-            span.title = stage; // Tooltip for long names
-            
-            label.appendChild(checkbox);
-            label.appendChild(span);
-            container.appendChild(label);
-        });
+        var hasAnyStages = false;
+
+        // Helper to render a group
+        var renderGroup = function(title, stages) {
+            if (!stages || stages.length === 0) return;
+            hasAnyStages = true;
+
+            var groupHeader = document.createElement('div');
+            groupHeader.className = 'text-xs font-bold text-gray-500 uppercase tracking-wider mt-2 mb-1 pb-1 border-b border-gray-100';
+            groupHeader.textContent = title;
+            container.appendChild(groupHeader);
+
+            stages.forEach(function(stage) {
+                var label = document.createElement('label');
+                label.className = 'flex items-center space-x-2 p-1 hover:bg-gray-100 rounded cursor-pointer ml-1';
+                
+                var checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.value = stage;
+                checkbox.checked = selectedSet.has(stage);
+                checkbox.className = 'form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500';
+                
+                var span = document.createElement('span');
+                span.textContent = stage;
+                span.className = 'text-sm text-gray-700 truncate';
+                span.title = stage; // Tooltip for long names
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                container.appendChild(label);
+            });
+        };
+
+        renderGroup('Global Options', groupedStages.global);
+        renderGroup('Epic Options', groupedStages.epic);
+        renderGroup('Story Options', groupedStages.story);
+        renderGroup('Bug Options', groupedStages.bug);
+
+        if (!hasAnyStages) {
+            container.innerHTML = '<p class="text-sm text-gray-500 p-2">No Project Stages defined. Please add options to any of the "Project Stage Options" lists below.</p>';
+        }
     }
 
     function onConfigDataLoaded(data) {
@@ -157,17 +173,15 @@
             setVal('bugProjectStageOptions', data.config.bugProjectStageOptions.join('\n'));
         }
 
-        // Combine all stages for KPI selector
-        var allStages = [
-            ...(data.config.projectStageOptions || []),
-            ...(data.config.epicProjectStageOptions || []),
-            ...(data.config.storyProjectStageOptions || []),
-            ...(data.config.bugProjectStageOptions || [])
-        ];
-        // Dedupe
-        allStages = [...new Set(allStages)].filter(Boolean).sort();
+        // Group stages for KPI selector
+        var groupedStages = {
+            global: (data.config.projectStageOptions || []).filter(Boolean).sort(),
+            epic: (data.config.epicProjectStageOptions || []).filter(Boolean).sort(),
+            story: (data.config.storyProjectStageOptions || []).filter(Boolean).sort(),
+            bug: (data.config.bugProjectStageOptions || []).filter(Boolean).sort()
+        };
         
-        renderKpiStageSelector(allStages, data.config.kpiProjectStages);
+        renderKpiStageSelector(groupedStages, data.config.kpiProjectStages);
         
         // Priority options
         if (data.config.priorityOptions) {
@@ -680,21 +694,26 @@
         var stageInputs = ['projectStageOptions', 'epicProjectStageOptions', 'storyProjectStageOptions', 'bugProjectStageOptions'];
         
         function updateKpiSelectorOptions() {
-            var allStages = [];
-            stageInputs.forEach(function(id) {
+            var groupedStages = {
+                global: [],
+                epic: [],
+                story: [],
+                bug: []
+            };
+
+            var getStages = function(id) {
                 var el = document.getElementById(id);
-                if (el) {
-                    var stages = el.value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
-                    allStages = allStages.concat(stages);
-                }
-            });
-            
-            // Dedupe and sort
-            allStages = Array.from(new Set(allStages)).sort();
+                return el ? el.value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean).sort() : [];
+            };
+
+            groupedStages.global = getStages('projectStageOptions');
+            groupedStages.epic = getStages('epicProjectStageOptions');
+            groupedStages.story = getStages('storyProjectStageOptions');
+            groupedStages.bug = getStages('bugProjectStageOptions');
             
             // Get currently selected stages to preserve selection if possible
             var currentSelected = Array.from(document.querySelectorAll('#kpiStageSelector input[type="checkbox"]:checked')).map(function(cb) { return cb.value; });
-            renderKpiStageSelector(allStages, currentSelected);
+            renderKpiStageSelector(groupedStages, currentSelected);
         }
 
         stageInputs.forEach(function(id) {
@@ -967,6 +986,12 @@
 
         const token = getToken();
         if (!token) return;
+
+        // Save current admin if not already saved
+        const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+        if (!localStorage.getItem('originalAdmin')) {
+            localStorage.setItem('originalAdmin', JSON.stringify(currentUser));
+        }
 
         google.script.run
             .withSuccessHandler(function(response) {

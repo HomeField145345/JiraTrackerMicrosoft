@@ -66,7 +66,10 @@ function importJiraFile(token, fileData) {
 }
 
 function saveConfiguration(token, optionsData) {
-  requireAuth(token);
+  const auth = requireAuth(token);
+  if (auth.role !== 'admin') {
+    throw new Error("Access denied: Admin rights required.");
+  }
   return saveConfiguration_(optionsData);
 }
 

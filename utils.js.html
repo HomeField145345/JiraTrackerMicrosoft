@@ -145,5 +145,60 @@ function showToast(message) {
     t.style.display = 'none'; 
   }, 2500, 'toast_hide');
 }
+
+/**
+ * Creates a debounced function that delays invoking func until after wait milliseconds have elapsed since the last time the debounced function was invoked.
+ * @param {Function} func - The function to debounce.
+ * @param {number} wait - The number of milliseconds to delay.
+ * @returns {Function} - The debounced function.
+ */
+function debounce(func, wait) {
+  let timeout;
+  return function() {
+    const context = this;
+    const args = arguments;
+    clearTimeout(timeout);
+    timeout = setTimeout(function() {
+      func.apply(context, args);
+    }, wait);
+  };
+}
+
+/**
+ * A debouncer that manages multiple timers based on a key.
+ * Useful for debouncing actions on specific items (like rows in a table) independently.
+ */
+const KeyedDebouncer = {
+  timers: {},
+  
+  /**
+   * Debounce a function execution based on a unique key.
+   * @param {string} key - Unique identifier for this operation (e.g. "save-JIRA-123-field")
+   * @param {Function} func - The function to execute
+   * @param {number} wait - Delay in ms
+   */
+  debounce: function(key, func, wait) {
+    if (this.timers[key]) {
+      clearTimeout(this.timers[key]);
+    }
+    
+    this.timers[key] = setTimeout(() => {
+      func();
+      delete this.timers[key];
+    }, wait);
+  },
+  
+  /**
+   * Cancel a pending debounce for a key
+   * @param {string} key 
+   */
+  cancel: function(key) {
+    if (this.timers[key]) {
+      clearTimeout(this.timers[key]);
+      delete this.timers[key];
+    }
+  }
+};
+
 </script>
 

@@ -240,9 +240,23 @@ function saveTask(taskData) {
       if (response.status === 'success') {
         closeModal();
         refreshData();
+      } else {
+          // Re-enable button if not success
+          var saveBtn = $('#modalSave');
+          if (saveBtn) {
+              saveBtn.disabled = false;
+              if (saveBtn.dataset.originalText) saveBtn.textContent = saveBtn.dataset.originalText;
+          }
       }
     })
-    .withFailureHandler(handleFailure)
+    .withFailureHandler(function(e) {
+        handleFailure(e);
+        var saveBtn = $('#modalSave');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            if (saveBtn.dataset.originalText) saveBtn.textContent = saveBtn.dataset.originalText;
+        }
+    })
     .saveIndependentTask(token, taskData);
 }
 
@@ -250,16 +264,43 @@ function saveManualField(jiraId, field, value) {
   const token = checkAuth();
   if (!token) return;
 
-  google.script.run
-    .withSuccessHandler(function(response) {
-      handleUpdateSuccess(response);
-      if (response.status === 'success') {
-        // Update validation status in real-time after saving any manual field
-        updateRowValidation(jiraId);
-      }
-    })
-    .withFailureHandler(handleFailure)
-    .saveManualData(token, jiraId, field, value);
+  // Create a unique key for this field on this item
+  const key = 'save-' + jiraId + '-' + field;
+
+  // Show a subtle indicator that changes are pending/saving
+  var statusEl = document.getElementById('sync-status');
+  if (statusEl) {
+      statusEl.textContent = 'Saving...';
+      statusEl.className = 'text-yellow-600';
+  }
+
+  // Debounce the server call (1 second delay)
+  // This prevents flooding the server if the user types quickly or changes their mind
+  KeyedDebouncer.debounce(key, function() {
+      google.script.run
+        .withSuccessHandler(function(response) {
+          handleUpdateSuccess(response);
+          if (response.status === 'success') {
+            // Update validation status in real-time after saving any manual field
+            updateRowValidation(jiraId);
+          }
+          
+          // Reset sync status
+          if (statusEl) {
+              statusEl.textContent = 'Synced';
+              statusEl.className = 'text-green-600';
+              setTimeout(function() { statusEl.textContent = ''; }, 2000);
+          }
+        })
+        .withFailureHandler(function(e) {
+            handleFailure(e);
+            if (statusEl) {
+                statusEl.textContent = 'Error saving';
+                statusEl.className = 'text-red-600';
+            }
+        })
+        .saveManualData(token, jiraId, field, value);
+  }, 1000);
 }
 
 function updateLastChecked(jiraId, element) {

@@ -1065,6 +1065,14 @@ function handlePastSprintClick() {
 }
 
 function handleSaveTask() {
+  var saveBtn = $('#modalSave');
+  if (saveBtn) {
+      if (saveBtn.disabled) return; // Prevent double clicks
+      saveBtn.disabled = true;
+      saveBtn.dataset.originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Saving...';
+  }
+
   var taskData = {
     ID: APP_STATE.currentEditId,
     Title: $('#t-title').value,

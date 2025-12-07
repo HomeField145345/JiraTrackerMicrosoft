@@ -20,6 +20,13 @@
  * @returns {Object} Result object with status and message
  */
 function saveConfiguration_(optionsData) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = getSheetOrThrow(ss, CONFIG_SHEET);
@@ -114,6 +121,8 @@ function saveConfiguration_(optionsData) {
     return { status: 'success', message: 'Configuration saved!' };
   } catch (e) {
     return { status: 'error', message: e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -125,6 +134,13 @@ function saveConfiguration_(optionsData) {
  * @returns {Object} Result object with status and message
  */
 function saveManualData_(jiraId, field, value) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
   try {
     var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
@@ -181,6 +197,8 @@ function saveManualData_(jiraId, field, value) {
     return { status: 'success', message: 'Data saved!' };
   } catch (e) {
     return { status: 'error', message: 'Failed to save data: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -210,6 +228,13 @@ function updateDriveLink_(jiraId, driveLink) {
  * @returns {Object} Result object with status and message
  */
 function saveIndependentTask_(taskData, user) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
   try {
     var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), INDEPENDENT_TASKS_SHEET);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
@@ -272,6 +297,8 @@ function saveIndependentTask_(taskData, user) {
     return { status: 'success', message: 'Task saved successfully!' };
   } catch (e) {
     return { status: 'error', message: 'Failed to save task: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -281,6 +308,13 @@ function saveIndependentTask_(taskData, user) {
  * @returns {Object} Result object with status, message, and new timestamp
  */
 function updateLastChecked_(jiraId) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
   try {
     var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
@@ -328,5 +362,7 @@ function updateLastChecked_(jiraId) {
     };
   } catch (e) {
     return { status: 'error', message: 'Failed to update timestamp: ' + e.message };
+  } finally {
+    lock.releaseLock();
   }
 }

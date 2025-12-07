@@ -80,6 +80,13 @@ function getUsers() {
  * @returns {Object} Result object
  */
 function authenticateUser(username, password) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { success: false, message: 'Server is busy. Please try again.' };
+  }
+
   try {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     const userSheet = ss.getSheetByName(USERS_SHEET);
@@ -132,6 +139,8 @@ function authenticateUser(username, password) {
   } catch (e) {
     Logger.log("Auth Error: " + e.toString());
     return { success: false, message: "An error occurred during login." };
+  } finally {
+    lock.releaseLock();
   }
 }
 
@@ -139,81 +148,103 @@ function authenticateUser(username, password) {
  * Authenticates using the active Google User (for SSO).
  */
 function loginWithGoogle() {
-  const email = Session.getActiveUser().getEmail();
-  if (!email) return { success: false, message: 'No Google User found' };
-  
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const userSheet = ss.getSheetByName(USERS_SHEET);
-  if (!userSheet) return { success: false, message: "Users sheet not found." };
-  
-  const data = userSheet.getDataRange().getValues();
-  
-  // Find user by Email (Column 3 / Index 2)
-  for(let i=1; i<data.length; i++) {
-    const row = data[i];
-    // Columns: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
-    
-    if(String(row[2]).trim().toLowerCase() === String(email).trim().toLowerCase() && row[5] === true) {
-        // Update Last Login
-        userSheet.getRange(i+1, 9).setValue(new Date());
-        
-        const userObj = { 
-            id: row[0], 
-            username: row[1], 
-            email: row[2],
-            displayName: row[3], 
-            role: row[4]
-        };
-        
-        const token = createSession(userObj.id, userObj.username, userObj.role);
-        
-        return { 
-            success: true, 
-            username: userObj.username,
-            role: userObj.role,
-            token: token,
-            user: userObj
-        };
-    }
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { success: false, message: 'Server is busy. Please try again.' };
   }
-  
-  return { success: false, message: 'Access Denied: Email not registered (' + email + ')' };
+
+  try {
+    const email = Session.getActiveUser().getEmail();
+    if (!email) return { success: false, message: 'No Google User found' };
+    
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const userSheet = ss.getSheetByName(USERS_SHEET);
+    if (!userSheet) return { success: false, message: "Users sheet not found." };
+    
+    const data = userSheet.getDataRange().getValues();
+    
+    // Find user by Email (Column 3 / Index 2)
+    for(let i=1; i<data.length; i++) {
+      const row = data[i];
+      // Columns: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
+      
+      if(String(row[2]).trim().toLowerCase() === String(email).trim().toLowerCase() && row[5] === true) {
+          // Update Last Login
+          userSheet.getRange(i+1, 9).setValue(new Date());
+          
+          const userObj = { 
+              id: row[0], 
+              username: row[1], 
+              email: row[2],
+              displayName: row[3], 
+              role: row[4]
+          };
+          
+          const token = createSession(userObj.id, userObj.username, userObj.role);
+          
+          return { 
+              success: true, 
+              username: userObj.username,
+              role: userObj.role,
+              token: token,
+              user: userObj
+          };
+      }
+    }
+    
+    return { success: false, message: 'Access Denied: Email not registered (' + email + ')' };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /**
  * Creates a new user.
  */
 function createUser(user) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let userSheet = ss.getSheetByName(USERS_SHEET);
-  
-  if (!userSheet) {
-    return { success: false, message: "Users sheet missing." };
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { success: false, message: 'Server is busy. Please try again.' };
   }
-  
-  // Check for duplicates
-  const data = userSheet.getDataRange().getValues();
-  for (let i = 1; i < data.length; i++) {
-    if (data[i][1] === user.username) { // Check username
-      return { success: false, message: "Username already exists." };
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let userSheet = ss.getSheetByName(USERS_SHEET);
+    
+    if (!userSheet) {
+      return { success: false, message: "Users sheet missing." };
     }
+    
+    // Check for duplicates
+    const data = userSheet.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (data[i][1] === user.username) { // Check username
+        return { success: false, message: "Username already exists." };
+      }
+    }
+    
+    const id = generateId();
+    // ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
+    userSheet.appendRow([
+      id, 
+      user.username, 
+      user.email, 
+      user.displayName || user.username, 
+      user.role, 
+      user.isActive !== undefined ? user.isActive : true, 
+      user.password || '123456', 
+      new Date(), 
+      ''
+    ]);
+    
+    return { success: true, message: "User created successfully." };
+  } finally {
+    lock.releaseLock();
   }
-  
-  const id = generateId();
-  // ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
-  userSheet.appendRow([
-    id, 
-    user.username, 
-    user.email, 
-    user.displayName || user.username, 
-    user.role, 
-    user.isActive !== undefined ? user.isActive : true, 
-    user.password || '123456', 
-    new Date(), 
-    ''
-  ]);
-  
-  return { success: true, message: "User created successfully." };
 }
 
 /**

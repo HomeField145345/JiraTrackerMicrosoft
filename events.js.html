@@ -88,11 +88,17 @@ function loadFilterState() {
         
         // Restore multi-select filters
         if (state.multiSelectFilters) {
-            APP_STATE.multiSelectFilters = state.multiSelectFilters;
+            // Merge saved filters with current state to ensure new filter types (like uatStatus) exist
+            APP_STATE.multiSelectFilters = Object.assign({}, APP_STATE.multiSelectFilters, state.multiSelectFilters);
             
+            // Ensure uatStatus is initialized if missing from saved state
+            if (!APP_STATE.multiSelectFilters.uatStatus) {
+                APP_STATE.multiSelectFilters.uatStatus = [];
+            }
+
             // Update checkboxes in the UI
-            Object.keys(state.multiSelectFilters).forEach(function(filterType) {
-                const selectedValues = state.multiSelectFilters[filterType] || [];
+            Object.keys(APP_STATE.multiSelectFilters).forEach(function(filterType) {
+                const selectedValues = APP_STATE.multiSelectFilters[filterType] || [];
                 const dropdown = $('[data-filter="' + filterType + '"]');
                 if (!dropdown) return;
                 
@@ -1439,6 +1445,7 @@ function applyFilters() {
     var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
     var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
     var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
     
@@ -1467,6 +1474,7 @@ function applyFilters() {
         planningStageFilters.length ||
         validationFilters.length ||
         projectStageFilters.length ||
+        uatStatusFilters.length ||
         assignedPMFilters.length ||
         assignedDevFilters.length ||
         (includeStories === false) ||
@@ -1554,6 +1562,7 @@ function applyFilters() {
             var _matchPlanning = matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters);
             var _matchValidation = matchesMultiSelectFilter(row.dataset.validation, validationFilters);
             var _matchProjectStage = matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters);
+            var _matchUatStatus = matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters);
             var _matchPM = matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters);
             var _matchDev = matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
 
@@ -1563,6 +1572,7 @@ function applyFilters() {
                             _matchPlanning &&
                             _matchValidation &&
                             _matchProjectStage &&
+                            _matchUatStatus &&
                             _matchPM &&
                             _matchDev &&
                             shouldShowBasedOnType;
@@ -1601,6 +1611,7 @@ function applyFilters() {
                                    matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters) &&
                                    matchesMultiSelectFilter(row.dataset.validation, validationFilters) &&
                                    matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters) &&
                                    matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters) &&
                                    matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
             

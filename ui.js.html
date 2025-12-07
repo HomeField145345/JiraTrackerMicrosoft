@@ -287,6 +287,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
     // Prefer Assigned PM/Dev; fall back to PM Lead/Assignee; always trim
     row.dataset.assignedPM = ((item['Assigned PM'] || item['PM Lead'] || '') + '').trim();
     row.dataset.assignedDev = ((item['Assigned Dev'] || item['Assignee'] || '') + '').trim();
+    row.dataset.uatStatus = (item['UAT Status'] || '').toString().trim();
     row.dataset.issueType = item['Issue Type'] || '';
     row.dataset.jiraId = (item['Jira #'] || '').toLowerCase(); // Add Jira ID for search
     // Store canonical ISO values for updated/checked (server values are UTC)
@@ -638,7 +639,7 @@ function populateLinksDropdown() {
 function populateFilters() {
     var allItems = [].concat(APP_STATE.allData.projects, APP_STATE.allData.independentTasks);
     var allStatuses = {}, allSprints = {}, allPlanningStages = {}, allValidations = {};
-    var allProjectStages = {}, allAssignedPMs = {}, allAssignedDevs = {};
+    var allProjectStages = {}, allAssignedPMs = {}, allAssignedDevs = {}, allUatStatuses = {};
     
     for (var i = 0; i < allItems.length; i++) {
         var item = allItems[i];
@@ -651,6 +652,8 @@ function populateFilters() {
         if (apm && apm !== '—' && apm.toLowerCase() !== 'none') allAssignedPMs[apm] = true;
         var adv = (item['Assigned Dev'] || item['Assignee'] || '').toString().trim();
         if (adv && adv !== '—' && adv.toLowerCase() !== 'none') allAssignedDevs[adv] = true;
+        var uat = (item['UAT Status'] || '').toString().trim();
+        if (uat && uat !== '—') allUatStatuses[uat] = true;
         
         var validationText = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']).text;
         allValidations[validationText] = true;
@@ -675,6 +678,7 @@ function populateFilters() {
     populateMultiSelectDropdown('planningStage', Object.keys(allPlanningStages).sort(), 'All Planning Stages');
     populateMultiSelectDropdown('validation', Object.keys(allValidations).sort(), 'All Validations');
     populateMultiSelectDropdown('projectStage', Object.keys(allProjectStages).sort(), 'All Project Stages');
+    populateMultiSelectDropdown('uatStatus', Object.keys(allUatStatuses).sort(), 'All UAT Statuses');
     populateMultiSelectDropdown('assignedPM', Object.keys(allAssignedPMs).sort(), 'All PMs');
     populateMultiSelectDropdown('assignedDev', Object.keys(allAssignedDevs).sort(), 'All Devs');
     
@@ -823,6 +827,11 @@ function updateFilterLabel(filterType, defaultLabel) {
     var label = dropdown.querySelector('.filter-label');
     if (!label) return;
     
+    // Safety check: ensure the filter array exists
+    if (!APP_STATE.multiSelectFilters[filterType]) {
+        APP_STATE.multiSelectFilters[filterType] = [];
+    }
+    
     var selectedCount = APP_STATE.multiSelectFilters[filterType].length;
     var toggleButton = dropdown.querySelector('.filter-dropdown-toggle');
     
@@ -834,6 +843,7 @@ function updateFilterLabel(filterType, defaultLabel) {
             case 'planningStage': defaultLabel = 'All Planning Stages'; break;
             case 'validation': defaultLabel = 'All Validations'; break;
             case 'projectStage': defaultLabel = 'All Project Stages'; break;
+            case 'uatStatus': defaultLabel = 'All UAT Statuses'; break;
             case 'assignedPM': defaultLabel = 'All PMs'; break;
             case 'assignedDev': defaultLabel = 'All Devs'; break;
             default: defaultLabel = 'All Items';
@@ -881,6 +891,7 @@ function getDefaultLabel(filterType) {
         'sprint': 'All Sprints',
         'validation': 'All Validations',
         'projectStage': 'All Project Stages',
+        'uatStatus': 'All UAT Statuses',
         'assignedPM': 'All PMs',
         'assignedDev': 'All Devs'
     };

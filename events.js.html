@@ -984,16 +984,23 @@ function handlePastSprintClick() {
         if (!sprintString || typeof sprintString !== 'string') return false;
         var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
         
+        var hasPastSprint = false;
+        var hasCurrentOrFutureSprint = false;
+        
         for (var i = 0; i < itemSprints.length; i++) {
             var sprintInfo = sprints[itemSprints[i]];
             if (sprintInfo && sprintInfo.end) {
                 var compareDate = currentSprintEndDate || today;
                 if (sprintInfo.end < compareDate) {
-                    return true;
+                    hasPastSprint = true;
+                } else {
+                    hasCurrentOrFutureSprint = true;
                 }
             }
         }
-        return false;
+        
+        // Only consider it a past sprint item if it has at least one past sprint AND no current/future sprints
+        return hasPastSprint && !hasCurrentOrFutureSprint;
     };
 
     var allRows = $$('#list-body tr');

@@ -585,46 +585,7 @@ function handleNeedsReviewFilter() {
     filterByValidationStatus(APP_CONSTANTS.VALIDATION.NEEDS_REVIEW);
 }
 
-function handleProjectStageFilter(targetStage) {
-    var rows = document.querySelectorAll('#list-body tr');
-    var visibleCount = 0;
-    var target = (targetStage || '').toLowerCase();
 
-    rows.forEach(function(row) {
-        if (row.classList.contains('row-epic')) {
-            row.style.display = 'none';
-            return;
-        }
-
-        var stage = (row.dataset.projectStage || '').toLowerCase();
-
-        if (stage === target) {
-            row.style.display = '';
-            visibleCount++;
-            // Show parent epic
-            var epicId = row.dataset.parentEpic;
-            if (epicId) {
-                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
-                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
-                if (epicRow) epicRow.style.display = '';
-            }
-        } else {
-            row.style.display = 'none';
-        }
-    });
-    
-    // Update counts
-    var filteredCount = $('#filtered-count');
-    if (filteredCount) filteredCount.textContent = visibleCount;
-    
-    // Show/hide no matches
-    var noMatches = $('#no-matches-indicator');
-    if (noMatches) {
-        noMatches.classList.toggle('hidden', visibleCount > 0);
-    }
-    
-    updateEpicFooters();
-}
 
 function handleUatFilter() {
     var rows = document.querySelectorAll('#list-body tr');

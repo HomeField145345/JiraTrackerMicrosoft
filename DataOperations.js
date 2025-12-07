@@ -41,17 +41,19 @@ function saveConfiguration_(optionsData) {
       "Priority Options"
     ]]);
     
-    // Set header for Past Due Exempt Stages in O1 (Column 15)
+    // Set header for Past Due Exempt Stages in O1 (Column 15) and KPI Project Stages in P1 (Column 16)
     sheet.getRange("O1").setValue("Past Due Exempt Stages");
+    sheet.getRange("P1").setValue("KPI Project Stages");
     
-    // Clear existing data (A-M and O, skipping N which is Connectors)
+    // Clear existing data (A-M, O, P, skipping N which is Connectors)
     sheet.getRange("A2:M" + sheet.getMaxRows()).clearContent();
-    sheet.getRange("O2:O" + sheet.getMaxRows()).clearContent();
+    sheet.getRange("O2:P" + sheet.getMaxRows()).clearContent();
     
     // Prepare data
     var actData = optionsData.actPctOptions.map(function(o) { return [o]; });
     var planData = optionsData.planningStageOptions.map(function(o) { return [o]; });
     var projData = optionsData.projectStageOptions.map(function(o) { return [o]; });
+    var kpiProjData = (optionsData.kpiProjectStages || []).map(function(o) { return [o]; });
     var epicProjData = (optionsData.epicProjectStageOptions || []).map(function(o) { return [o]; });
     var storyProjData = (optionsData.storyProjectStageOptions || []).map(function(o) { return [o]; });
     var bugProjData = (optionsData.bugProjectStageOptions || []).map(function(o) { return [o]; });
@@ -62,6 +64,9 @@ function saveConfiguration_(optionsData) {
     if (actData.length > 0) sheet.getRange(2, 1, actData.length, 1).setValues(actData);
     if (planData.length > 0) sheet.getRange(2, 2, planData.length, 1).setValues(planData);
     if (projData.length > 0) sheet.getRange(2, 3, projData.length, 1).setValues(projData);
+    
+    // Set KPI Project Stages in P (column 16)
+    if (kpiProjData.length > 0) sheet.getRange(2, 16, kpiProjData.length, 1).setValues(kpiProjData);
     
     // Set per-type options in E, F, G (restored original positions)
     if (epicProjData.length > 0) sheet.getRange(2, 5, epicProjData.length, 1).setValues(epicProjData);

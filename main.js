@@ -7,9 +7,7 @@ function doGet(e) {
   var template;
   
   // Simple routing
-  if (e.parameter.page === 'config') {
-    template = HtmlService.createTemplateFromFile('Config.html');
-  } else if (e.parameter.page === 'tasks') {
+  if (e.parameter.page === 'tasks') {
     template = HtmlService.createTemplateFromFile('Tasks.html');
   } else if (e.parameter.page === 'dashboard') {
     template = HtmlService.createTemplateFromFile('Dashboard.html');
@@ -50,6 +48,11 @@ function forceGetProjectData(token) {
 function getProjectData(token, targetUsername) {
   const auth = requireAuth(token);
   return getProjectData_(auth.user, targetUsername);
+}
+
+function getConfigData(token) {
+  const auth = requireAuth(token);
+  return getConfigData_(auth.user);
 }
 
 function importJiraCsv(token, csvData) {

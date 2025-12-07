@@ -448,6 +448,12 @@ function handleKPICardClick(card) {
     card.classList.add('active-filter');
 
     // Apply specific filter based on type
+    if (filterType && filterType.startsWith('project-stage:')) {
+        var stage = filterType.split(':')[1];
+        handleProjectStageFilter(stage);
+        return;
+    }
+
     switch(filterType) {
         case 'current-sprint':
             handleCurrentSprintFilter();
@@ -576,6 +582,47 @@ function handleStaleFilter() {
 
 function handleNeedsReviewFilter() {
     filterByValidationStatus(APP_CONSTANTS.VALIDATION.NEEDS_REVIEW);
+}
+
+function handleProjectStageFilter(targetStage) {
+    var rows = document.querySelectorAll('#list-body tr');
+    var visibleCount = 0;
+    var target = (targetStage || '').toLowerCase();
+
+    rows.forEach(function(row) {
+        if (row.classList.contains('row-epic')) {
+            row.style.display = 'none';
+            return;
+        }
+
+        var stage = (row.dataset.projectStage || '').toLowerCase();
+
+        if (stage === target) {
+            row.style.display = '';
+            visibleCount++;
+            // Show parent epic
+            var epicId = row.dataset.parentEpic;
+            if (epicId) {
+                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
+                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
+                if (epicRow) epicRow.style.display = '';
+            }
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update counts
+    var filteredCount = $('#filtered-count');
+    if (filteredCount) filteredCount.textContent = visibleCount;
+    
+    // Show/hide no matches
+    var noMatches = $('#no-matches-indicator');
+    if (noMatches) {
+        noMatches.classList.toggle('hidden', visibleCount > 0);
+    }
+    
+    updateEpicFooters();
 }
 
 function handleUatFilter() {
@@ -1730,6 +1777,63 @@ function updateKPICards() {
     updateNeedsReviewKPI();
     updateUatKPI();
     updateRetestKPI();
+    updateProjectStageKPIs();
+}
+
+function updateProjectStageKPIs() {
+    var config = (APP_STATE.allData && APP_STATE.allData.config) || {};
+    var kpiStages = config.kpiProjectStages || [];
+    var container = document.getElementById('project-stage-kpi-cards');
+    var group = document.getElementById('project-stage-kpi-group');
+    var divider = document.getElementById('project-stage-divider');
+
+    if (!kpiStages.length || !container || !group) {
+        if (group) group.style.display = 'none';
+        if (divider) divider.style.display = 'none';
+        return;
+    }
+
+    group.style.display = 'flex';
+    if (divider) divider.style.display = 'block';
+    container.innerHTML = '';
+
+    var allProjects = APP_STATE.allData.projects || [];
+    var counts = {};
+    
+    // Initialize counts
+    kpiStages.forEach(function(stage) {
+        counts[stage.toLowerCase()] = 0;
+    });
+
+    // Count items
+    allProjects.forEach(function(project) {
+        var stage = (project['Project Stage'] || '').trim().toLowerCase();
+        if (counts.hasOwnProperty(stage)) {
+            counts[stage]++;
+        }
+    });
+
+    // Create cards
+    kpiStages.forEach(function(stage) {
+        var count = counts[stage.toLowerCase()] || 0;
+        var cardId = 'project-stage-' + stage.replace(/\s+/g, '-').toLowerCase();
+        
+        var cardHtml = 
+            '<div class="stat-card clickable" data-filter="project-stage:' + stage + '">' +
+                '<div class="stat-icon bg-indigo-100 text-indigo-600">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>' +
+                        '<polyline points="22 4 12 14.01 9 11.01"></polyline>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="stat-content">' +
+                    '<div class="stat-label">' + stage + '</div>' +
+                    '<div class="stat-value text-indigo-600">' + count + '</div>' +
+                '</div>' +
+            '</div>';
+            
+        container.insertAdjacentHTML('beforeend', cardHtml);
+    });
 }
 
 function updateCurrentSprintKPI() {

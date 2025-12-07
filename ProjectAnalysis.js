@@ -143,6 +143,7 @@ function _loadConfiguration(configSheet) {
   var actPctOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("A2:A" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var planningStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("B2:B" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var projectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("C2:C" + configSheet.getLastRow()).getValues()).filter(String) : [];
+  var kpiProjectStages = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("P2:P" + configSheet.getLastRow()).getValues()).filter(String) : [];
   
   // Per-type project stage options (optional)
   var epicProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("E2:E" + configSheet.getLastRow()).getValues()).filter(String) : [];
@@ -159,9 +160,10 @@ function _loadConfiguration(configSheet) {
   var stageStatusMappings = _loadStageStatusMappings(configSheet);
   
   return { 
-    actPctOptions: actPctOptions, 
-    planningStageOptions: planningStageOptions, 
-    projectStageOptions: projectStageOptions, 
+    actPctOptions: actPctOptions,
+    planningStageOptions: planningStageOptions,
+    projectStageOptions: projectStageOptions,
+    kpiProjectStages: kpiProjectStages,
     epicProjectStageOptions: epicProjectStageOptions,
     storyProjectStageOptions: storyProjectStageOptions,
     bugProjectStageOptions: bugProjectStageOptions,
@@ -418,5 +420,21 @@ function _logTimestampSamples(combinedProjects) {
     });
   } catch (logError) {
     // Don't let logging errors affect the main operation
+  }
+}
+
+/**
+ * Get configuration data for the config page
+ * @param {Object} user - The user requesting the data
+ * @returns {Object} Configuration data
+ */
+function getConfigData_(user) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var configSheet = getSheetOrThrow(ss, CONFIG_SHEET);
+    var config = _loadConfiguration(configSheet);
+    return { config: config };
+  } catch (e) {
+    return { error: true, message: e.toString() };
   }
 }

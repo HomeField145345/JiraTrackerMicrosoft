@@ -1868,7 +1868,9 @@ function updateCurrentSprintKPI() {
     var sprintStats = APP_STATE.allData.sprintStats || {};
     var currentSprintName = sprintStats.currentSprintName;
     var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
-    var closedList = Array.isArray(cfg.closedStages) ? cfg.closedStages : ['Done', 'Closed', 'Complete', 'Released'];
+    // Use closedProjectStages from config, fallback to closedStages (legacy) or default list
+    var closedList = Array.isArray(cfg.closedProjectStages) ? cfg.closedProjectStages : 
+                    (Array.isArray(cfg.closedStages) ? cfg.closedStages : ['Done', 'Closed', 'Complete', 'Released']);
     var closedSet = new Set(closedList.map(function(s){ return String(s).trim().toLowerCase(); }));
 
     if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
@@ -1878,7 +1880,20 @@ function updateCurrentSprintKPI() {
             if (issueType === 'epic') return;
 
             var sprints = project.sprint || project.Sprint || '';
-            if (typeof sprints === 'string' && sprints.indexOf(currentSprintName) !== -1) {
+            var isInSprint = false;
+            
+            if (typeof sprints === 'string') {
+                // Split by comma and check each part exactly using formatSprint
+                var sprintParts = sprints.split(',');
+                for (var i = 0; i < sprintParts.length; i++) {
+                    if (formatSprint(sprintParts[i]) === currentSprintName) {
+                        isInSprint = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (isInSprint) {
                 currentSprintItems++;
                 
                 var stage = (project['Project Stage'] || '').trim().toLowerCase();

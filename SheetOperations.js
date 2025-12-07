@@ -290,7 +290,7 @@ function analyzeSprintData(allItems) {
     var isInCurrentSprint = false;
     if (currentSprintName !== 'None') {
       isInCurrentSprint = itemSprints.some(function(sprint) {
-        return sprint.includes(currentSprintName);
+        return formatSprint(sprint) === currentSprintName;
       });
     }
     if (isInCurrentSprint) {

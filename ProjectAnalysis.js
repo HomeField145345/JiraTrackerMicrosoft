@@ -97,6 +97,7 @@ function _getRawProjectData() {
     var projects = readJiraData(jiraSheet);
     var manualDataMap = readManualData(manualDataSheet);
     var independentTasks = readIndependentTasks(independentTasksSheet);
+    var users = getUsers();
     
     // Combine Jira data with manual overrides
     var combinedProjects = _combineProjectData(projects, manualDataMap);
@@ -109,7 +110,8 @@ function _getRawProjectData() {
       projects: combinedProjects, 
       independentTasks: independentTasks, 
       config: config,
-      sprintStats: sprintStats
+      sprintStats: sprintStats,
+      users: users
     };
     
     // Log timestamp samples for debugging
@@ -153,6 +155,7 @@ function _loadConfiguration(configSheet) {
   var planningStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("B2:B" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var projectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("C2:C" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var kpiProjectStages = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("P2:P" + configSheet.getLastRow()).getValues()).filter(String) : [];
+  var independentTaskStatusOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("Q2:Q" + configSheet.getLastRow()).getValues()).filter(String) : [];
   
   // Per-type project stage options (optional)
   var epicProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("E2:E" + configSheet.getLastRow()).getValues()).filter(String) : [];
@@ -173,6 +176,7 @@ function _loadConfiguration(configSheet) {
     planningStageOptions: planningStageOptions,
     projectStageOptions: projectStageOptions,
     kpiProjectStages: kpiProjectStages,
+    independentTaskStatusOptions: independentTaskStatusOptions,
     epicProjectStageOptions: epicProjectStageOptions,
     storyProjectStageOptions: storyProjectStageOptions,
     bugProjectStageOptions: bugProjectStageOptions,

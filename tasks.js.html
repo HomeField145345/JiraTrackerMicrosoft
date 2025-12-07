@@ -21,6 +21,9 @@ function initTasksView() {
         addPersonalBtn.addEventListener('click', function() {
             APP_STATE.currentEditId = null;
             closeModal();
+            
+            populateTaskDropdowns();
+            
             const priorityEl = document.getElementById('t-priority');
             if (priorityEl) priorityEl.value = 'Medium';
             
@@ -225,6 +228,7 @@ function handleSaveTaskLocal() {
 }
 
 function editTask(id) {
+    populateTaskDropdowns();
     const task = APP_STATE.allData.independentTasks.find(t => t.ID === id);
     if (task) {
         APP_STATE.currentEditId = task.ID;
@@ -253,6 +257,52 @@ function editTask(id) {
         document.getElementById('t-desc').value = task.Description || '';
         
         openModal('Edit Task');
+    }
+
+    function populateTaskDropdowns() {
+        if (!APP_STATE.allData) return;
+
+        // Populate Status
+        const statusSelect = document.getElementById('t-status');
+        if (statusSelect) {
+            statusSelect.innerHTML = '';
+            const statuses = (APP_STATE.allData.config && APP_STATE.allData.config.independentTaskStatusOptions && APP_STATE.allData.config.independentTaskStatusOptions.length > 0) 
+                ? APP_STATE.allData.config.independentTaskStatusOptions 
+                : ['Open', 'In Progress', 'Done'];
+            
+            statuses.forEach(function(s) {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = s;
+                statusSelect.appendChild(opt);
+            });
+        }
+
+        // Populate Assignee
+        const assigneeSelect = document.getElementById('t-assignee');
+        if (assigneeSelect) {
+            assigneeSelect.innerHTML = '<option value="">Select Assignee</option>';
+            const users = APP_STATE.allData.users || [];
+            users.forEach(function(u) {
+                const opt = document.createElement('option');
+                opt.value = u.username;
+                opt.textContent = u.displayName || u.username;
+                assigneeSelect.appendChild(opt);
+            });
+        }
+
+        // Populate Project (Epics)
+        const projectSelect = document.getElementById('t-project');
+        if (projectSelect) {
+            projectSelect.innerHTML = '<option value="">Select Project</option>';
+            const epics = (APP_STATE.allData.projects || []).filter(function(p) { return p['Issue Type'] === 'Epic'; });
+            epics.forEach(function(e) {
+                const opt = document.createElement('option');
+                opt.value = e.Summary; 
+                opt.textContent = e.Summary;
+                projectSelect.appendChild(opt);
+            });
+        }
     }
 }
 </script>

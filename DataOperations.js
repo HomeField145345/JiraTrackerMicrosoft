@@ -44,10 +44,11 @@ function saveConfiguration_(optionsData) {
     // Set header for Past Due Exempt Stages in O1 (Column 15) and KPI Project Stages in P1 (Column 16)
     sheet.getRange("O1").setValue("Past Due Exempt Stages");
     sheet.getRange("P1").setValue("KPI Project Stages");
+    sheet.getRange("Q1").setValue("Independent Task Status Options");
     
-    // Clear existing data (A-M, O, P, skipping N which is Connectors)
+    // Clear existing data (A-M, O, P, Q, skipping N which is Connectors)
     sheet.getRange("A2:M" + sheet.getMaxRows()).clearContent();
-    sheet.getRange("O2:P" + sheet.getMaxRows()).clearContent();
+    sheet.getRange("O2:Q" + sheet.getMaxRows()).clearContent();
     
     // Prepare data
     var actData = optionsData.actPctOptions.map(function(o) { return [o]; });
@@ -59,6 +60,7 @@ function saveConfiguration_(optionsData) {
     var bugProjData = (optionsData.bugProjectStageOptions || []).map(function(o) { return [o]; });
     var priorityData = (optionsData.priorityOptions || []).map(function(o) { return [o]; });
     var pastDueExemptData = (optionsData.pastDueExemptStages || []).map(function(o) { return [o]; });
+    var independentTaskStatusData = (optionsData.independentTaskStatusOptions || []).map(function(o) { return [o]; });
     
     // Set option data
     if (actData.length > 0) sheet.getRange(2, 1, actData.length, 1).setValues(actData);
@@ -67,6 +69,9 @@ function saveConfiguration_(optionsData) {
     
     // Set KPI Project Stages in P (column 16)
     if (kpiProjData.length > 0) sheet.getRange(2, 16, kpiProjData.length, 1).setValues(kpiProjData);
+
+    // Set Independent Task Status Options in Q (column 17)
+    if (independentTaskStatusData.length > 0) sheet.getRange(2, 17, independentTaskStatusData.length, 1).setValues(independentTaskStatusData);
     
     // Set per-type options in E, F, G (restored original positions)
     if (epicProjData.length > 0) sheet.getRange(2, 5, epicProjData.length, 1).setValues(epicProjData);

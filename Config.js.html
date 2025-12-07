@@ -187,6 +187,10 @@
         if (data.config.priorityOptions) {
             setVal('priorityOptions', data.config.priorityOptions.join('\n'));
         }
+        // Independent Task Status Options
+        if (data.config.independentTaskStatusOptions) {
+            setVal('independentTaskStatusOptions', data.config.independentTaskStatusOptions.join('\n'));
+        }
         // Closed mappings
         if (data.config.closedProjectStages) {
             setVal('closedProjectStages', data.config.closedProjectStages.join('\n'));
@@ -836,6 +840,7 @@
                 storyProjectStageOptions: (document.getElementById('storyProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 bugProjectStageOptions: (document.getElementById('bugProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 priorityOptions: (document.getElementById('priorityOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                independentTaskStatusOptions: (document.getElementById('independentTaskStatusOptions') ? document.getElementById('independentTaskStatusOptions').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),

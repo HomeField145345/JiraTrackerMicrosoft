@@ -1668,7 +1668,12 @@ function stopImpersonation() {
     if (originalAdmin) {
         localStorage.setItem('projectHubUser', originalAdmin);
         localStorage.removeItem('originalAdmin');
-        location.reload();
+        
+        if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
+            window.top.location.href = SCRIPT_URL + "?page=dashboard";
+        } else {
+            location.reload();
+        }
     }
 }
 

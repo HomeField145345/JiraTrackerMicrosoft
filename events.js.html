@@ -449,8 +449,9 @@ function handleKPICardClick(card) {
 
     // Apply specific filter based on type
     if (filterType && filterType.startsWith('project-stage:')) {
-        var stage = filterType.split(':')[1];
-        handleProjectStageFilter(stage);
+        var stage = filterType.substring('project-stage:'.length);
+        APP_STATE.multiSelectFilters.projectStage = [stage];
+        applyFilters();
         return;
     }
 

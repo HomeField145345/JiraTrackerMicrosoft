@@ -205,6 +205,11 @@
             var ta = document.getElementById('pastDueExemptStages');
             if (ta) ta.value = data.config.pastDueExemptStages.join('\n');
         }
+        // In Progress Statuses (optional)
+        if (data.config.inProgressStatuses) {
+            var ta = document.getElementById('inProgressStatuses');
+            if (ta) ta.value = data.config.inProgressStatuses.join('\n');
+        }
        
         // Load stage status mappings into visual interface
         try {
@@ -844,6 +849,7 @@
                 closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                inProgressStatuses: (document.getElementById('inProgressStatuses') ? document.getElementById('inProgressStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                 // closedStatuses removed: stage-only logic
                 helpfulLinks: linksData,
                 stageStatusMappings: getCurrentMappingsAsArray()

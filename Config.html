@@ -145,6 +145,19 @@
                             <textarea id="pastDueExemptStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g. On Hold\nBlocked"></textarea>
                             <p class="mt-1 text-xs text-gray-500">Optional. One value per line. Case-insensitive match to the Project Stage dropdown.</p>
                         </div>
+                        <div>
+                            <div class="flex items-center justify-between">
+                                <label for="inProgressStatuses" class="block text-sm font-medium text-gray-700">
+                                    In Progress Statuses
+                                    <span class="inline-flex align-middle ml-1 text-blue-600" title="Statuses considered 'In Progress' for the dashboard filter.">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                    </span>
+                                </label>
+                                <button class="text-xs text-blue-600 hover:underline" data-clean-for="inProgressStatuses">Clean</button>
+                            </div>
+                            <textarea id="inProgressStatuses" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="In Progress\nTesting\nReady for Testing"></textarea>
+                            <p class="mt-1 text-xs text-gray-500">One value per line. Used for the 'Show Only In Progress' filter.</p>
+                        </div>
                     </div>
 
                     <!-- Stage ↔ Status Mapping -->

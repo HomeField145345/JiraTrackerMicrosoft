@@ -1471,6 +1471,16 @@ function applyFilters() {
     var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
     var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
     
+    // Get In Progress toggle state
+    var toggleInProgressBtn = $('#filter-in-progress');
+    var showOnlyInProgress = (toggleInProgressBtn ? toggleInProgressBtn.checked : false);
+    
+    // Get In Progress Statuses from config
+    var inProgressStatuses = [];
+    if (APP_STATE.allData.config && APP_STATE.allData.config.inProgressStatuses) {
+        inProgressStatuses = APP_STATE.allData.config.inProgressStatuses.map(function(s){ return (s||'').toLowerCase().trim(); });
+    }
+    
     // Save filter state whenever filters are applied
     saveFilterState();
 
@@ -1486,7 +1496,8 @@ function applyFilters() {
         assignedPMFilters.length ||
         assignedDevFilters.length ||
         (includeStories === false) ||
-        (includeBugs === false)
+        (includeBugs === false) ||
+        showOnlyInProgress
     );
 
     // Update active filters indicator
@@ -1585,6 +1596,14 @@ function applyFilters() {
                             _matchDev &&
                             shouldShowBasedOnType;
             
+            // Apply "Show Only In Progress" filter
+            if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
+                var status = (row.dataset.status || '').toLowerCase().trim();
+                if (inProgressStatuses.indexOf(status) === -1) {
+                    isVisible = false;
+                }
+            }
+
             // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
             // EXCEPT if the item specifically matches the search term
             if (!includeClosed && isVisible) {
@@ -1633,6 +1652,18 @@ function applyFilters() {
                 isVisible = childMatches; // Status filters are active, so only show epics with matching children
             } else {
                 isVisible = epicMatchesFilters || childMatches; // No status filters, show if epic matches other filters
+            }
+
+            // Apply "Show Only In Progress" filter to Epics
+            if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
+                // Show if it has matching children (already handled by childMatches logic above, but let's be explicit)
+                // OR if the epic itself is in progress
+                var status = (row.dataset.status || '').toLowerCase().trim();
+                var isSelfInProgress = inProgressStatuses.indexOf(status) !== -1;
+                
+                if (!childMatches && !isSelfInProgress) {
+                    isVisible = false;
+                }
             }
 
                 // Auto-expand epics when any selection filter is active and the epic is relevant (matches or has matching children)
@@ -2401,6 +2432,15 @@ function setupEventListeners() {
       openModal(null, 'import');
   });
   document.getElementById('clearFiltersBtn').addEventListener('click', handleClearFilters);
+  
+  // In Progress Filter Toggle
+  var filterInProgress = document.getElementById('filter-in-progress');
+  if (filterInProgress) {
+      filterInProgress.addEventListener('change', function() {
+          applyFilters();
+      });
+  }
+
   // Quick filters dropdown event listener removed
   document.getElementById('expandAllBtn').addEventListener('click', function() {
     handleExpandCollapseAll(true);

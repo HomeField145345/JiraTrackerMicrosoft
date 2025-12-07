@@ -1763,6 +1763,7 @@ function updateCurrentSprintKPI() {
     var countCard = $('#current-sprint-count');
     var numberSpan = $('#current-sprint-number');
     var progressBar = $('#current-sprint-progress');
+    var dateSpan = $('#current-sprint-date');
     
     if (countCard) {
         countCard.textContent = currentSprintItems;
@@ -1774,6 +1775,22 @@ function updateCurrentSprintKPI() {
             numberSpan.textContent = match ? '(' + match[1] + ')' : '(' + currentSprintName + ')';
         } else {
             numberSpan.textContent = '';
+        }
+    }
+
+    if (dateSpan) {
+        if (sprintStats.currentSprintStart && sprintStats.currentSprintEnd) {
+            try {
+                var start = new Date(sprintStats.currentSprintStart);
+                var end = new Date(sprintStats.currentSprintEnd);
+                var options = { month: 'short', day: 'numeric' };
+                dateSpan.textContent = start.toLocaleDateString('en-US', options) + ' - ' + end.toLocaleDateString('en-US', options);
+            } catch (e) {
+                console.error('Error formatting sprint dates:', e);
+                dateSpan.textContent = '';
+            }
+        } else {
+            dateSpan.textContent = '';
         }
     }
 
@@ -2359,12 +2376,15 @@ function setupEventListeners() {
     }
   });
 
-  $('.kpi-stat-bar').addEventListener('click', function(e) {
-      var card = e.target.closest('.stat-card.clickable');
-      if (card) {
-          handleKPICardClick(card);
-      }
-  });
+  var kpiContainer = $('.kpi-container') || $('.kpi-stat-bar');
+  if (kpiContainer) {
+      kpiContainer.addEventListener('click', function(e) {
+          var card = e.target.closest('.stat-card.clickable');
+          if (card) {
+              handleKPICardClick(card);
+          }
+      });
+  }
   
   document.body.addEventListener('change', function(e) {
     if (e.target.matches('select[id^="f-"]')) {

@@ -262,12 +262,17 @@ function analyzeSprintData(allItems) {
     }
   });
 
+  var currentSprintStart = null;
+  var currentSprintEnd = null;
+
   // Find current sprint (sprint where today falls between start and end dates)
   for (var sprintFullName in sprints) {
     if (sprints.hasOwnProperty(sprintFullName)) {
       var dates = sprints[sprintFullName];
       if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
         currentSprintName = formatSprint(sprintFullName);
+        currentSprintStart = dates.start;
+        currentSprintEnd = dates.end;
         break; // Found the current sprint, stop looking
       }
     }
@@ -313,6 +318,8 @@ function analyzeSprintData(allItems) {
 
   return {
     currentSprintName: currentSprintName,
+    currentSprintStart: currentSprintStart ? currentSprintStart.toISOString() : null,
+    currentSprintEnd: currentSprintEnd ? currentSprintEnd.toISOString() : null,
     itemsInCurrentSprint: itemsInCurrentSprint,
     pastSprintOpenItems: pastSprintOpenItems
   };

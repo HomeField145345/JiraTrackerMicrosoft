@@ -11,26 +11,59 @@
   <div class="app" role="application">
     <header class="app-header">
        <div class="header-row">
-          <div class="brand" aria-label="ProjectHub"><div class="logo" aria-hidden="true"></div><div>My Tasks</div></div>
+          <div class="brand" aria-label="ProjectHub"><div class="logo" aria-hidden="true">P</div><div>My Tasks</div></div>
           <div class="flex items-center gap-2">
-            <a href="<?= url ?>" class="btn">&larr; Back to Dashboard</a>
+            <a href="<?= url ?>?page=dashboard" class="btn">&larr; Back to Dashboard</a>
             <button id="newBtn" class="btn primary">+ New Task</button>
           </div>
        </div>
     </header>
     
     <main class="main p-6">
-      <div id="tasks-content-wrapper">
-          <h2 class="text-2xl font-bold text-gray-800 mb-4">All Tasks</h2>
+      <div id="tasks-content-wrapper" class="max-w-4xl mx-auto">
+          <h2 class="text-2xl font-bold text-gray-800 mb-6">My Tasks</h2>
           <div id="task-list-container">
-            <p class="text-gray-500">Task-specific view to be built.</p>
+            <!-- Tasks will be loaded here -->
           </div>
       </div>
     </main>
   </div>
 
+  <!-- Modal Host -->
+  <div id="modalHost" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+    <div class="modal" role="document">
+      <header>
+        <strong id="modalTitle">New Task</strong>
+        <div>
+          <button id="modalClose" class="btn" aria-label="Close">Close</button>
+          <button id="modalSave" class="btn primary">Save</button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="grid">
+          <div class="field"><label class="label" for="t-title">Title</label><input id="t-title" class="input" /></div>
+          <div class="field"><label class="label" for="t-assignee">Assignee</label><input id="t-assignee" class="input" /></div>
+          <div class="field"><label class="label" for="t-status">Status</label>
+            <select id="t-status" class="select">
+                <option value="Open">Open</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Done">Done</option>
+            </select>
+          </div>
+          <div class="field"><label class="label" for="t-priority">Priority</label><select id="t-priority" class="select"><option>High</option><option>Medium</option><option>Low</option></select></div>
+          <div class="field"><label class="label" for="t-due">Due date</label><input id="t-due" class="input" type="date" /></div>
+          <div class="field"><label class="label" for="t-project">Project</label><input id="t-project" class="input" /></div>
+          <div class="field" style="grid-column:1/-1"><label class="label" for="t-tags">Tags (comma‑separated)</label><input id="t-tags" class="input" /></div>
+          <div class="field" style="grid-column:1/-1"><label class="label" for="t-desc">Description</label><textarea id="t-desc" class="input"></textarea></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <?!= include('state.js.html'); ?>
   <?!= include('utils.js.html'); ?>
   <?!= include('api.js.html'); ?>
+  <?!= include('ui.js.html'); ?>
+  <?!= include('tasks.js.html'); ?>
   </body>
 </html>

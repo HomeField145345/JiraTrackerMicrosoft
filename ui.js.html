@@ -559,6 +559,18 @@ function renderApp() {
     renderKPIs();
     populateLinksDropdown();
 
+    // Handle view container visibility
+    var contentWrapper = $('#content-wrapper');
+    var tasksView = $('#view-tasks');
+    
+    if (contentWrapper) {
+        contentWrapper.style.display = (APP_STATE.currentView === 'table' || APP_STATE.currentView === 'board') ? 'block' : 'none';
+    }
+    
+    if (tasksView) {
+        tasksView.style.display = (APP_STATE.currentView === 'tasks') ? 'block' : 'none';
+    }
+
     if (APP_STATE.currentView === 'table') {
         renderTable();
     } else if (APP_STATE.currentView === 'board') {
@@ -566,8 +578,9 @@ function renderApp() {
     } else if (APP_STATE.currentView === 'gantt') {
         renderGanttChart(APP_STATE.allData.projects);
     } else if (APP_STATE.currentView === 'tasks') {
-        // This view is now a separate page, but we'll keep the function for now
-        renderTasksView();
+        if (typeof renderTasksView === 'function') {
+            renderTasksView();
+        }
     }
 
     var isGanttView = (APP_STATE.currentView === 'gantt');

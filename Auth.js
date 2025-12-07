@@ -24,6 +24,30 @@ function findRowById(sheet, id, idColIndex = 0) {
   return -1;
 }
 
+/**
+ * Gets a user by ID.
+ * @param {string} userId
+ * @returns {Object|null} User object or null
+ */
+function getUserById(userId) {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USERS_SHEET);
+  if (!sheet) return null;
+  
+  const rowIndex = findRowById(sheet, userId, 0);
+  if (rowIndex === -1) return null;
+  
+  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+  return {
+      id: row[0], 
+      username: row[1], 
+      email: row[2], 
+      displayName: row[3], 
+      role: row[4], 
+      isActive: row[5]
+  };
+}
+
 // --- USER MANAGEMENT ---
 
 /**
@@ -89,7 +113,7 @@ function authenticateUser(username, password) {
           };
           
           // Create session
-          const token = createSession(userObj.username, userObj.role);
+          const token = createSession(userObj.id, userObj.username, userObj.role);
           
           return { 
             success: true, 
@@ -141,7 +165,7 @@ function loginWithGoogle() {
             role: row[4]
         };
         
-        const token = createSession(userObj.username, userObj.role);
+        const token = createSession(userObj.id, userObj.username, userObj.role);
         
         return { 
             success: true, 
@@ -202,9 +226,22 @@ function updateUser(userId, updates) {
   
   if (rowIndex === -1) return { success: false, message: 'User not found' };
   
+  // Get current data to check for username change
+  const currentUsername = sheet.getRange(rowIndex, 2).getValue();
+  
   // Columns: ID(0), Username(1), Email(2), Display Name(3), Role(4), Is Active(5), Password(6)
   
-  if (updates.username) sheet.getRange(rowIndex, 2).setValue(updates.username);
+  if (updates.username) {
+      sheet.getRange(rowIndex, 2).setValue(updates.username);
+      
+      // Trigger data update if username changed
+      if (currentUsername !== updates.username) {
+          // Call the function from DataOwnership.js
+          if (typeof updateDataOwnership === 'function') {
+              updateDataOwnership(currentUsername, updates.username);
+          }
+      }
+  }
   if (updates.email) sheet.getRange(rowIndex, 3).setValue(updates.email);
   if (updates.displayName) sheet.getRange(rowIndex, 4).setValue(updates.displayName);
   if (updates.role) sheet.getRange(rowIndex, 5).setValue(updates.role);
@@ -222,24 +259,30 @@ function updateUser(userId, updates) {
 
 /**
  * Creates a new session for a user.
+ * @param {string} userId
  * @param {string} username
  * @param {string} role
  * @returns {string} The session token
  */
-function createSession(username, role) {
+function createSession(userId, username, role) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sessionSheet = ss.getSheetByName(SESSIONS_SHEET);
   
   if (!sessionSheet) {
     sessionSheet = ss.insertSheet(SESSIONS_SHEET);
-    sessionSheet.appendRow(['Token', 'Username', 'Role', 'Expiration']);
+    sessionSheet.appendRow(['Token', 'Username', 'Role', 'Expiration', 'UserID']);
+  } else {
+    // Ensure header has UserID
+    if (sessionSheet.getLastColumn() < 5) {
+       sessionSheet.getRange(1, 5).setValue('UserID');
+    }
   }
   
   const token = Utilities.getUuid();
   const expiration = new Date();
   expiration.setHours(expiration.getHours() + 24); // 24 hour session
   
-  sessionSheet.appendRow([token, username, role, expiration]);
+  sessionSheet.appendRow([token, username, role, expiration, userId]);
   
   // Clean up old sessions occasionally
   if (Math.random() < 0.1) cleanupSessions();
@@ -269,11 +312,14 @@ function validateSession(token) {
       if (expiration > now) {
         // Normalize role to lowercase for consistent checking
         const role = String(data[i][2]).toLowerCase();
+        const userId = data[i][4]; // UserID is at index 4
+        
         return { 
             valid: true, 
             username: data[i][1], 
             role: role,
-            user: { username: data[i][1], role: role } // Add user object for convenience
+            userId: userId,
+            user: { username: data[i][1], role: role, id: userId } // Add user object for convenience
         };
       } else {
         // Expired
@@ -338,7 +384,7 @@ function impersonateUser_(adminToken, targetUserId) {
   };
 
   // 3. Create Session for Target User
-  const token = createSession(userObj.username, userObj.role);
+  const token = createSession(userObj.id, userObj.username, userObj.role);
 
   return {
     success: true,

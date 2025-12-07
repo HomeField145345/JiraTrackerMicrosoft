@@ -87,6 +87,13 @@
           </svg>
           Gantt
         </button>
+        <button data-view="tasks" class="view-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          My Tasks
+        </button>
     </div>
 
     <div class="flex items-center gap-3">
@@ -169,13 +176,6 @@
               </a>
           </div>
       </div>
-      <a href="<?= url ?>?page=tasks" class="btn">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M9 11l3 3L22 4"></path>
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
-        </svg>
-        My Tasks
-      </a>
       <button id="newBtn" class="btn primary">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -470,6 +470,49 @@
             <div class="no-matches-text">No items match your filter selection</div>
             <div class="no-matches-subtext">Try adjusting your filters or clearing them to see more results</div>
           </div>
+        </div>
+      </div>
+      
+      <!-- My Tasks View -->
+      <div id="view-tasks" class="view-container" style="display: none;">
+        <div class="tasks-header flex justify-between items-center mb-4 px-4 pt-4">
+            <h2 class="text-xl font-bold text-gray-800">My Tasks</h2>
+            <div class="flex gap-2">
+                <button id="refresh-tasks-btn" class="btn btn-sm">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path></svg>
+                    Refresh
+                </button>
+                <button id="add-personal-task-btn" class="btn btn-sm primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Add Personal Task
+                </button>
+            </div>
+        </div>
+        
+        <div class="tasks-grid grid grid-cols-1 md:grid-cols-2 gap-6 px-4 pb-4">
+            <!-- Assigned to Me -->
+            <div class="task-column">
+                <div class="column-header bg-blue-50 p-3 rounded-t-lg border-b border-blue-100 flex justify-between items-center">
+                    <h3 class="font-semibold text-blue-800">Assigned to Me</h3>
+                    <span id="assigned-count" class="badge bg-blue-200 text-blue-800 text-xs px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="assigned-tasks-list" class="task-list bg-gray-50 p-3 rounded-b-lg min-h-[200px] max-h-[600px] overflow-y-auto space-y-2">
+                    <!-- Tasks will be injected here -->
+                    <div class="text-center text-gray-400 py-8">Loading tasks...</div>
+                </div>
+            </div>
+
+            <!-- Personal Tasks -->
+            <div class="task-column">
+                <div class="column-header bg-green-50 p-3 rounded-t-lg border-b border-green-100 flex justify-between items-center">
+                    <h3 class="font-semibold text-green-800">Personal Tasks</h3>
+                    <span id="personal-count" class="badge bg-green-200 text-green-800 text-xs px-2 py-0.5 rounded-full">0</span>
+                </div>
+                <div id="personal-tasks-list" class="task-list bg-gray-50 p-3 rounded-b-lg min-h-[200px] max-h-[600px] overflow-y-auto space-y-2">
+                    <!-- Tasks will be injected here -->
+                    <div class="text-center text-gray-400 py-8">Loading tasks...</div>
+                </div>
+            </div>
         </div>
       </div>
     </main>
@@ -1057,6 +1100,7 @@
   <?!= include('state.js.html'); ?>
   <?!= include('utils.js.html'); ?>
   <?!= include('gantt.js.html'); ?>
+  <?!= include('tasks.js.html'); ?>
   <?!= include('ui.js.html'); ?>
   <?!= include('api.js.html'); ?>
   <?!= include('events.js.html'); ?>

@@ -2327,6 +2327,16 @@ function handleLogout() {
 }
 
 function setupEventListeners() {
+  // View switcher
+  $$('.view-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var view = this.getAttribute('data-view');
+      if (view) {
+        switchView(view);
+      }
+    });
+  });
+
   setupDropdown('filter-toggle-btn', 'filter-popup', 'filter-container');
   setupDropdown('actions-toggle-btn', 'actions-popup', 'actions-container');
   setupDropdown('user-toggle-btn', 'user-popup', 'user-container');

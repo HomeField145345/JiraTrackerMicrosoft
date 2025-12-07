@@ -30,6 +30,15 @@ function getProjectData_(user, targetUsername) {
   // Default to the logged-in user
   var filterUser = user.username;
   
+  // If we have a userId, fetch the latest username from the database
+  // This ensures that if the username was changed, we use the new one
+  if (user.id) {
+      var freshUser = getUserById(user.id);
+      if (freshUser) {
+          filterUser = freshUser.username;
+      }
+  }
+  
   // If a target is specified, use it.
   // This allows QA/View Only users to view PM/Admin workspaces.
   if (targetUsername) {

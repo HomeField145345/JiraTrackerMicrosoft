@@ -211,7 +211,17 @@ function saveIndependentTask_(taskData, user) {
     
     // If new task, set Owner
     if (!taskData.ID && user) {
-      taskData.Owner = user.username;
+      // Use fresh username if available via UserID
+      if (user.id) {
+          var freshUser = getUserById(user.id);
+          if (freshUser) {
+              taskData.Owner = freshUser.username;
+          } else {
+              taskData.Owner = user.username;
+          }
+      } else {
+          taskData.Owner = user.username;
+      }
     }
     
     var newRow = headers.map(function(header) { 

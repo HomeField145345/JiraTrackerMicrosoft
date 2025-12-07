@@ -1982,12 +1982,17 @@ function updatePastSprintKPI() {
 function updateUatKPI() {
     var uatCount = 0;
     var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
     
     allProjects.forEach(function(project) {
         var issueType = (project['Issue Type'] || '').toLowerCase();
         if (issueType === 'epic') return;
 
         var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
+
         if (projectStage === 'uat') {
             uatCount++;
         }
@@ -2002,10 +2007,16 @@ function updateUatKPI() {
 function updateRetestKPI() {
     var retestCount = 0;
     var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
     
     allProjects.forEach(function(project) {
         var issueType = (project['Issue Type'] || '').toLowerCase();
         if (issueType === 'epic') return;
+
+        var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
 
         var status = (project['Status'] || '').trim().toLowerCase();
         if (status === 'retest') {

@@ -1678,12 +1678,23 @@ function checkImpersonationStatus() {
         if (bannerText) {
             bannerText.innerHTML = '<i class="ph-fill ph-mask-happy text-lg"></i> You are viewing as: ' + (currentUser.displayName || currentUser.username);
         }
-        // Adjust body padding and header position
-        document.body.style.paddingTop = '40px';
-        const header = document.querySelector('.app-header');
-        if (header) {
-            header.style.top = '40px';
-        }
+        
+        // Adjust body padding and header position dynamically
+        const adjustLayout = function() {
+            const height = banner.offsetHeight;
+            document.body.style.paddingTop = height + 'px';
+            const header = document.querySelector('.app-header');
+            if (header) {
+                header.style.top = height + 'px';
+            }
+        };
+
+        // Run initially
+        // Use requestAnimationFrame to ensure DOM has updated
+        requestAnimationFrame(adjustLayout);
+        
+        // Run on resize to handle text wrapping
+        window.addEventListener('resize', adjustLayout);
     }
 }
 

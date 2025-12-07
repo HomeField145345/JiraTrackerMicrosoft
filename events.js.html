@@ -59,6 +59,7 @@ function saveFilterState() {
         const filterState = {
             multiSelectFilters: APP_STATE.multiSelectFilters || {},
             closedToggle: hasClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE),
+            inProgressToggle: hasClass('#filter-toggle-in-progress', APP_CONSTANTS.CSS.ACTIVE),
             storiesToggle: hasClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
             bugsToggle: hasClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
             searchQuery: inputValue('#q') || ''
@@ -121,6 +122,10 @@ function loadFilterState() {
             toggleClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE, state.closedToggle);
         }
         
+        if (state.inProgressToggle !== undefined) {
+            toggleClass('#filter-toggle-in-progress', APP_CONSTANTS.CSS.ACTIVE, state.inProgressToggle);
+        }
+
         if (state.storiesToggle !== undefined) {
             toggleClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE, state.storiesToggle);
         }
@@ -1465,8 +1470,8 @@ function applyFilters() {
     var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
     
     // Get In Progress toggle state
-    var toggleInProgressBtn = $('#filter-in-progress');
-    var showOnlyInProgress = (toggleInProgressBtn ? toggleInProgressBtn.checked : false);
+    var toggleInProgressBtn = $('#filter-toggle-in-progress');
+    var showOnlyInProgress = (toggleInProgressBtn ? toggleInProgressBtn.classList.contains('active') : false);
     
     // Get In Progress Statuses from config
     var inProgressStatuses = [];
@@ -2441,14 +2446,6 @@ function setupEventListeners() {
   });
   document.getElementById('clearFiltersBtn').addEventListener('click', handleClearFilters);
   
-  // In Progress Filter Toggle
-  var filterInProgress = document.getElementById('filter-in-progress');
-  if (filterInProgress) {
-      filterInProgress.addEventListener('change', function() {
-          applyFilters();
-      });
-  }
-
   // Quick filters dropdown event listener removed
   document.getElementById('expandAllBtn').addEventListener('click', function() {
     handleExpandCollapseAll(true);

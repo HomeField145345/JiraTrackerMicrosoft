@@ -585,93 +585,40 @@ function handlePastSprintFilter() {
 }
 
 function handlePastDueFilter() {
-    filterByValidationStatus(APP_CONSTANTS.VALIDATION.PAST_DUE);
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.PAST_DUE];
+    applyFilters();
 }
 
 function handleStaleFilter() {
-    filterByValidationStatus(APP_CONSTANTS.VALIDATION.STALE);
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.STALE];
+    applyFilters();
 }
 
 function handleNeedsReviewFilter() {
-    filterByValidationStatus(APP_CONSTANTS.VALIDATION.NEEDS_REVIEW);
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.NEEDS_REVIEW];
+    applyFilters();
 }
 
-
-
 function handleUatFilter() {
-    var rows = document.querySelectorAll('#list-body tr');
-    var visibleCount = 0;
-
-    rows.forEach(function(row) {
-        if (row.classList.contains('row-epic')) {
-            row.style.display = 'none';
-            return;
-        }
-
-        var projectStage = (row.dataset.projectStage || '').toLowerCase();
-
-        if (projectStage === 'uat') {
-            row.style.display = '';
-            visibleCount++;
-            // Show parent epic
-            var epicId = row.dataset.parentEpic;
-            if (epicId) {
-                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
-                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
-                if (epicRow) epicRow.style.display = '';
-            }
-        } else {
-            row.style.display = 'none';
-        }
-    });
-    
-    // Update counts
-    var filteredCount = $('#filtered-count');
-    if (filteredCount) filteredCount.textContent = visibleCount;
-    
-    // Show/hide no matches
-    var noMatches = $('#no-matches-indicator');
-    if (noMatches) {
-        noMatches.classList.toggle('hidden', visibleCount > 0);
-    }
+    APP_STATE.multiSelectFilters.projectStage = ['UAT'];
+    applyFilters();
 }
 
 function handleRetestFilter() {
-    var rows = document.querySelectorAll('#list-body tr');
-    var visibleCount = 0;
-
-    rows.forEach(function(row) {
-        if (row.classList.contains('row-epic')) {
-            row.style.display = 'none';
-            return;
-        }
-
-        var status = (row.dataset.status || '').toLowerCase();
-
-        if (status === 'retest') {
-            row.style.display = '';
-            visibleCount++;
-            // Show parent epic
-            var epicId = row.dataset.parentEpic;
-            if (epicId) {
-                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
-                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
-                if (epicRow) epicRow.style.display = '';
-            }
-        } else {
-            row.style.display = 'none';
-        }
+    // Find all statuses that match 'retest' case-insensitively
+    var allStatuses = new Set();
+    (APP_STATE.allData.projects || []).forEach(function(p) {
+        if (p.Status) allStatuses.add(p.Status);
     });
     
-    // Update counts
-    var filteredCount = $('#filtered-count');
-    if (filteredCount) filteredCount.textContent = visibleCount;
+    var retestStatuses = Array.from(allStatuses).filter(function(s) {
+        return s.toLowerCase() === 'retest';
+    });
     
-    // Show/hide no matches
-    var noMatches = $('#no-matches-indicator');
-    if (noMatches) {
-        noMatches.classList.toggle('hidden', visibleCount > 0);
-    }
+    if (retestStatuses.length === 0) retestStatuses = ['Retest']; // Fallback
+    
+    APP_STATE.multiSelectFilters.status = retestStatuses;
+    applyFilters();
 }
 
 function filterByValidationStatus(statusText) {

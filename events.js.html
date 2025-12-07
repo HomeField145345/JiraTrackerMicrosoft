@@ -429,6 +429,18 @@ function handleQuickFilter(filterType) {
 function handleExpandCollapseAll(shouldExpand) {
   $$('.row-epic').forEach(function(epicRow) {
     epicRow.classList.toggle('expanded', shouldExpand);
+    var epicId = epicRow.dataset.id;
+    if (epicId) {
+        if (shouldExpand) {
+            // If expanding, clear the manual collapse state so it stays expanded
+            delete APP_STATE.manuallyCollapsedEpics[epicId];
+            APP_STATE.expandedEpicIds[epicId] = true;
+        } else {
+            // If collapsing, mark as manually collapsed so auto-expand doesn't reopen it
+            APP_STATE.manuallyCollapsedEpics[epicId] = true;
+            delete APP_STATE.expandedEpicIds[epicId];
+        }
+    }
   });
   applyFilters();
 }

@@ -592,8 +592,42 @@ function handlePastSprintFilter() {
             checkbox.checked = isPastSprint;
         });
         updateFilterSelection('sprint');
-        updateActiveFiltersIndicator(); // Update filter indicator
     }
+
+    // Apply Project Stage filter to exclude closed stages defined in config
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var pastClosedStages = cfg.pastSprintClosedStages || [];
+    
+    if (pastClosedStages.length > 0) {
+        var closedSet = new Set(pastClosedStages.map(function(s) { return s.toLowerCase().trim(); }));
+        var stageDropdown = $('[data-filter="projectStage"]');
+        
+        if (stageDropdown) {
+            var checkboxes = stageDropdown.querySelectorAll('.filter-checkbox');
+            var hasChanges = false;
+            
+            checkboxes.forEach(function(checkbox) {
+                if (checkbox.value === 'Select All') {
+                    checkbox.checked = false;
+                    return;
+                }
+                
+                // If the stage is NOT in the closed set, check it. Otherwise uncheck it.
+                var stage = checkbox.value.trim();
+                var shouldBeChecked = !closedSet.has(stage.toLowerCase());
+                
+                if (checkbox.checked !== shouldBeChecked) {
+                    checkbox.checked = shouldBeChecked;
+                    hasChanges = true;
+                }
+            });
+            
+            // Only update if we actually changed something or if we want to enforce the filter
+            updateFilterSelection('projectStage');
+        }
+    }
+
+    updateActiveFiltersIndicator(); // Update filter indicator
 }
 
 function handlePastDueFilter() {

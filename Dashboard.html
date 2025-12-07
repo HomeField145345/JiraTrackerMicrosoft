@@ -15,15 +15,15 @@
   <?!= include('Config.css'); ?>
 </head>
 <body>
-  <!-- Impersonation Banner -->
-  <div id="impersonation-banner" class="hidden bg-orange-500 text-white px-4 py-2 text-center text-sm font-bold flex justify-center items-center gap-4 fixed top-0 left-0 right-0 z-[60] shadow-md">
-      <span id="impersonation-text">You are viewing as: User</span>
-      <button id="stop-impersonation-btn" class="bg-white text-orange-600 px-3 py-1 rounded hover:bg-orange-50 transition-colors text-xs uppercase tracking-wide">
-          Stop Impersonating
-      </button>
-  </div>
-
   <div class="app" role="application">
+    <!-- Impersonation Banner -->
+    <div id="impersonation-banner" class="hidden bg-orange-500 text-white px-4 py-2 text-center text-sm font-bold flex justify-center items-center gap-4 shadow-md w-full flex-shrink-0">
+        <span id="impersonation-text">You are viewing as: User</span>
+        <button id="stop-impersonation-btn" class="bg-white text-orange-600 px-3 py-1 rounded hover:bg-orange-50 transition-colors text-xs uppercase tracking-wide">
+            Stop Impersonating
+        </button>
+    </div>
+
     <!-- Loading indicator -->
     <div id="loading-overlay" class="loading-overlay">
       <div class="loading-spinner"></div>

@@ -156,6 +156,7 @@ function _loadConfiguration(configSheet) {
   var projectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("C2:C" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var kpiProjectStages = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("P2:P" + configSheet.getLastRow()).getValues()).filter(String) : [];
   var independentTaskStatusOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("Q2:Q" + configSheet.getLastRow()).getValues()).filter(String) : [];
+  var inProgressStatuses = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("R2:R" + configSheet.getLastRow()).getValues()).filter(String) : [];
   
   // Per-type project stage options (optional)
   var epicProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("E2:E" + configSheet.getLastRow()).getValues()).filter(String) : [];
@@ -186,7 +187,8 @@ function _loadConfiguration(configSheet) {
     closedStatuses: closedStatuses, // Kept for backward compatibility; not used for sync
     stageStatusMappings: stageStatusMappings,
     pastSprintClosedStages: pastSprintClosedStages,
-    pastDueExemptStages: pastDueExemptStages
+    pastDueExemptStages: pastDueExemptStages,
+    inProgressStatuses: inProgressStatuses
   };
 }
 

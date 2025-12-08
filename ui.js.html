@@ -1426,22 +1426,24 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     var projectStageSelect = rowToUpdate.cells[2] ? rowToUpdate.cells[2].querySelector('select') : null;
     var projectStage = projectStageSelect ? projectStageSelect.value : '';
     
-    // Get Target Date from the row
-    var targetDateInput = rowToUpdate.cells[15] ? rowToUpdate.cells[15].querySelector('input') : null;
-    var targetDate = targetDateInput ? targetDateInput.value : '';
+    // Get Target Date from the row (Column 14, index 13)
+    // Note: Target Date is currently rendered as text, not an input
+    var targetDateCell = rowToUpdate.cells[13];
+    var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
+    if (targetDate === '—') targetDate = '';
 
     var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage, targetDate);
 
-    // Update Last Checked cell text and class (19th column)
-    var checkedCell = rowToUpdate.cells[18];
+    // Update Last Checked cell text and class (20th column, index 19)
+    var checkedCell = rowToUpdate.cells[19];
     if (checkedCell) {
         var formattedCheckedDate = checkedIso ? formatDateTimeLocal(checkedIso) : 'Never';
         checkedCell.textContent = formattedCheckedDate;
         checkedCell.className = validation.checkedClassName || 'recent-check';
     }
 
-    // Update Last Updated cell class (18th column) and ensure local display
-    var updatedCell = rowToUpdate.cells[17];
+    // Update Last Updated cell class (19th column, index 18) and ensure local display
+    var updatedCell = rowToUpdate.cells[18];
     if (updatedCell) {
         var formattedUpdatedDate = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.textContent = formattedUpdatedDate;
@@ -1504,8 +1506,9 @@ function updateRowValidation(jiraId) {
     var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
 
     // Get Target Date from the row
-    var targetDateInput = row.cells[15] ? row.cells[15].querySelector('input') : null;
-    var targetDate = targetDateInput ? targetDateInput.value : '';
+    var targetDateCell = row.cells[13];
+    var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
+    if (targetDate === '—') targetDate = '';
 
     // Persist dataset.projectStage so filters/search use latest value
     row.dataset.projectStage = projectStage;
@@ -1541,12 +1544,12 @@ function updateRowValidation(jiraId) {
     row.dataset.validation = validation.text;
 
     // Update date cell classes and ensure local display using canonical ISO
-    var updatedCell = row.cells[17];
+    var updatedCell = row.cells[18];
     if (updatedCell) {
         updatedCell.textContent = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.className = validation.updatedClassName || '';
     }
-    var checkedCell = row.cells[18];
+    var checkedCell = row.cells[19];
     if (checkedCell) {
         checkedCell.textContent = checkedStr ? formatDateTimeLocal(checkedStr) : 'Never';
         checkedCell.className = validation.checkedClassName || '';

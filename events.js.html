@@ -2570,16 +2570,29 @@ function setupEventListeners() {
       
       if (jiraId && field) {
         saveManualField(jiraId, field, value);
+        
+        // Update local state immediately for real-time KPI updates
+        if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var project = APP_STATE.allData.projects.find(function(p) {
+                return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
+            });
+            
+            if (project) {
+                project[field] = value;
+            }
+        }
       }
 
-            // Re-apply filters immediately to respect the closed toggle when Project Stage becomes Production
-            if (field === 'Project Stage') {
-                applyFilters();
-                // Immediately update the row's sync indicator (status dot) based on new stage
-                try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) { }
-                // Also update the validation pill to reflect potential rule changes
-                try { if (typeof updateRowValidation === 'function') updateRowValidation(jiraId); } catch (e) { }
-            }
+      // Re-apply filters immediately to update KPIs and respect closed toggle
+      applyFilters();
+      
+      // Immediately update the row's sync indicator (status dot) based on new stage
+      if (field === 'Project Stage') {
+          try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) { }
+      }
+      
+      // Also update the validation pill to reflect potential rule changes
+      try { if (typeof updateRowValidation === 'function') updateRowValidation(jiraId); } catch (e) { }
     }
     
     // Handle manual text input changes  
@@ -2590,6 +2603,20 @@ function setupEventListeners() {
       
       if (jiraId && field) {
         saveManualField(jiraId, field, value);
+        
+        // Update local state immediately
+        if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var project = APP_STATE.allData.projects.find(function(p) {
+                return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
+            });
+            
+            if (project) {
+                project[field] = value;
+            }
+        }
+        
+        // Update KPIs if relevant fields changed (e.g. Target Date)
+        applyFilters();
       }
     }
   });

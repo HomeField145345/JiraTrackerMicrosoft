@@ -1466,8 +1466,24 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     // Update row dataset for filtering
     rowToUpdate.dataset.validation = validation.text;
 
+    // Update local state for KPI calculations
+    if (APP_STATE.allData && APP_STATE.allData.projects) {
+        var project = APP_STATE.allData.projects.find(function(p) {
+            return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
+        });
+        
+        if (project) {
+            project['Last Checked'] = checkedIso;
+        }
+    }
+
     // Update validation badges for parent epics
     updateEpicValidationBadges();
+    
+    // Update KPIs
+    if (typeof updateKPICards === 'function') {
+        updateKPICards();
+    }
 }
 
 // New helper: Recompute and refresh a row's validation/sync classes without changing timestamps

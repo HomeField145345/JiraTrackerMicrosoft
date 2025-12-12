@@ -2063,7 +2063,8 @@ function updateUatKPI() {
         // Skip if project stage is closed
         if (maps.stages.indexOf(projectStage) !== -1) return;
 
-        if (projectStage === 'uat') {
+        var status = (project['Status'] || '').trim().toLowerCase();
+        if (status === 'uat') {
             uatCount++;
         }
     });

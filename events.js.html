@@ -391,6 +391,9 @@ function handleClearFilters() {
   // Clear the manually collapsed epics tracking
   APP_STATE.manuallyCollapsedEpics = {};
   
+  // Reset Out of Sync filter
+  APP_STATE.showOnlyOutOfSync = false;
+  
   applyFilters();
 }
 
@@ -498,6 +501,9 @@ function handleKPICardClick(card) {
             break;
         case 'needs-review':
             handleNeedsReviewFilter();
+            break;
+        case 'out-of-sync':
+            handleOutOfSyncFilter();
             break;
         case 'uat':
             handleUatFilter();
@@ -647,6 +653,11 @@ function handleStaleFilter() {
 
 function handleNeedsReviewFilter() {
     APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.NEEDS_REVIEW];
+    applyFilters();
+}
+
+function handleOutOfSyncFilter() {
+    APP_STATE.showOnlyOutOfSync = true;
     applyFilters();
 }
 
@@ -1468,6 +1479,15 @@ function applyFilters() {
         ? cfg.closedProjectStages.map(function(s){ return (s||'').toLowerCase().trim(); })
         : ['in production','production','prod','fixed','done','canceled'];
 
+    // Build stage-status mappings for Out of Sync check
+    var stageStatusMap = {};
+    (cfg.stageStatusMappings || []).forEach(function(m){ 
+        if (m && m.stage) {
+            var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+            stageStatusMap[(m.stage+'').toLowerCase().trim()] = expectedStatuses;
+        }
+    });
+
     // Closed visibility is controlled only by the explicit toggle now
     var toggleClosedBtn = $('#filter-toggle-closed');
     var includeClosed = (toggleClosedBtn ? toggleClosedBtn.classList.contains('active') : false);
@@ -1590,6 +1610,47 @@ function applyFilters() {
             var _matchPM = matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters);
             var _matchDev = matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
 
+            // Out of Sync Filter
+            var _matchOutOfSync = true;
+            if (APP_STATE.showOnlyOutOfSync) {
+                var projectStage = (row.dataset.projectStage || '').trim().toLowerCase();
+                
+                // Skip if closed
+                if (mappedClosedStages.indexOf(projectStage) !== -1) {
+                    _matchOutOfSync = false;
+                } else {
+                    var stageIsEmpty = !projectStage;
+                    if (stageIsEmpty) {
+                        _matchOutOfSync = true;
+                    } else {
+                        var status = (row.dataset.status || '').trim().toLowerCase();
+                        var expectedStatuses = stageStatusMap[projectStage] || [];
+                        var statusAlignedWithStage = false;
+                        var statusIsEmpty = !status;
+
+                        if (expectedStatuses.length > 0) {
+                            if (statusIsEmpty) {
+                                statusAlignedWithStage = false;
+                            } else {
+                                for (var si = 0; si < expectedStatuses.length; si++) {
+                                    if (status === expectedStatuses[si]) { 
+                                        statusAlignedWithStage = true; 
+                                        break; 
+                                    } 
+                                }
+                            }
+                        } else {
+                            // No stage-specific mapping: flag as mismatch
+                            statusAlignedWithStage = false;
+                        }
+                        
+                        if (statusAlignedWithStage) {
+                            _matchOutOfSync = false;
+                        }
+                    }
+                }
+            }
+
             var isVisible = _matchesSearch &&
                             _matchStatus &&
                             _matchSprint &&
@@ -1599,7 +1660,8 @@ function applyFilters() {
                             _matchUatStatus &&
                             _matchPM &&
                             _matchDev &&
-                            shouldShowBasedOnType;
+                            shouldShowBasedOnType &&
+                            _matchOutOfSync;
             
             // Apply "Show Only In Progress" filter
             if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
@@ -1797,6 +1859,7 @@ function updateKPICards() {
     updatePastDueKPI();
     updateStaleKPI();
     updateNeedsReviewKPI();
+    updateOutOfSyncKPI();
     updateUatKPI();
     updateRetestKPI();
     updateProjectStageKPIs();
@@ -2184,6 +2247,68 @@ function updateNeedsReviewKPI() {
     }
 }
 
+function updateOutOfSyncKPI() {
+    var outOfSyncCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var stageMap = {};
+    (cfg.stageStatusMappings || []).forEach(function(m){ 
+        if (m && m.stage) {
+            var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+            stageMap[(m.stage+'').toLowerCase().trim()] = expectedStatuses;
+        }
+    });
+
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
+
+        // Check for Out of Sync
+        var status = (project['Status'] || '').trim().toLowerCase();
+        var stageIsEmpty = !project['Project Stage'] || String(project['Project Stage']).trim() === '';
+        
+        if (stageIsEmpty) {
+            outOfSyncCount++;
+            return;
+        }
+
+        var expectedStatuses = stageMap[projectStage] || [];
+        var statusAlignedWithStage = false;
+        var statusIsEmpty = !project.Status || String(project.Status).trim() === '';
+
+        if (expectedStatuses.length > 0) {
+            if (statusIsEmpty) {
+                statusAlignedWithStage = false;
+            } else {
+                for (var si = 0; si < expectedStatuses.length; si++) {
+                    if (status === expectedStatuses[si]) { 
+                        statusAlignedWithStage = true; 
+                        break; 
+                    } 
+                }
+            }
+        } else {
+            // No stage-specific mapping: flag as mismatch so it gets attention
+            statusAlignedWithStage = false;
+        }
+
+        if (!statusAlignedWithStage) {
+            outOfSyncCount++;
+        }
+    });
+
+    var card = $('#out-of-sync-count');
+    if (card) {
+        card.textContent = outOfSyncCount;
+    }
+}
+
 
 
 function getCurrentSprintNumber() {
@@ -2222,12 +2347,13 @@ function hasActiveFilters() {
     var hideBugs = $('#filter-toggle-bugs') ? !$('#filter-toggle-bugs').classList.contains('active') : false;
     var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var showOnlyOutOfSync = APP_STATE.showOnlyOutOfSync || false;
     
     return !!(searchTerm || statusFilters.length || sprintFilters.length || 
               planningStageFilters.length || validationFilters.length || 
               projectStageFilters.length || assignedPMFilters.length || 
               assignedDevFilters.length || uatStatusFilters.length ||
-              showClosed || hideStories || hideBugs || showOnlyInProgress);
+              showClosed || hideStories || hideBugs || showOnlyInProgress || showOnlyOutOfSync);
 }
 
 

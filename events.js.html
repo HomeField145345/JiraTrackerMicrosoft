@@ -2219,11 +2219,14 @@ function hasActiveFilters() {
     var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
     var hideStories = $('#filter-toggle-stories') ? !$('#filter-toggle-stories').classList.contains('active') : false;
     var hideBugs = $('#filter-toggle-bugs') ? !$('#filter-toggle-bugs').classList.contains('active') : false;
+    var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
     
     return !!(searchTerm || statusFilters.length || sprintFilters.length || 
               planningStageFilters.length || validationFilters.length || 
               projectStageFilters.length || assignedPMFilters.length || 
-              assignedDevFilters.length || showClosed || hideStories || hideBugs);
+              assignedDevFilters.length || uatStatusFilters.length ||
+              showClosed || hideStories || hideBugs || showOnlyInProgress);
 }
 
 

@@ -219,8 +219,20 @@ function _buildHeaderMapping(headers, uploadedHeaders) {
   }
 
   headers.forEach(function(sheetHeader, sheetIndex) {
-    const uploadHeaderName = Object.keys(headerNameMap).find(function(k){ return headerNameMap[k] === sheetHeader; }) || sheetHeader;
-    const uploadIndex = findUploadedIndex(uploadHeaderName);
+    // Find all potential upload headers that map to this sheet header
+    const potentialUploadHeaders = Object.keys(headerNameMap).filter(function(k){ return headerNameMap[k] === sheetHeader; });
+    // Also check the sheet header itself as a fallback
+    if (potentialUploadHeaders.indexOf(sheetHeader) === -1) {
+        potentialUploadHeaders.push(sheetHeader);
+    }
+    
+    var uploadIndex = -1;
+    // Try each potential header until we find a match in the upload
+    for (var i = 0; i < potentialUploadHeaders.length; i++) {
+        uploadIndex = findUploadedIndex(potentialUploadHeaders[i]);
+        if (uploadIndex !== -1) break;
+    }
+
     headerMap[sheetHeader] = { 
       sheetIndex: sheetIndex, 
       uploadIndex: uploadIndex

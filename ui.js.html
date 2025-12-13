@@ -946,7 +946,7 @@ function renderTable() {
 
         // 1. Check Bug Links (Child -> Parent)
         bugs.forEach(function(bug) {
-            var links = (bug['Links'] || '').split(',');
+            var links = (bug['Links'] || bug['Linked Issues'] || '').split(',');
             links.forEach(function(link) {
                 var parentKey = link.trim();
                 if (parentKey && storyLookup[parentKey]) {
@@ -961,7 +961,7 @@ function renderTable() {
 
         // 2. Check Story Links (Parent -> Child)
         nonBugs.forEach(function(story) {
-            var links = (story['Links'] || '').split(',');
+            var links = (story['Links'] || story['Linked Issues'] || '').split(',');
             links.forEach(function(link) {
                 var childKey = link.trim();
                 if (childKey && bugLookup[childKey]) {

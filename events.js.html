@@ -1460,7 +1460,7 @@ function showUploadResults(response) {
 
 
 // --- FILTERING AND VIEW SWITCHING ---
-function applyFilters() {
+function applyFilters(skipAnimation) {
     var searchTerm = ($('#q') ? $('#q').value : '').toLowerCase();
     
     // Get multi-select filter values
@@ -1672,11 +1672,14 @@ function applyFilters() {
             }
 
             // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
-            // EXCEPT if the item specifically matches the search term
+            // EXCEPT if the item specifically matches the search term OR has open children
             if (!includeClosed && isVisible) {
                 var matchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
                 if (isClosedByProjectStage(row) && !matchesSpecificSearch) {
-                    isVisible = false;
+                    var openChildrenCount = parseInt(row.dataset.openChildren || '0');
+                    if (openChildrenCount === 0) {
+                        isVisible = false;
+                    }
                 }
             }
             
@@ -1812,7 +1815,44 @@ function applyFilters() {
                 }
             }
             
-            row.style.display = isVisible ? 'table-row' : 'none';
+            if (isVisible) {
+                if (row.style.display === 'none') {
+                    row.classList.remove('closing');
+                    row.style.display = 'table-row';
+                }
+            } else {
+                // If currently visible and is a story/bug, animate out
+                var isAnimatedRow = row.classList.contains('row-story') || row.classList.contains('row-bug-child');
+                if (!skipAnimation && row.style.display !== 'none' && isAnimatedRow && !row.classList.contains('closing')) {
+                    row.classList.add('closing');
+                    
+                    // Define cleanup
+                    var cleanup = function() {
+                        if (row.classList.contains('closing')) {
+                            row.style.display = 'none';
+                            row.classList.remove('closing');
+                        }
+                    };
+                    
+                    // Listen for animation end (once)
+                    var onAnimationEnd = function() {
+                        cleanup();
+                        row.removeEventListener('animationend', onAnimationEnd);
+                    };
+                    row.addEventListener('animationend', onAnimationEnd);
+                    
+                    // Safety timeout slightly longer than animation
+                    setTimeout(function() {
+                        if (row.classList.contains('closing')) {
+                            cleanup();
+                            row.removeEventListener('animationend', onAnimationEnd);
+                        }
+                    }, 450);
+                } else if (!row.classList.contains('closing')) {
+                    // If not animating (or already closed), hide immediately
+                    row.style.display = 'none';
+                }
+            }
         });
     }
     

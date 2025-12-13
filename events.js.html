@@ -62,7 +62,8 @@ function saveFilterState() {
             inProgressToggle: hasClass('#filter-toggle-in-progress', APP_CONSTANTS.CSS.ACTIVE),
             storiesToggle: hasClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
             bugsToggle: hasClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
-            searchQuery: inputValue('#q') || ''
+            searchQuery: inputValue('#q') || '',
+            manuallyCollapsedEpics: APP_STATE.manuallyCollapsedEpics || {}
         };
         
         localStorage.setItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE, JSON.stringify(filterState));
@@ -115,6 +116,11 @@ function loadFilterState() {
                 // Update the dropdown label
                 updateFilterLabel(filterType);
             });
+        }
+
+        // Restore manually collapsed epics
+        if (state.manuallyCollapsedEpics) {
+            APP_STATE.manuallyCollapsedEpics = state.manuallyCollapsedEpics;
         }
         
         // Restore toggle states

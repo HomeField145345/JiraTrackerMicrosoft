@@ -92,7 +92,7 @@ function normalizeValue_(value) {
   var datePatterns = [
     /^\d{1,2}\/\d{1,2}\/\d{2,4}(\s+\d{1,2}:\d{2}(:\d{2})?(\s*(AM|PM))?)?$/i, // MM/dd/yy or MM/dd/yyyy
     /^\d{4}-\d{2}-\d{2}(\s+\d{1,2}:\d{2}(:\d{2})?)?$/i, // yyyy-MM-dd
-    /^\d{1,2}\/[A-Za-z]{3}\/\d{2,4}(\s+\d{1,2}:\d{2}(:\d{2})?(\s*(AM|PM))?)?$/i // dd/MMM/yy format from Jira
+    /^\d{1,2}[\/-][A-Za-z]{3}[\/-]\d{2,4}(\s+\d{1,2}:\d{2}(:\d{2})?(\s*(AM|PM))?)?$/i // dd/MMM/yy or dd-MMM-yy format from Jira
   ];
   var isDateLike = datePatterns.some(function(pattern) { return pattern.test(strValue); });
   if (isDateLike) {
@@ -101,10 +101,10 @@ function normalizeValue_(value) {
       var originalDateStr = dateStr;
       var formatIdentified = "unknown";
       
-      // Handle Jira format: "30/Apr/25 4:37 PM" -> "Apr 30, 2025 4:37 PM"
-      if (/^\d{1,2}\/[A-Za-z]{3}\/\d{2,4}/.test(dateStr)) {
+      // Handle Jira format: "30/Apr/25" or "30-Apr-25" -> "Apr 30, 2025"
+      if (/^\d{1,2}[\/-][A-Za-z]{3}[\/-]\d{2,4}/.test(dateStr)) {
         formatIdentified = "Jira dd/MMM/yy";
-        var parts = dateStr.match(/^(\d{1,2})\/([A-Za-z]{3})\/(\d{2,4})(.*)$/);
+        var parts = dateStr.match(/^(\d{1,2})[\/-]([A-Za-z]{3})[\/-](\d{2,4})(.*)$/);
         if (parts) {
           var day = parts[1];
           var month = parts[2];

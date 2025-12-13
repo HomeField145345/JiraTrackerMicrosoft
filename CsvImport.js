@@ -189,7 +189,8 @@ function _buildHeaderMapping(headers, uploadedHeaders) {
     'Story Points': 'Story Points', 'Updated': 'Updated', 'Resolved': 'Resolved', 'Created': 'Created',
     'Resolution': 'Resolution',
     'Acceptance Criteria': 'Acceptance Critera', // Map to existing sheet header (with typo)
-    'Acceptance Critera': 'Acceptance Critera' // Also support if import has the typo
+    'Acceptance Critera': 'Acceptance Critera', // Also support if import has the typo
+    'Links': 'Links', 'Linked Issues': 'Links', 'Issue Links': 'Links' // Map various link headers to 'Links'
   };
   
   const headerMap = {};

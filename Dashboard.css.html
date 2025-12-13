@@ -68,31 +68,93 @@
         border-left: 3px solid var(--primary);
     }
 
-    .row-story .col-summary {
-        padding-left: 2rem !important; /* Indent story summaries */
+    /* MOVED HIERARCHY TO JIRA COLUMN */
+    .row-story .col-jira {
+        padding-left: 2.5rem !important; /* Indent story jira */
         position: relative;
-        color: var(--gray-500);
     }
+
+    /* Position the expander inline, but we need to ensure it doesn't break layout */
+    /* We removed absolute positioning to let it flow naturally */
     
-    /* Connector line for hierarchy */
-    .row-story .col-summary::before {
+    /* Connector line for hierarchy (Story under Epic) */
+    /* Vertical line segment */
+    .row-story .col-jira::before {
         content: '';
         position: absolute;
-        left: 0.75rem;
-        top: 50%;
-        width: 0.75rem;
-        height: 1px;
-        background-color: var(--gray-300);
-    }
-    
-    .row-story .col-summary::after {
-        content: '';
-        position: absolute;
-        left: 0.75rem;
+        left: 1.25rem;
         top: -50%;
         bottom: 50%;
         width: 1px;
         background-color: var(--gray-300);
+    }
+    
+    /* Horizontal line segment */
+    .row-story .col-jira::after {
+        content: '';
+        position: absolute;
+        left: 1.25rem;
+        top: 50%;
+        width: 1rem;
+        height: 1px;
+        background-color: var(--gray-300);
+    }
+
+    /* Reset Summary Column */
+    .row-story .col-summary {
+        color: var(--gray-500);
+        padding-left: 0.75rem !important; /* Reset to standard padding */
+    }
+
+    /* Nested Bug Styling */
+    .row-bug-child {
+        background-color: #ffffff;
+    }
+    
+    .row-bug-child:hover {
+        background-color: var(--gray-50);
+    }
+
+    /* MOVED HIERARCHY TO JIRA COLUMN */
+    .row-bug-child .col-jira {
+        padding-left: 4.5rem !important;
+        position: relative;
+    }
+    
+    /* Vertical line segment (from Story) */
+    .row-bug-child .col-jira::before {
+        content: '';
+        position: absolute;
+        left: 3.25rem;
+        top: -50%; 
+        bottom: 50%; 
+        width: 1px;
+        background-color: var(--gray-300);
+    }
+    
+    /* Horizontal line segment */
+    .row-bug-child .col-jira::after {
+        content: '';
+        position: absolute;
+        left: 3.25rem;
+        top: 50%;
+        width: 1rem;
+        height: 1px;
+        background-color: var(--gray-300);
+    }
+
+    /* Stop the vertical line for the last child */
+    .row-bug-child.is-last-child .col-jira::before {
+        height: 50%;
+        top: 0; /* Start from top */
+        bottom: auto;
+    }
+
+    /* Reset Summary Column for Bugs */
+    .row-bug-child .col-summary {
+        font-size: 0.95em;
+        color: var(--gray-500);
+        padding-left: 0.75rem !important; /* Reset to standard padding */
     }
 
     html { font-size: 14px; height: 100%; width: 100%; overflow: hidden; } 

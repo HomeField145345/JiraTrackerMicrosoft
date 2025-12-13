@@ -58,7 +58,7 @@ function addOwnerColumn() {
 function setupSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],
@@ -217,11 +217,19 @@ function addNewJiraFields() {
         jiraSheet.getRange(1, updatedHeaders2.length + 1).setValue('Fix Version');
         columnsAdded.push('Fix Version (Column Q)');
       }
+
+      // Add Links column (R) if missing
+      const updatedHeaders3 = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      if (updatedHeaders3.indexOf('Links') === -1) {
+        jiraSheet.insertColumnAfter(updatedHeaders3.length);
+        jiraSheet.getRange(1, updatedHeaders3.length + 1).setValue('Links');
+        columnsAdded.push('Links (Column R)');
+      }
       
       if (columnsAdded.length > 0) {
         SpreadsheetApp.getUi().alert('Successfully added new fields to JiraData sheet: ' + columnsAdded.join(', ') + '\n\nThese fields will now be imported from your Jira CSV exports.');
       } else {
-        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria (Column O)\n- Target Date (Column P)\n- Fix Version (Column Q)');
+        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria\n- Target Date\n- Fix Version\n- Links');
       }
     } else {
       SpreadsheetApp.getUi().alert('JiraData sheet not found. Please run "1. Create Backend Sheets" first.');

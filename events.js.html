@@ -1103,29 +1103,29 @@ function handleSaveTask() {
   saveTask(taskData);
 }
 
-function handleEpicExpand(expander) {
-    var epicRow = expander.closest('tr');
-    if (!epicRow) {
+function handleRowExpand(expander) {
+    var row = expander.closest('tr');
+    if (!row) {
         return;
     }
     
     // Check current state and determine new state
-    var wasExpanded = epicRow.classList.contains('expanded');
+    var wasExpanded = row.classList.contains('expanded');
     var shouldExpand = !wasExpanded;
-    var epicId = epicRow.dataset.id;
+    var id = row.dataset.id;
     
     // Force the class to the new state
     if (shouldExpand) {
-        epicRow.classList.add('expanded');
+        row.classList.add('expanded');
         // Remove from manually collapsed list if it was there
-        if (APP_STATE.manuallyCollapsedEpics[epicId]) {
-            delete APP_STATE.manuallyCollapsedEpics[epicId];
+        if (APP_STATE.manuallyCollapsedEpics[id]) {
+            delete APP_STATE.manuallyCollapsedEpics[id];
         }
     } else {
-        epicRow.classList.remove('expanded');
-        // If filters are active, track that this epic was manually collapsed
+        row.classList.remove('expanded');
+        // If filters are active, track that this row was manually collapsed
         if (hasActiveFilters()) {
-            APP_STATE.manuallyCollapsedEpics[epicId] = true;
+            APP_STATE.manuallyCollapsedEpics[id] = true;
         }
     }
     
@@ -1133,8 +1133,8 @@ function handleEpicExpand(expander) {
     applyFilters();
     
     // Ensure the class state wasn't changed by applyFilters
-    if (shouldExpand && !epicRow.classList.contains('expanded')) {
-        epicRow.classList.add('expanded');
+    if (shouldExpand && !row.classList.contains('expanded')) {
+        row.classList.add('expanded');
     }
 }
 
@@ -1795,6 +1795,20 @@ function applyFilters() {
                     // Always show footer when epic is expanded - this gives users the "Show All" option
                     // even when no children are currently visible due to filters
                     isVisible = true;
+                }
+            } else if (row.classList.contains('row-bug-child')) {
+                var parentStoryId = row.dataset.parentEpic; // Actually parent Story ID
+                var parentStory = parentStoryId ? $('tr.row-story[data-id="' + parentStoryId + '"]') : null;
+                
+                if (parentStory) {
+                    // Check if parent story is expanded
+                    if (!parentStory.classList.contains('expanded')) {
+                        isVisible = false;
+                    } 
+                    // Check if parent story is effectively visible
+                    else if (parentStory.style.display === 'none') {
+                        isVisible = false;
+                    }
                 }
             }
             
@@ -2548,6 +2562,25 @@ function setupEventListeners() {
     });
   });
 
+  // Nest Bugs Toggle
+  var nestToggle = document.getElementById('toggle-nest-bugs');
+  if (nestToggle) {
+      nestToggle.addEventListener('change', function() {
+          APP_STATE.nestBugs = this.checked;
+          localStorage.setItem('nestBugsPref', this.checked);
+          if (APP_STATE.currentView === 'table') renderTable();
+      });
+      
+      // Load preference
+      var savedNest = localStorage.getItem('nestBugsPref');
+      if (savedNest !== null) {
+          APP_STATE.nestBugs = (savedNest === 'true');
+          nestToggle.checked = APP_STATE.nestBugs;
+      } else {
+          APP_STATE.nestBugs = true; // Default
+      }
+  }
+
   setupDropdown('filter-toggle-btn', 'filter-popup', 'filter-container');
   setupDropdown('actions-toggle-btn', 'actions-popup', 'actions-container');
   setupDropdown('user-toggle-btn', 'user-popup', 'user-container');
@@ -2627,7 +2660,7 @@ function setupEventListeners() {
 
   $('#content-wrapper').addEventListener('click', function(e) {
     var expander = e.target.closest('.expander');
-    if (expander) { handleEpicExpand(expander); return; }
+    if (expander) { handleRowExpand(expander); return; }
     
     // Handle validation badge click (replaces check button)
     var validationBadge = e.target.closest('.validation-clickable[data-clickable="true"]');

@@ -280,6 +280,20 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
     var nb = b.replace(/\s+/g, ' ');
     return na === nb;
   }
+
+  // Special handling for Date-only fields (Target Date, Due Date, Start Date, End Date)
+  // Ignore time/timezone differences if the date part (YYYY-MM-DD) matches
+  if (h.indexOf('target date') !== -1 || h.indexOf('due date') !== -1 || h.indexOf('start date') !== -1 || h.indexOf('end date') !== -1) {
+    // Check if both look like ISO dates (which normalizeValue_ produces)
+    var isoDateRegex = /^\d{4}-\d{2}-\d{2}T/;
+    if (isoDateRegex.test(a) && isoDateRegex.test(b)) {
+      var datePartA = a.split('T')[0];
+      var datePartB = b.split('T')[0];
+      if (datePartA === datePartB) {
+        return true;
+      }
+    }
+  }
   
   // Log differences for debugging only if they're significant
   if (a !== b) {

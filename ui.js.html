@@ -275,9 +275,12 @@ function createDropdown(options, selectedValue, jiraId, field) {
   return select;
 }
 
-function createRow(item, type, parentEpicId, validationBadgeCount) {
+function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild) {
     var row = document.createElement('tr');
     row.className = 'row-' + type;
+    if (isLastChild) {
+        row.classList.add('is-last-child');
+    }
     // Preserve full sprint string (may contain multiple sprints) for accurate filtering
     row.dataset.sprint = (item['sprint'] && typeof item['sprint'] === 'string') ? item['sprint'] : '';
     row.dataset.title = (item.Summary || item.Title || '').toLowerCase();
@@ -297,7 +300,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
     var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']);
     row.dataset.validation = validation.text;
     var isFauxEpic = item['Jira #'] === 'UNASSIGNED';
-    var isJiraItem = (type === 'epic' || type === 'story') && !isFauxEpic;
+    var isJiraItem = (type === 'epic' || type === 'story' || type === 'bug-child') && !isFauxEpic;
     var jiraCellHtml = '';
 
     // Logic for 'task' type (nested task)
@@ -327,8 +330,21 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
         jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + infoIconHtml + '</div>';
     } else if (type === 'story') {
         row.dataset.parentEpic = parentEpicId;
+        row.dataset.id = item['Jira #']; // Add ID for child lookup
         var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
-        jiraCellHtml = '<div class="flex items-center gap-2"><a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
+        
+        var expanderHtml = '';
+        if (hasChildren) {
+             var expanderSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>';
+             expanderHtml = '<span class="expander">' + expanderSvg + '</span>';
+             row.dataset.showingAll = 'false'; // Default to collapsed
+        }
+        
+        jiraCellHtml = '<div class="flex items-center gap-2">' + expanderHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
+    } else if (type === 'bug-child') {
+        row.dataset.parentEpic = parentEpicId; // Actually parent Story ID
+        var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
+        jiraCellHtml = '<div class="flex items-center gap-2"><a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Bug Details">' + infoIconSvg + '</button></div>';
     } else { // Fallback for independent tasks on the old task view
         jiraCellHtml = item['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>' : '—';
     }
@@ -403,7 +419,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount) {
         (isJiraItem ? 'data-jira-id="' + item['Jira #'] + '" data-clickable="true"' : '') + '>' + 
         validation.text + 
         '</span>' + 
-        ((type === 'epic' && validationBadgeCount > 0) ? '<span class="validation-badge">' + validationBadgeCount + '</span>' : '') + 
+        (((type === 'epic' || type === 'story') && validationBadgeCount > 0) ? '<span class="validation-badge">' + validationBadgeCount + '</span>' : '') + 
       '</span></td>' +
             (function(){
           var statusText = item.Status || '—';
@@ -908,7 +924,63 @@ function renderTable() {
           '</tr></thead><tbody id="list-body"></tbody></table></div>';
     var projects = APP_STATE.allData.projects;
     var epics = projects.filter(function(p) { return p['Issue Type'] === 'Epic'; });
-    var stories = projects.filter(function(p) { return p['Issue Type'] !== 'Epic'; });
+    var allChildren = projects.filter(function(p) { return p['Issue Type'] !== 'Epic'; });
+    
+    var stories = allChildren;
+    var storyBugsMap = {};
+    
+    if (APP_STATE.nestBugs) {
+        var bugs = allChildren.filter(function(p) { return p['Issue Type'] === 'Bug'; });
+        var nonBugs = allChildren.filter(function(p) { return p['Issue Type'] !== 'Bug'; });
+        
+        // Create lookups for bidirectional linking
+        var storyLookup = {};
+        nonBugs.forEach(function(s) { storyLookup[s['Jira #']] = true; });
+        
+        var bugLookup = {};
+        bugs.forEach(function(b) { bugLookup[b['Jira #']] = b; });
+
+        // 1. Check Bug Links (Child -> Parent)
+        bugs.forEach(function(bug) {
+            var links = (bug['Links'] || '').split(',');
+            links.forEach(function(link) {
+                var parentKey = link.trim();
+                if (parentKey && storyLookup[parentKey]) {
+                    if (!storyBugsMap[parentKey]) storyBugsMap[parentKey] = [];
+                    // Avoid duplicates
+                    if (!storyBugsMap[parentKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
+                        storyBugsMap[parentKey].push(bug);
+                    }
+                }
+            });
+        });
+
+        // 2. Check Story Links (Parent -> Child)
+        nonBugs.forEach(function(story) {
+            var links = (story['Links'] || '').split(',');
+            links.forEach(function(link) {
+                var childKey = link.trim();
+                if (childKey && bugLookup[childKey]) {
+                    var storyKey = story['Jira #'];
+                    if (!storyBugsMap[storyKey]) storyBugsMap[storyKey] = [];
+                    
+                    var bug = bugLookup[childKey];
+                    // Avoid duplicates
+                    if (!storyBugsMap[storyKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
+                        storyBugsMap[storyKey].push(bug);
+                    }
+                }
+            });
+        });
+        
+        var mappedBugIds = {};
+        Object.keys(storyBugsMap).forEach(function(key) {
+            storyBugsMap[key].forEach(function(b) { mappedBugIds[b['Jira #']] = true; });
+        });
+        var unparentedBugs = bugs.filter(function(b) { return !mappedBugIds[b['Jira #']]; });
+        
+        stories = nonBugs.concat(unparentedBugs);
+    }
     
     var epicSummaries = {};
     epics.forEach(function(epic) { epicSummaries[normalizeString(epic.Summary)] = true; });
@@ -1021,7 +1093,25 @@ function renderTable() {
         
     childStories.sort(sortChildren);
         childStories.forEach(function(story) { 
-            body.appendChild(createRow(story, 'story', epic['Jira #']));
+            var openBugCount = 0;
+            var childBugs = [];
+            if (APP_STATE.nestBugs && storyBugsMap[story['Jira #']]) {
+                childBugs = storyBugsMap[story['Jira #']];
+                childBugs.forEach(function(b) {
+                    if (!isStoryObjectClosed(b)) openBugCount++;
+                });
+            }
+
+            body.appendChild(createRow(story, 'story', epic['Jira #'], openBugCount, childBugs.length > 0));
+            
+            if (childBugs.length > 0) {
+                childBugs.sort(sortChildren);
+                childBugs.forEach(function(bug, index) {
+                    var isLast = index === childBugs.length - 1;
+                    body.appendChild(createRow(bug, 'bug-child', story['Jira #'], null, false, isLast));
+                });
+            }
+
             if (story.tasks) {
                 story.tasks.forEach(function(task){
                     body.appendChild(createRow(task, 'task', epic['Jira #']));
@@ -1053,7 +1143,24 @@ function renderTable() {
         
         var orphanStoryRows = [];
     orphanStories.sort(sortChildren).forEach(function(story) {
-            orphanStoryRows.push(createRow(story, 'story', 'UNASSIGNED'));
+            var openBugCount = 0;
+            var childBugs = [];
+            if (APP_STATE.nestBugs && storyBugsMap[story['Jira #']]) {
+                childBugs = storyBugsMap[story['Jira #']];
+                childBugs.forEach(function(b) {
+                    if (!isStoryObjectClosed(b)) openBugCount++;
+                });
+            }
+
+            orphanStoryRows.push(createRow(story, 'story', 'UNASSIGNED', openBugCount, childBugs.length > 0));
+            
+            if (childBugs.length > 0) {
+                childBugs.sort(sortChildren);
+                childBugs.forEach(function(bug, index) {
+                    var isLast = index === childBugs.length - 1;
+                    orphanStoryRows.push(createRow(bug, 'bug-child', 'UNASSIGNED', null, false, isLast));
+                });
+            }
         });
         
         unassignedEpicRow.after.apply(unassignedEpicRow, orphanStoryRows);

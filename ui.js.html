@@ -275,7 +275,7 @@ function createDropdown(options, selectedValue, jiraId, field) {
   return select;
 }
 
-function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild) {
+function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild, openChildrenCount) {
     var row = document.createElement('tr');
     row.className = 'row-' + type;
     if (isLastChild) {
@@ -331,7 +331,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     } else if (type === 'story') {
         row.dataset.parentEpic = parentEpicId;
         row.dataset.id = item['Jira #']; // Add ID for child lookup
-        row.dataset.openChildren = validationBadgeCount || 0; // Store open children count
+        row.dataset.openChildren = (openChildrenCount !== undefined) ? openChildrenCount : 0; // Store open children count
         var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
         
         var expanderHtml = '';
@@ -1099,15 +1099,20 @@ function renderTable() {
     childStories.sort(sortChildren);
         childStories.forEach(function(story) { 
             var openBugCount = 0;
+            var needsAttentionCount = 0;
             var childBugs = [];
             if (APP_STATE.nestBugs && storyBugsMap[story['Jira #']]) {
                 childBugs = storyBugsMap[story['Jira #']];
                 childBugs.forEach(function(b) {
                     if (!isStoryObjectClosed(b)) openBugCount++;
+                    var status = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage'], b['Target Date']).text;
+                    if (status === 'Needs Review' || status === 'Past Due') {
+                        needsAttentionCount++;
+                    }
                 });
             }
 
-            body.appendChild(createRow(story, 'story', epic['Jira #'], openBugCount, childBugs.length > 0));
+            body.appendChild(createRow(story, 'story', epic['Jira #'], needsAttentionCount, childBugs.length > 0, false, openBugCount));
             
             if (childBugs.length > 0) {
                 childBugs.sort(sortChildren);
@@ -1149,15 +1154,20 @@ function renderTable() {
         var orphanStoryRows = [];
     orphanStories.sort(sortChildren).forEach(function(story) {
             var openBugCount = 0;
+            var needsAttentionCount = 0;
             var childBugs = [];
             if (APP_STATE.nestBugs && storyBugsMap[story['Jira #']]) {
                 childBugs = storyBugsMap[story['Jira #']];
                 childBugs.forEach(function(b) {
                     if (!isStoryObjectClosed(b)) openBugCount++;
+                    var status = getValidationStatus(b['Planning Stage'], b['Updated'], b['Last Checked'], b['Project Stage'], b['Target Date']).text;
+                    if (status === 'Needs Review' || status === 'Past Due') {
+                        needsAttentionCount++;
+                    }
                 });
             }
 
-            orphanStoryRows.push(createRow(story, 'story', 'UNASSIGNED', openBugCount, childBugs.length > 0));
+            orphanStoryRows.push(createRow(story, 'story', 'UNASSIGNED', needsAttentionCount, childBugs.length > 0, false, openBugCount));
             
             if (childBugs.length > 0) {
                 childBugs.sort(sortChildren);

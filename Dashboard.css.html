@@ -1,7 +1,7 @@
 <style>
     :root { 
         /* Base colors - ClickUp inspired */
-        --bg: #f6f8fc;
+        --bg: #e2e8f0; /* Darker gray for contrast */
         --surface: #ffffff;
         --ink: #1e1f21;
         --muted: #64748b;
@@ -826,49 +826,35 @@
         color: var(--primary);
     }
     
-    .quick-links-bar {
-  display: flex;
-  gap: 1rem;
-  padding: 0.75rem 1.5rem 0.25rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
+    /* Modern toggle buttons (ClickUp style) */
+    .filter-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.375rem 0.75rem;
+        background-color: var(--gray-50);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        color: var(--gray-500);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
 
-.filter-section-label {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-right: 0.5rem;
-}
+    .filter-toggle:hover {
+        background-color: var(--gray-100);
+        color: var(--ink);
+    }
 
-/* Modern toggle buttons (ClickUp style) */
-.filter-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 0.875rem;
-  background-color: var(--gray-100);
-  border: 1px solid var(--gray-200);
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.filter-toggle:hover {
-  background-color: var(--gray-50);
-  color: var(--ink);
-}
-
-.filter-toggle.active {
-  background-color: var(--primary-light);
-  color: var(--primary);
-  border-color: var(--primary-light);
-}
+    .filter-toggle.active {
+        background-color: var(--primary-light);
+        color: var(--primary);
+        border-color: var(--primary-light);
+        font-weight: 600;
+    }
 
 .filter-toggle svg {
   opacity: 0.7;
@@ -1178,9 +1164,12 @@
         display: flex;
         align-items: center;
         gap: 1rem;
-        padding: 0.75rem 1.5rem;
+        padding: 1rem 1.5rem;
         background: var(--surface);
-        border-bottom: 1px solid var(--line);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 1.5rem 1.5rem 0.75rem 1.5rem;
+        box-shadow: var(--shadow-sm);
         overflow-x: auto;
         scrollbar-width: none; /* Hide scrollbar */
     }
@@ -1194,9 +1183,12 @@
         display: flex;
         align-items: stretch;
         gap: 1.5rem;
-        padding: 0.75rem 1.5rem;
+        padding: 1rem 1.5rem;
         background: var(--surface);
-        border-bottom: 1px solid var(--line);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        margin: 1.5rem 1.5rem 0.75rem 1.5rem;
+        box-shadow: var(--shadow-sm);
         overflow-x: auto;
         scrollbar-width: none;
     }

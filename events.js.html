@@ -2672,31 +2672,34 @@ function setupEventListeners() {
     }
   });
   
-  $('#quick-links').addEventListener('click', function(e) {
-      var toggleBtn = e.target.closest('.filter-toggle');
-      if (toggleBtn) {
-          var wasActive = toggleBtn.classList.contains('active');
-          toggleBtn.classList.toggle('active');
-          
-          // Special handling for the closed toggle - now controls whether to include closed items in the view
-          if (toggleBtn.id === 'filter-toggle-closed') {
-              // When active, we're including closed items in the view (not filtering to just closed)
-              var isNowActive = toggleBtn.classList.contains('active');
+  var tableControls = document.getElementById('table-controls');
+  if (tableControls) {
+      tableControls.addEventListener('click', function(e) {
+          var toggleBtn = e.target.closest('.filter-toggle');
+          if (toggleBtn) {
+              var wasActive = toggleBtn.classList.contains('active');
+              toggleBtn.classList.toggle('active');
               
-              // Define our closed project stages and production status
-              var closedProjectStages = ['Fixed', 'Done', 'Canceled'];
-              var productionStatus = 'In Production';
-              var allClosedStatuses = closedProjectStages.concat([productionStatus]);
-              
-              // Instead of checking statuses when toggle is active, we'll just apply filters
-              // The applyFilters function now checks toggleBtn.classList.contains('active')
-              // to determine whether to include closed items
-              applyFilters();
-          } else {
-              applyFilters();
+              // Special handling for the closed toggle - now controls whether to include closed items in the view
+              if (toggleBtn.id === 'filter-toggle-closed') {
+                  // When active, we're including closed items in the view (not filtering to just closed)
+                  var isNowActive = toggleBtn.classList.contains('active');
+                  
+                  // Define our closed project stages and production status
+                  var closedProjectStages = ['Fixed', 'Done', 'Canceled'];
+                  var productionStatus = 'In Production';
+                  var allClosedStatuses = closedProjectStages.concat([productionStatus]);
+                  
+                  // Instead of checking statuses when toggle is active, we'll just apply filters
+                  // The applyFilters function now checks toggleBtn.classList.contains('active')
+                  // to determine whether to include closed items
+                  applyFilters();
+              } else {
+                  applyFilters();
+              }
           }
-      }
-  });
+      });
+  }
 
   $('#content-wrapper').addEventListener('click', function(e) {
     var expander = e.target.closest('.expander');

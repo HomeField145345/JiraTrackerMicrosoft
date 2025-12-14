@@ -307,8 +307,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     if (type === 'task') {
       row.dataset.parentEpic = parentEpicId; 
       jiraCellHtml = item.Title || 'Untitled Task';
-      row.innerHTML = '<td></td>' + // Sync Status
-        '<td colspan="2">' + jiraCellHtml + '</td>' + // Span Jira # and Planning Stage
+      row.innerHTML = '<td colspan="2">' + jiraCellHtml + '</td>' + // Span Jira # and Planning Stage
         '<td colspan="17">' + (item.Assignee ? 'Assignee: ' + item.Assignee : '') + '</td>'; // Span remaining cells for Assignee (17 = 20 total - 3 already used, Action column removed)
       return row;
     }
@@ -327,7 +326,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
             infoIconHtml = '<button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Epic Details">' + infoIconSvg + '</button>';
         }
 
-        jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + link + infoIconHtml + '</div>';
+        var syncStatusHtml = item['Sync Status'] ? '<span class="text-xs font-bold mr-1" title="Sync Status: ' + item['Sync Status'] + '">' + item['Sync Status'] + '</span>' : '';
+        jiraCellHtml = '<div class="flex items-center gap-2"><span class="expander">' + expanderSvg + '</span>' + syncStatusHtml + link + infoIconHtml + '</div>';
     } else if (type === 'story') {
         row.dataset.parentEpic = parentEpicId;
         row.dataset.id = item['Jira #']; // Add ID for child lookup
@@ -344,11 +344,13 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
              expanderHtml = '<span class="expander placeholder"></span>';
         }
         
-        jiraCellHtml = '<div class="flex items-center gap-2">' + expanderHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
+        var syncStatusHtml = item['Sync Status'] ? '<span class="text-xs font-bold mr-1" title="Sync Status: ' + item['Sync Status'] + '">' + item['Sync Status'] + '</span>' : '';
+        jiraCellHtml = '<div class="flex items-center gap-2">' + expanderHtml + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
     } else if (type === 'bug-child') {
         row.dataset.parentEpic = parentEpicId; // Actually parent Story ID
         var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
-        jiraCellHtml = '<div class="flex items-center gap-2"><a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Bug Details">' + infoIconSvg + '</button></div>';
+        var syncStatusHtml = item['Sync Status'] ? '<span class="text-xs font-bold mr-1" title="Sync Status: ' + item['Sync Status'] + '">' + item['Sync Status'] + '</span>' : '';
+        jiraCellHtml = '<div class="flex items-center gap-2">' + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Bug Details">' + infoIconSvg + '</button></div>';
     } else { // Fallback for independent tasks on the old task view
         jiraCellHtml = item['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>' : '—';
     }
@@ -406,8 +408,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     var lastUpdatedDisplay = row.dataset.updatedIso ? formatDateTimeLocal(row.dataset.updatedIso) : formatSheetDateToLocal(item['Updated']);
     var lastCheckedDisplay = row.dataset.checkedIso ? formatDateTimeLocal(row.dataset.checkedIso) : (item['Last Checked'] ? formatSheetDateToLocal(item['Last Checked']) : 'Never');
 
-    row.innerHTML = '<td class="col-sync-status">' + (item['Sync Status'] || '') + '</td>' +
-  '<td class="col-jira">' + jiraCellHtml + '</td>' +
+    row.innerHTML = '<td class="col-jira">' + jiraCellHtml + '</td>' +
       (function(){
           var type = (item['Issue Type'] || '').toLowerCase();
           var cfg = APP_STATE.allData.config || {};
@@ -921,7 +922,7 @@ function getDefaultLabel(filterType) {
 function renderTable() {
     var wrapper = $('#content-wrapper');
     wrapper.innerHTML = '<div class="table-container"><table class="table" aria-describedby="count"><thead><tr>' +
-              '<th class="col-sync-status">S</th><th class="col-jira">Jira #</th><th class="col-project-stage">Project Stage</th><th class="col-title">Title</th>' +
+              '<th class="col-jira">Jira #</th><th class="col-project-stage">Project Stage</th><th class="col-title">Title</th>' +
               '<th class="col-validation">Validation</th><th class="col-status">Status</th><th class="col-uat-status">UAT Status</th><th class="col-type">Type</th><th class="col-priority">Priority</th><th class="col-story-points">Story Points</th>' +
               '<th class="col-pm-lead">Assigned PM</th><th class="col-dev-assignee">Assigned Dev</th><th class="col-sprint">Sprint</th><th class="col-target-date">Target Date</th><th class="col-fix-version">Fix Version</th>' +
               '<th class="col-act-pct">ACT/PCT</th><th class="col-start-date">Start Date</th><th class="col-end-date">End Date</th><th class="col-last-updated">Last Updated</th><th class="col-last-checked">Last Checked</th>' +
@@ -1583,8 +1584,8 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
             rowToUpdate = allRows[i];
             break;
         }
-        // Look for the Jira ID in the second cell (td:nth-child(2)) which contains the link
-        var link = allRows[i].querySelector('td:nth-child(2) a');
+        // Look for the Jira ID in the first cell (td:nth-child(1)) which contains the link
+        var link = allRows[i].querySelector('td:nth-child(1) a');
         if (link && link.textContent.trim() === jiraId) {
             rowToUpdate = allRows[i];
             break;
@@ -1604,24 +1605,24 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     var projectStageSelect = rowToUpdate.querySelector('select[data-field="Project Stage"]');
     var projectStage = projectStageSelect ? projectStageSelect.value : (rowToUpdate.dataset.projectStage || '');
     
-    // Get Target Date from the row (Column 14, index 13)
+    // Get Target Date from the row (Column 13, index 12)
     // Note: Target Date is currently rendered as text, not an input
-    var targetDateCell = rowToUpdate.cells[13];
+    var targetDateCell = rowToUpdate.cells[12];
     var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
     if (targetDate === '—') targetDate = '';
 
     var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage, targetDate);
 
-    // Update Last Checked cell text and class (20th column, index 19)
-    var checkedCell = rowToUpdate.cells[19];
+    // Update Last Checked cell text and class (19th column, index 18)
+    var checkedCell = rowToUpdate.cells[18];
     if (checkedCell) {
         var formattedCheckedDate = checkedIso ? formatDateTimeLocal(checkedIso) : 'Never';
         checkedCell.textContent = formattedCheckedDate;
         checkedCell.className = validation.checkedClassName || 'recent-check';
     }
 
-    // Update Last Updated cell class (19th column, index 18) and ensure local display
-    var updatedCell = rowToUpdate.cells[18];
+    // Update Last Updated cell class (18th column, index 17) and ensure local display
+    var updatedCell = rowToUpdate.cells[17];
     if (updatedCell) {
         var formattedUpdatedDate = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.textContent = formattedUpdatedDate;
@@ -1684,7 +1685,7 @@ function updateRowValidation(jiraId) {
             break;
         }
         // Fallback to link text lookup
-        var link = allRows[i].querySelector('td:nth-child(2) a');
+        var link = allRows[i].querySelector('td:nth-child(1) a');
         if (link && link.textContent.trim() === jiraId) { row = allRows[i]; break; }
     }
     if (!row) return;
@@ -1698,8 +1699,8 @@ function updateRowValidation(jiraId) {
     var stageSelect = row.querySelector('select[data-field="Project Stage"]');
     var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
 
-    // Get Target Date from the row (Column 14, index 13)
-    var targetDateCell = row.cells[13];
+    // Get Target Date from the row (Column 13, index 12)
+    var targetDateCell = row.cells[12];
     var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
     if (targetDate === '—') targetDate = '';
 
@@ -1745,12 +1746,12 @@ function updateRowValidation(jiraId) {
     }
 
     // Update date cell classes and ensure local display using canonical ISO
-    var updatedCell = row.cells[18];
+    var updatedCell = row.cells[17];
     if (updatedCell) {
         updatedCell.textContent = updatedStr ? formatDateTimeLocal(updatedStr) : '—';
         updatedCell.className = validation.updatedClassName || '';
     }
-    var checkedCell = row.cells[19];
+    var checkedCell = row.cells[18];
     if (checkedCell) {
         checkedCell.textContent = checkedStr ? formatDateTimeLocal(checkedStr) : 'Never';
         checkedCell.className = validation.checkedClassName || '';
@@ -1784,7 +1785,7 @@ function updateRowSyncIndicator(jiraId) {
                 row = rows[i];
                 break;
             }
-            var link = rows[i].querySelector('td:nth-child(2) a');
+            var link = rows[i].querySelector('td:nth-child(1) a');
             if (link && link.textContent.trim() === jiraId) { row = rows[i]; break; }
         }
         if (!row) return;
@@ -1802,7 +1803,7 @@ function updateRowSyncIndicator(jiraId) {
         if (!isJiraItem) return;
 
         // Empty/blank stage -> show warning dot
-        var statusCell = row.cells[5];
+        var statusCell = row.cells[4];
         if (!statusCell) return;
 
         var stageIsEmpty = !projectStage || String(projectStage).trim() === '';
@@ -1855,22 +1856,36 @@ function updateRowSyncIndicator(jiraId) {
 function updateEpicValidationBadges() {
     try {
         // For each epic row, count children requiring review and update its badge
-        var epicRows = $$('tr.row-epic');
+        var allRows = $$('#list-body tr');
+        var epicRows = [];
+        
+        // First pass: collect all epic rows
+        for (var i = 0; i < allRows.length; i++) {
+            if (allRows[i].classList.contains('row-epic')) {
+                epicRows.push(allRows[i]);
+            }
+        }
+
         for (var i = 0; i < epicRows.length; i++) {
             var epicRow = epicRows[i];
             var epicId = epicRow.dataset.id;
             if (!epicId) continue;
 
             var count = 0;
-            // Count both stories and tasks under this epic
-            var childRows = $$('tr.row-story[data-parent-epic="' + epicId + '"], tr.row-task[data-parent-epic="' + epicId + '"]');
-            for (var j = 0; j < childRows.length; j++) {
-                var r = childRows[j];
-                var v = (r.dataset.validation || '').trim();
-                if (v === 'Needs Review') count++;
+            
+            // Second pass: count children for this epic
+            // We iterate all rows again or use a more efficient lookup if possible
+            // Since we need to check dataset.parentEpic which might not be in DOM attributes for querySelectorAll
+            for (var j = 0; j < allRows.length; j++) {
+                var r = allRows[j];
+                // Check if it's a story or task belonging to this epic
+                if ((r.classList.contains('row-story') || r.classList.contains('row-task')) && r.dataset.parentEpic === epicId) {
+                    var v = (r.dataset.validation || '').trim();
+                    if (v === 'Needs Review' || v === 'Past Due') count++;
+                }
             }
 
-            var cell = epicRow.cells[4];
+            var cell = epicRow.cells[3];
             if (!cell) continue;
             var container = cell.querySelector('.validation-pill-container');
             if (!container) continue;
@@ -1887,7 +1902,7 @@ function updateEpicValidationBadges() {
                 if (badge) badge.remove();
             }
         }
-    } catch (e) { /* no-op */ }
+    } catch (e) { console.error('Error updating epic badges:', e); }
 }
 
 // --- IMPERSONATION LOGIC ---

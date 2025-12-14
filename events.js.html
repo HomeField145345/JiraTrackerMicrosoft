@@ -441,6 +441,22 @@ function handleQuickFilter(filterType) {
 }
 
 function handleExpandCollapseAll(shouldExpand) {
+  // Identify visible parents (Epics/Stories) to allow animation only for them
+  var visibleParentIds = new Set();
+  var viewportHeight = window.innerHeight;
+  
+  // Only check visibility if we are expanding (to animate open) or collapsing (to animate close)
+  // Optimization: Only check rows that are currently displayed
+  $$('.row-epic, .row-story').forEach(function(row) {
+      if (row.style.display !== 'none') {
+          var rect = row.getBoundingClientRect();
+          // Check if any part of the row is in the viewport (with some buffer)
+          if (rect.bottom > -100 && rect.top < viewportHeight + 100) {
+              visibleParentIds.add(row.dataset.id);
+          }
+      }
+  });
+
   // Handle epics
   $$('.row-epic').forEach(function(epicRow) {
     epicRow.classList.toggle('expanded', shouldExpand);
@@ -467,7 +483,8 @@ function handleExpandCollapseAll(shouldExpand) {
     }
   });
   
-  applyFilters();
+  // Apply filters with skipAnimation=false (default), but pass visibleParentIds
+  applyFilters(false, visibleParentIds);
 }
 
 function handleKPICardClick(card) {
@@ -1477,7 +1494,7 @@ function showUploadResults(response) {
 
 
 // --- FILTERING AND VIEW SWITCHING ---
-function applyFilters(skipAnimation) {
+function applyFilters(skipAnimation, visibleParentIds) {
     var searchTerm = ($('#q') ? $('#q').value : '').toLowerCase();
     
     // Get multi-select filter values
@@ -1863,12 +1880,49 @@ function applyFilters(skipAnimation) {
             if (isVisible) {
                 if (row.style.display === 'none') {
                     row.classList.remove('closing');
+                    
+                    // Determine if we should animate this row
+                    var shouldAnimate = true;
+                    if (visibleParentIds) {
+                        // If visibleParentIds is provided (e.g. during Expand All), only animate if parent is visible
+                        var parentId = row.dataset.parentEpic;
+                        if (!parentId || !visibleParentIds.has(parentId)) {
+                            shouldAnimate = false;
+                        }
+                    }
+                    
+                    if (!shouldAnimate) {
+                        row.classList.add('no-animate');
+                    } else {
+                        row.classList.remove('no-animate');
+                    }
+                    
                     row.style.display = 'table-row';
+                    
+                    // If we disabled animation, we should remove the class later so future interactions animate
+                    if (!shouldAnimate) {
+                        // Use a timeout to remove the class after the "instant" transition would have happened
+                        // This ensures the browser renders it without animation first
+                        setTimeout(function() {
+                            row.classList.remove('no-animate');
+                        }, 50);
+                    }
                 }
             } else {
                 // If currently visible and is a story/bug, animate out
                 var isAnimatedRow = row.classList.contains('row-story') || row.classList.contains('row-bug-child');
-                if (!skipAnimation && row.style.display !== 'none' && isAnimatedRow && !row.classList.contains('closing')) {
+                
+                // Determine if we should animate out
+                var shouldAnimateOut = !skipAnimation;
+                if (visibleParentIds && isAnimatedRow) {
+                     var parentId = row.dataset.parentEpic;
+                     if (!parentId || !visibleParentIds.has(parentId)) {
+                         shouldAnimateOut = false;
+                     }
+                }
+
+                if (shouldAnimateOut && row.style.display !== 'none' && isAnimatedRow && !row.classList.contains('closing')) {
+                    row.classList.remove('no-animate'); // Ensure animation is allowed
                     row.classList.add('closing');
                     
                     // Define cleanup

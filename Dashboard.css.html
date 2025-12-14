@@ -177,7 +177,7 @@
     }
     
     .row-story .col-jira {
-        padding-left: 2.5rem !important;
+        padding-left: 1.5rem !important;
         position: relative;
         font-weight: 600;
     }
@@ -193,7 +193,7 @@
         display: block;
         content: '';
         position: absolute;
-        left: 3.25rem;
+        left: 2.25rem;
         width: 2px;
         background-color: #cbd5e1;
         top: calc(50% + 14px);
@@ -228,8 +228,10 @@
     }
 
     .row-bug-child .col-jira {
-        padding-left: 9rem !important; /* Extra Deep indentation */
+        padding-left: 3.5rem !important; /* Reduced indentation */
         position: relative;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     
     /* Tree Line - Vertical (Trunk) */
@@ -237,7 +239,7 @@
         content: '';
         display: block;
         position: absolute;
-        left: 3.25rem; /* Aligns with Story expander */
+        left: 2.25rem; /* Aligns with Story expander */
         top: -1px; /* Connect to row above */
         bottom: 0;
         width: 2px;
@@ -250,8 +252,8 @@
         content: '';
         display: block;
         position: absolute;
-        left: 3.25rem;
-        width: 5rem;
+        left: 2.25rem;
+        width: 1.25rem; /* Shortened branch */
         top: 50%;
         height: 2px;
         background-color: #cbd5e1;
@@ -261,7 +263,7 @@
     /* Last Child - L Shape */
     .row-bug-child.is-last-child .col-jira::before {
         background-color: transparent;
-        width: 5rem;
+        width: 1.25rem; /* Shortened branch */
         height: calc(50% + 1px);
         border-left: 2px solid #cbd5e1;
         border-bottom: 2px solid #cbd5e1;
@@ -473,6 +475,7 @@
     /* Manual field dropdowns in table cells */
     .manual-field-dropdown {
         font-size: 0.875rem !important;
+        font-weight: normal !important; /* Prevent inheriting bold from epic rows */
         min-width: 100px;
         width: 100%;
         padding: 0.25rem 0.5rem;
@@ -767,7 +770,7 @@
     
     .table-container { flex: 1; min-height: 0; overflow: auto; width: 100%; }
     .view-container { flex: 1; min-height: 0; overflow-y: auto; width: 100%; }
-    .table { width: 100%; border-collapse: separate; border-spacing: 0; } /* Separate for border-radius if needed */
+    .table { width: max-content; min-width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; } /* Fixed layout for stability */
     
     .table th, .table td { 
       padding: 0.875rem 1rem; /* More padding for modern look */
@@ -1453,25 +1456,24 @@
     }
 
     .col-info { width: 40px; }
-    .col-jira { min-width: 180px; white-space: nowrap; }
-    .col-project-stage { min-width: 160px; }
-    .col-title { max-width: 450px; min-width: 250px; white-space: normal; word-break: break-word; }
-    .col-validation { min-width: 150px; }
-    .col-status { min-width: 120px; }
-    .col-type { min-width: 80px; }
-    .col-priority { min-width: 120px; }
-    .col-story-points { min-width: 80px; }
-    .col-project-stage { min-width: 160px; }
-    .col-pm-lead { min-width: 120px; }
-    .col-dev-assignee { min-width: 150px; }
-    .col-sprint { min-width: 140px; }
-    .col-target-date { min-width: 120px; }
-    .col-fix-version { min-width: 100px; }
-    .col-act-pct { min-width: 120px; }
-    .col-start-date { min-width: 120px; }
-    .col-end-date { min-width: 120px; }
-    .col-last-updated { min-width: 120px; }
-    .col-last-checked { min-width: 120px; }
+    .col-jira { width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } /* Reduced width with truncation */
+    .col-project-stage { width: 160px; }
+    .col-title { width: 300px; white-space: normal; word-break: break-word; }
+    .col-validation { width: 150px; }
+    .col-status { width: 120px; }
+    .col-type { width: 80px; }
+    .col-priority { width: 120px; }
+    .col-story-points { width: 80px; }
+    .col-pm-lead { width: 120px; }
+    .col-dev-assignee { width: 150px; }
+    .col-sprint { width: 140px; }
+    .col-target-date { width: 120px; }
+    .col-fix-version { width: 100px; }
+    .col-act-pct { width: 120px; }
+    .col-start-date { width: 120px; }
+    .col-end-date { width: 120px; }
+    .col-last-updated { width: 120px; }
+    .col-last-checked { width: 120px; }
 
     /* Multi-select filter dropdowns */
     .filter-dropdown {
@@ -1701,5 +1703,10 @@
         opacity: 0.5;
         pointer-events: none;
         cursor: not-allowed;
+    }
+    /* Performance Optimization: Disable animations on specific rows */
+    tr.no-animate td {
+        animation: none !important;
+        transition: none !important;
     }
 </style>

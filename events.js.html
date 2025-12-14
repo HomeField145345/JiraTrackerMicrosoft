@@ -460,7 +460,11 @@ function handleExpandCollapseAll(shouldExpand) {
   
   // Handle stories (which may have bug children)
   $$('.row-story').forEach(function(storyRow) {
-    storyRow.classList.toggle('expanded', shouldExpand);
+    // Only expand if it has children (indicated by a non-placeholder expander)
+    var expander = storyRow.querySelector('.expander');
+    if (expander && !expander.classList.contains('placeholder')) {
+        storyRow.classList.toggle('expanded', shouldExpand);
+    }
   });
   
   applyFilters();

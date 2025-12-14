@@ -474,11 +474,18 @@
     
     /* Manual field dropdowns in table cells */
     .manual-field-dropdown {
-        font-size: 0.875rem !important;
-        font-weight: normal !important; /* Prevent inheriting bold from epic rows */
-        min-width: 100px;
-        width: 100%;
-        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem !important; /* Slightly smaller to match table density */
+        font-weight: 400 !important; /* Force normal weight */
+        color: var(--ink) !important;
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        padding: 2px 6px !important; /* Tighter padding */
+        height: 26px !important; /* Fixed height for consistency */
+        line-height: 1.2 !important;
+        box-sizing: border-box !important;
+        display: block !important;
+        margin: 0 auto !important; /* Center within table cell */
     }
     
     /* Modern button styling */
@@ -877,9 +884,6 @@
     }
     
     .row-story { display: table-row; } /* Changed from none */
-    .row-story td:nth-child(2) { 
-    padding-left: 4rem; 
-}
 
     /* NEW: Styles for the epic footer row */
     .row-epic-footer td {

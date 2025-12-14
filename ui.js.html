@@ -367,10 +367,11 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
         case 'bug': typePillClass = 'type-bug'; break;
       }
     }
-    var typeCellHtml = '<td>' + (typePillClass ? '<span class="type-pill ' + typePillClass + '">' + displayText + '</span>' : '—') + '</td>';
+    var typeCellHtml = '<td class="col-type">' + (typePillClass ? '<span class="type-pill ' + typePillClass + '">' + displayText + '</span>' : '—') + '</td>';
     
-    var createCellWithDropdown = function(options, value, jiraId, field) {
+    var createCellWithDropdown = function(options, value, jiraId, field, className) {
         var cell = document.createElement('td');
+        if (className) cell.className = className;
         if (isJiraItem) {
             cell.appendChild(createDropdown(options, value, jiraId, field));
         } else {
@@ -389,8 +390,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
       return formatDateTimeLocal(dateStr);
     };
     
-    var createDateInputCell = function(dateStr, jiraId, field) {
-        var cell = '<td>';
+    var createDateInputCell = function(dateStr, jiraId, field, className) {
+        var cell = className ? '<td class="' + className + '">' : '<td>';
         if (isJiraItem) {
             var dateValue = '';
             if (dateStr) {
@@ -416,10 +417,10 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
           if (type === 'epic' && Array.isArray(cfg.epicProjectStageOptions) && cfg.epicProjectStageOptions.length) opts = cfg.epicProjectStageOptions;
           else if ((type === 'story' || type === 'vzagile story') && Array.isArray(cfg.storyProjectStageOptions) && cfg.storyProjectStageOptions.length) opts = cfg.storyProjectStageOptions;
           else if (type === 'bug' && Array.isArray(cfg.bugProjectStageOptions) && cfg.bugProjectStageOptions.length) opts = cfg.bugProjectStageOptions;
-          return createCellWithDropdown(opts, item['Project Stage'], item['Jira #'], 'Project Stage');
+          return createCellWithDropdown(opts, item['Project Stage'], item['Jira #'], 'Project Stage', 'col-project-stage');
       })() +
-      '<td class="col-summary">' + (item.Summary || item.Title || 'Untitled') + '</td>' +
-      '<td><span class="validation-pill-container">' + 
+      '<td class="col-title">' + (item.Summary || item.Title || 'Untitled') + '</td>' +
+      '<td class="col-validation"><span class="validation-pill-container">' + 
         '<span class="status-pill validation-clickable ' + validation.className + '" ' + 
         (isJiraItem ? 'data-jira-id="' + item['Jira #'] + '" data-clickable="true"' : '') + '>' + 
         validation.text + 
@@ -431,7 +432,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
           var stageText = item['Project Stage'] || '';
           
           if (!isJiraItem) {
-              return '<td>' + statusText + '</td>';
+              return '<td class="col-status">' + statusText + '</td>';
           }
           
           // Flag as out of sync if Project Stage is blank/empty
@@ -439,7 +440,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
           if (stageIsEmpty) {
               var tooltip = 'Project Stage is empty - this should be set';
               var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
-              return '<td>' + statusText + dot + '</td>';
+              return '<td class="col-status">' + statusText + dot + '</td>';
           }
                     var s = String(item.Status).toLowerCase().trim();
                     var stg = String(item['Project Stage']).toLowerCase().trim();
@@ -489,15 +490,15 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
                         }
                     } catch (e) {}
             if (!mismatch) {
-                return '<td>' + statusText + '</td>';
+                return '<td class="col-status">' + statusText + '</td>';
             }
                     var tooltip = 'Status ("' + item.Status + '") and Project Stage ("' + item['Project Stage'] + '") may be out of sync' + (expectedStatuses.length ? ('\nExpected Status: ' + expectedStatuses.join(', ') + (matchedStatus ? ('\nCurrent matches: ' + matchedStatus) : '\nNo match found')) : '\nNo stage-specific mapping configured');
                     var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
-                    return '<td>' + statusText + dot + '</td>';
+                    return '<td class="col-status">' + statusText + dot + '</td>';
       })() +
     (function() {
         var uat = item['UAT Status'] || '';
-        if (!uat || uat === '—') return '<td>—</td>';
+        if (!uat || uat === '—') return '<td class="col-uat-status">—</td>';
         
         var s = uat.toLowerCase().trim();
         var cls = 'uat-default';
@@ -508,13 +509,13 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
         else if (s === 'blocked' || s === 'hold' || s === 'on hold') cls = 'uat-blocked';
         else if (s === 'n/a' || s === 'na' || s === 'none' || s === 'not required') cls = 'uat-na';
         
-        return '<td><span class="uat-badge ' + cls + '">' + uat + '</span></td>';
+        return '<td class="col-uat-status"><span class="uat-badge ' + cls + '">' + uat + '</span></td>';
     })() +
     typeCellHtml + 
-    createCellWithDropdown(APP_STATE.allData.config.priorityOptions, item['Priority'], item['Jira #'], 'Priority') +
-    '<td>' + storyPoints + '</td>' +
-    '<td>' + assignedPm + '</td>' + '<td>' + assignedDev + '</td>' + '<td>' + sprintDisplayText + '</td>' +
-    '<td>' + (function() {
+    createCellWithDropdown(APP_STATE.allData.config.priorityOptions, item['Priority'], item['Jira #'], 'Priority', 'col-priority') +
+    '<td class="col-story-points">' + storyPoints + '</td>' +
+    '<td class="col-pm-lead">' + assignedPm + '</td>' + '<td class="col-dev-assignee">' + assignedDev + '</td>' + '<td class="col-sprint">' + sprintDisplayText + '</td>' +
+    '<td class="col-target-date">' + (function() {
         var targetDate = item['Target Date'] || item['Target Date '];
         if (!targetDate) return '—';
         if (targetDate instanceof Date) {
@@ -526,12 +527,12 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
             return targetDate;
         }
     })() + '</td>' +
-    '<td>' + (item['Fix Version'] || '—') + '</td>' +
-    createCellWithDropdown(APP_STATE.allData.config.actPctOptions, item['ACT/PCT'], item['Jira #'], 'ACT/PCT') +
-    createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date') +
-    createDateInputCell(item['End Date'], item['Jira #'], 'End Date') +
-    '<td class="' + validation.updatedClassName + '">' + lastUpdatedDisplay + '</td>' +
-    '<td class="' + validation.checkedClassName + '">' + lastCheckedDisplay + '</td>';
+    '<td class="col-fix-version">' + (item['Fix Version'] || '—') + '</td>' +
+    createCellWithDropdown(APP_STATE.allData.config.actPctOptions, item['ACT/PCT'], item['Jira #'], 'ACT/PCT', 'col-act-pct') +
+    createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date', 'col-start-date') +
+    createDateInputCell(item['End Date'], item['Jira #'], 'End Date', 'col-end-date') +
+    '<td class="col-last-updated ' + validation.updatedClassName + '">' + lastUpdatedDisplay + '</td>' +
+    '<td class="col-last-checked ' + validation.checkedClassName + '">' + lastCheckedDisplay + '</td>';
     return row;
 }
 

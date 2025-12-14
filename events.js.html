@@ -441,6 +441,7 @@ function handleQuickFilter(filterType) {
 }
 
 function handleExpandCollapseAll(shouldExpand) {
+  // Handle epics
   $$('.row-epic').forEach(function(epicRow) {
     epicRow.classList.toggle('expanded', shouldExpand);
     var epicId = epicRow.dataset.id;
@@ -456,6 +457,12 @@ function handleExpandCollapseAll(shouldExpand) {
         }
     }
   });
+  
+  // Handle stories (which may have bug children)
+  $$('.row-story').forEach(function(storyRow) {
+    storyRow.classList.toggle('expanded', shouldExpand);
+  });
+  
   applyFilters();
 }
 

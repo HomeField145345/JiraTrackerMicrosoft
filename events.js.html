@@ -1573,6 +1573,8 @@ function applyFilters(skipAnimation) {
         var epicChildrenMap = new Map(); // Track which epics have open children
         var epicsWithMatchingChildren = new Set(); // Track epics that should be shown because they have matching children
 
+        var storiesWithMatchingChildren = new Set(); // Track stories that should be shown because they have matching children
+
         // First pass: identify open children for each epic
         allRows.forEach(function(row) {
             if (row.classList.contains('row-epic-footer')) return;
@@ -1666,7 +1668,7 @@ function applyFilters(skipAnimation) {
                             _matchUatStatus &&
                             _matchPM &&
                             _matchDev &&
-                            shouldShowBasedOnType &&
+                            (shouldShowBasedOnType || !!searchTerm) &&
                             _matchOutOfSync;
             
             // Apply "Show Only In Progress" filter
@@ -1693,7 +1695,33 @@ function applyFilters(skipAnimation) {
             
             // If this story/task is visible and has a parent epic, mark that epic as having matching children
             if (isVisible && row.dataset.parentEpic) {
-                epicsWithMatchingChildren.add(row.dataset.parentEpic);
+                if (row.classList.contains('row-bug-child')) {
+                    storiesWithMatchingChildren.add(row.dataset.parentEpic);
+                } else if (row.classList.contains('row-task')) {
+                    epicsWithMatchingChildren.add(row.dataset.parentEpic);
+                }
+                // Stories are handled in the next pass to account for their children
+            }
+        });
+
+        // Intermediate pass: Update Story visibility based on children and propagate to Epics
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-story')) {
+                var isVisible = rowVisibility.get(row);
+                var hasMatchingChildren = storiesWithMatchingChildren.has(row.dataset.id);
+                
+                if (hasMatchingChildren) {
+                    isVisible = true;
+                    rowVisibility.set(row, true);
+                    // Auto-expand story if it has matching children
+                    if (anySelectionFilterActive && !row.classList.contains('expanded')) {
+                         row.classList.add('expanded');
+                    }
+                }
+                
+                if (isVisible && row.dataset.parentEpic) {
+                    epicsWithMatchingChildren.add(row.dataset.parentEpic);
+                }
             }
         });
 

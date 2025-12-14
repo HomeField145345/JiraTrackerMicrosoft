@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <base target="_top">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login - Project Tracker</title>
@@ -136,9 +135,12 @@
         document.getElementById('successMessage').classList.remove('hidden');
         
         // Set up the continue button
-        var appUrl = "<?= url ?>";
         document.getElementById('continueBtn').onclick = function() {
-            window.top.location.href = appUrl + "?page=dashboard";
+            // Use relative navigation to preserve the current environment (Dev vs Exec)
+            // and avoid cross-origin issues in iframes.
+            var currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('page', 'dashboard');
+            window.location.href = currentUrl.toString();
         };
     }
 

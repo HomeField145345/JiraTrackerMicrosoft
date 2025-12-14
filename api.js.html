@@ -51,13 +51,10 @@ function showSessionExpiredModal() {
 }
 
 window.redirectToLogin = function() {
-    if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
-        window.top.location.href = SCRIPT_URL + "?page=login";
-    } else {
-        google.script.run.withSuccessHandler(function(url) {
-            window.top.location.href = url + "?page=login";
-        }).getScriptUrl();
-    }
+    // Use relative navigation to preserve environment
+    var currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.set('page', 'login');
+    window.location.href = currentUrl.toString();
 };
 
 // --- DATA FETCHING & CALLBACKS ---

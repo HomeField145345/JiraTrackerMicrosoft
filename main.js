@@ -31,6 +31,24 @@ function getScriptUrl() {
   return ScriptApp.getService().getUrl();
 }
 
+function getPageHtml(page) {
+  var template;
+  if (page === 'dashboard') {
+    template = HtmlService.createTemplateFromFile('Dashboard.html');
+  } else if (page === 'tasks') {
+    template = HtmlService.createTemplateFromFile('Tasks.html');
+  } else {
+    template = HtmlService.createTemplateFromFile('Login.html');
+  }
+  
+  template.url = ScriptApp.getService().getUrl();
+  return template.evaluate()
+    .setTitle("Project Tracker")
+    .setFaviconUrl('https://cdn-icons-png.flaticon.com/512/9757/9757813.png')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+    .getContent();
+}
+
 // --- Client-Callable API Functions ---
 
 function requireAuth(token) {

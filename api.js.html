@@ -51,10 +51,21 @@ function showSessionExpiredModal() {
 }
 
 window.redirectToLogin = function() {
-    // Use relative navigation to preserve environment
-    var currentUrl = new URL(window.location.href);
-    currentUrl.searchParams.set('page', 'login');
-    window.location.href = currentUrl.toString();
+    var targetUrl = (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) ? SCRIPT_URL : null;
+    
+    if (targetUrl) {
+         if (document.referrer && document.referrer.indexOf('/dev') !== -1) {
+             targetUrl = targetUrl.replace('/exec', '/dev');
+         }
+         window.location.href = targetUrl + "?page=login";
+    } else {
+        google.script.run.withSuccessHandler(function(url) {
+             if (document.referrer && document.referrer.indexOf('/dev') !== -1) {
+                 url = url.replace('/exec', '/dev');
+             }
+            window.location.href = url + "?page=login";
+        }).getScriptUrl();
+    }
 };
 
 // --- DATA FETCHING & CALLBACKS ---

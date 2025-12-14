@@ -136,11 +136,25 @@
         
         // Set up the continue button
         document.getElementById('continueBtn').onclick = function() {
-            // Use relative navigation to preserve the current environment (Dev vs Exec)
-            // and avoid cross-origin issues in iframes.
-            var currentUrl = new URL(window.location.href);
-            currentUrl.searchParams.set('page', 'dashboard');
-            window.location.href = currentUrl.toString();
+            var btn = document.getElementById('continueBtn');
+            btn.disabled = true;
+            btn.textContent = "Loading Dashboard...";
+            
+            // Use server-side rendering to fetch the dashboard content
+            // and replace the current document. This avoids URL navigation issues
+            // (403 errors, cross-origin blocks) entirely.
+            google.script.run
+                .withSuccessHandler(function(html) {
+                    document.open();
+                    document.write(html);
+                    document.close();
+                })
+                .withFailureHandler(function(e) {
+                    alert("Failed to load dashboard: " + e);
+                    btn.disabled = false;
+                    btn.textContent = "Continue to Dashboard";
+                })
+                .getPageHtml('dashboard');
         };
     }
 

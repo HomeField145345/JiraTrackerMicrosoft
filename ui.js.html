@@ -1522,12 +1522,67 @@ function formatSheetDateToLocal(val) {
     }
 }
 
+// Helper to update parent story/epic badge count when a child changes
+function updateParentBadge(parentId) {
+    if (!parentId) return;
+    
+    // Find parent row
+    var allRows = $$('#list-body tr');
+    var parentRow = null;
+    var searchId = (parentId || '').toLowerCase();
+    
+    for (var i = 0; i < allRows.length; i++) {
+        if (allRows[i].dataset.jiraId === searchId) {
+            parentRow = allRows[i];
+            break;
+        }
+    }
+    
+    if (!parentRow) return;
+    
+    // Find all child bugs
+    var needsAttentionCount = 0;
+    for (var i = 0; i < allRows.length; i++) {
+        var row = allRows[i];
+        // Check for bugs nested under this story (parentEpic points to Story ID for bugs)
+        if (row.classList.contains('row-bug-child') && row.dataset.parentEpic === parentId) {
+            var val = row.dataset.validation; // This should be up to date
+            if (val === 'Needs Review' || val === 'Past Due') {
+                needsAttentionCount++;
+            }
+        }
+    }
+    
+    // Update badge
+    var pillWrap = parentRow.querySelector('.validation-pill-container');
+    if (pillWrap) {
+        var badge = pillWrap.querySelector('.validation-badge');
+        if (needsAttentionCount > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'validation-badge';
+                pillWrap.appendChild(badge);
+            }
+            badge.textContent = needsAttentionCount;
+        } else {
+            if (badge) {
+                badge.remove();
+            }
+        }
+    }
+}
+
 // --- UPDATE ROW HELPERS ---
 function updateRowTimestamp(jiraId, newTimestampISO) {
     var allRows = $$('#list-body tr');
     var rowToUpdate = null;
+    var searchId = (jiraId || '').toLowerCase();
     
     for (var i = 0; i < allRows.length; i++) {
+        if (allRows[i].dataset.jiraId === searchId) {
+            rowToUpdate = allRows[i];
+            break;
+        }
         // Look for the Jira ID in the second cell (td:nth-child(2)) which contains the link
         var link = allRows[i].querySelector('td:nth-child(2) a');
         if (link && link.textContent.trim() === jiraId) {
@@ -1546,8 +1601,8 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
 
     var planningStage = (rowToUpdate.dataset.planningStage || '');
     var updatedStr = rowToUpdate.dataset.updatedIso || null;
-    var projectStageSelect = rowToUpdate.cells[2] ? rowToUpdate.cells[2].querySelector('select') : null;
-    var projectStage = projectStageSelect ? projectStageSelect.value : '';
+    var projectStageSelect = rowToUpdate.querySelector('select[data-field="Project Stage"]');
+    var projectStage = projectStageSelect ? projectStageSelect.value : (rowToUpdate.dataset.projectStage || '');
     
     // Get Target Date from the row (Column 14, index 13)
     // Note: Target Date is currently rendered as text, not an input
@@ -1574,7 +1629,7 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     }
     
     // Update validation pill (preserve any existing badge)
-    var pillWrap = rowToUpdate.cells[4] ? rowToUpdate.cells[4].querySelector('.validation-pill-container') : null;
+    var pillWrap = rowToUpdate.querySelector('.validation-pill-container');
     if (pillWrap) {
         var statusPill = pillWrap.querySelector('.status-pill');
         if (!statusPill) {
@@ -1590,6 +1645,11 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
 
     // Update row dataset for filtering
     rowToUpdate.dataset.validation = validation.text;
+    
+    // If this is a child bug, update the parent story's badge
+    if (rowToUpdate.classList.contains('row-bug-child') && rowToUpdate.dataset.parentEpic) {
+        updateParentBadge(rowToUpdate.dataset.parentEpic);
+    }
 
     // Update local state for KPI calculations
     if (APP_STATE.allData && APP_STATE.allData.projects) {
@@ -1615,7 +1675,15 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
 function updateRowValidation(jiraId) {
     var allRows = $$('#list-body tr');
     var row = null;
+    var searchId = (jiraId || '').toLowerCase();
+    
     for (var i = 0; i < allRows.length; i++) {
+        // Prefer dataset lookup
+        if (allRows[i].dataset.jiraId === searchId) {
+            row = allRows[i];
+            break;
+        }
+        // Fallback to link text lookup
         var link = allRows[i].querySelector('td:nth-child(2) a');
         if (link && link.textContent.trim() === jiraId) { row = allRows[i]; break; }
     }
@@ -1625,10 +1693,12 @@ function updateRowValidation(jiraId) {
     var planningStage = (row.dataset.planningStage || '');
     var updatedStr = row.dataset.updatedIso || null;
     var checkedStr = row.dataset.checkedIso || null;
-    var stageSelect = row.cells[2] ? row.cells[2].querySelector('select') : null;
+    
+    // Find Project Stage select more robustly
+    var stageSelect = row.querySelector('select[data-field="Project Stage"]');
     var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
 
-    // Get Target Date from the row
+    // Get Target Date from the row (Column 14, index 13)
     var targetDateCell = row.cells[13];
     var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
     if (targetDate === '—') targetDate = '';
@@ -1638,9 +1708,12 @@ function updateRowValidation(jiraId) {
 
     // Recalculate validation
     var validation = getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDate);
+    
+    // Update row dataset validation
+    row.dataset.validation = validation.text;
 
     // Update validation pill
-    var pillWrap = row.cells[4] ? row.cells[4].querySelector('.validation-pill-container') : null;
+    var pillWrap = row.querySelector('.validation-pill-container');
     if (pillWrap) {
         var statusPill = pillWrap.querySelector('.status-pill');
         if (!statusPill) {
@@ -1665,6 +1738,11 @@ function updateRowValidation(jiraId) {
 
     // Update dataset used by filters
     row.dataset.validation = validation.text;
+    
+    // If this is a child bug, update the parent story's badge
+    if (row.classList.contains('row-bug-child') && row.dataset.parentEpic) {
+        updateParentBadge(row.dataset.parentEpic);
+    }
 
     // Update date cell classes and ensure local display using canonical ISO
     var updatedCell = row.cells[18];
@@ -1699,7 +1777,13 @@ function updateRowSyncIndicator(jiraId) {
     try {
         var rows = $$('#list-body tr');
         var row = null;
+        var searchId = (jiraId || '').toLowerCase();
+
         for (var i = 0; i < rows.length; i++) {
+            if (rows[i].dataset.jiraId === searchId) {
+                row = rows[i];
+                break;
+            }
             var link = rows[i].querySelector('td:nth-child(2) a');
             if (link && link.textContent.trim() === jiraId) { row = rows[i]; break; }
         }
@@ -1707,14 +1791,14 @@ function updateRowSyncIndicator(jiraId) {
 
         // Read latest values
         var statusText = (row.dataset.status || '').toString();
-        var stageSelect = row.cells[2] ? row.cells[2].querySelector('select') : null;
+        var stageSelect = row.querySelector('select[data-field="Project Stage"]');
         var projectStage = stageSelect ? stageSelect.value : (row.dataset.projectStage || '');
 
         // Persist stage into dataset for filters and future reads
         row.dataset.projectStage = projectStage;
 
-        // Only applicable for Jira items (epic/story). If not, do nothing.
-        var isJiraItem = row.classList.contains('row-epic') || row.classList.contains('row-story');
+        // Only applicable for Jira items (epic/story/bug-child). If not, do nothing.
+        var isJiraItem = row.classList.contains('row-epic') || row.classList.contains('row-story') || row.classList.contains('row-bug-child');
         if (!isJiraItem) return;
 
         // Empty/blank stage -> show warning dot

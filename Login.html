@@ -128,34 +128,42 @@
           user: result.user // Store full user object
         }));
         
-        // Show success message and button
-        document.getElementById('loading-overlay').classList.add('hidden');
-        document.getElementById('login-container').classList.remove('hidden'); // Ensure container is visible
-        document.getElementById('loginForm').classList.add('hidden');
-        document.getElementById('successMessage').classList.remove('hidden');
+        // Update UI to show loading state
+        document.getElementById('loading-overlay').classList.remove('hidden');
+        document.querySelector('#loading-overlay p').textContent = "Loading Dashboard...";
+        document.getElementById('login-container').classList.add('hidden');
         
-        // Set up the continue button
-        document.getElementById('continueBtn').onclick = function() {
-            var btn = document.getElementById('continueBtn');
-            btn.disabled = true;
-            btn.textContent = "Loading Dashboard...";
-            
-            // Use server-side rendering to fetch the dashboard content
-            // and replace the current document. This avoids URL navigation issues
-            // (403 errors, cross-origin blocks) entirely.
-            google.script.run
-                .withSuccessHandler(function(html) {
-                    document.open();
-                    document.write(html);
-                    document.close();
-                })
-                .withFailureHandler(function(e) {
-                    alert("Failed to load dashboard: " + e);
-                    btn.disabled = false;
-                    btn.textContent = "Continue to Dashboard";
-                })
-                .getPageHtml('dashboard');
-        };
+        // Automatically load dashboard
+        loadDashboard();
+    }
+
+    function loadDashboard() {
+        google.script.run
+            .withSuccessHandler(function(html) {
+                document.open();
+                document.write(html);
+                document.close();
+            })
+            .withFailureHandler(function(e) {
+                // If dashboard load fails, show the manual continue button/error
+                document.getElementById('loading-overlay').classList.add('hidden');
+                document.getElementById('login-container').classList.remove('hidden');
+                document.getElementById('loginForm').classList.add('hidden');
+                document.getElementById('successMessage').classList.remove('hidden');
+                
+                showError("Failed to load dashboard automatically: " + e);
+                
+                // Re-enable the continue button just in case they want to try again
+                var btn = document.getElementById('continueBtn');
+                btn.disabled = false;
+                btn.textContent = "Continue to Dashboard";
+                btn.onclick = function() {
+                    btn.disabled = true;
+                    btn.textContent = "Loading Dashboard...";
+                    loadDashboard();
+                };
+            })
+            .getPageHtml('dashboard');
     }
 
     function showError(msg) {

@@ -19,6 +19,7 @@ function doGet(e) {
   template.url = ScriptApp.getService().getUrl();
   return template.evaluate()
     .setTitle("Project Tracker")
+    .setFaviconUrl('https://cdn-icons-png.flaticon.com/512/4471/4471770.png')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 

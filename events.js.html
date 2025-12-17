@@ -1783,6 +1783,18 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 var isVisible = rowVisibility.get(row);
                 var hasMatchingChildren = storiesWithMatchingChildren.has(row.dataset.id);
                 
+                // Update expander visibility based on whether there are matching children
+                var expander = row.querySelector('.expander');
+                if (expander) {
+                    if (hasMatchingChildren) {
+                        expander.style.visibility = ''; // Reset to default
+                    } else {
+                        expander.style.visibility = 'hidden';
+                        // Also collapse the row since there's nothing to show
+                        row.classList.remove('expanded');
+                    }
+                }
+
                 if (hasMatchingChildren) {
                     // Ensure parent is visible if it has matching children (e.g. In Progress bugs),
                     // overriding any filters that might have hidden the parent (like "Show Only In Progress")

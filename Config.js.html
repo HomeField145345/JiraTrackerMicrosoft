@@ -980,17 +980,51 @@
                 '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">' + user.username + '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + user.email + '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + formatRole(user.role) + '</td>' +
+                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title="' + (user.dataSheetId || 'Global Database') + '">' + 
+                    (user.dataSheetId ? '<span class="font-mono text-xs">' + user.dataSheetId.substring(0, 8) + '...</span>' : '<span class="text-gray-400 italic">Global</span>') + 
+                '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + 
                     (user.isActive ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive</span>') + 
                 '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">' +
                     '<button class="text-indigo-600 hover:text-indigo-900 mr-3" onclick="editUser(\'' + user.id + '\')">Edit</button>' +
+                    (!user.dataSheetId ? '<button class="text-orange-600 hover:text-orange-900 mr-3" onclick="migrateUser(\'' + user.id + '\')">Migrate</button>' : '') +
                     '<button class="text-green-600 hover:text-green-900 mr-3" onclick="loginAsUser(\'' + user.id + '\')">Login As</button>' +
                     '<button class="text-red-600 hover:text-red-900" onclick="deleteUser(\'' + user.id + '\')">Delete</button>' +
                 '</td>';
             tbody.appendChild(tr);
         });
     }
+
+    window.migrateUser = function(userId) {
+        const user = allUsers.find(u => u.id === userId);
+        if (!user) return;
+        
+        if (!confirm('Are you sure you want to migrate ' + user.username + ' to a personal database? This will create a new spreadsheet and copy all current data to it.')) return;
+
+        const token = getToken();
+        if (!token) return;
+
+        // Show loading state
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-blue-600 animate-pulse">Migrating user data... This may take a minute...</td></tr>';
+
+        google.script.run
+            .withSuccessHandler(function(response) {
+                if (response.success) {
+                    alert('Migration Successful!\nNew Sheet URL: ' + response.newSheetUrl);
+                    loadUsersList(); // Reload list to show new ID
+                } else {
+                    alert('Migration Failed: ' + response.message);
+                    loadUsersList(); // Reload to restore table
+                }
+            })
+            .withFailureHandler(function(error) {
+                alert('Migration Error: ' + error.message);
+                loadUsersList();
+            })
+            .migrateUserToPersonalDatabase(token, userId);
+    };
 
     window.loginAsUser = function(userId) {
         if (!confirm('Are you sure you want to log in as this user?')) return;
@@ -1069,6 +1103,7 @@
         document.getElementById('role').value = 'view_only';
         document.getElementById('isActive').checked = true;
         document.getElementById('password').value = '';
+        document.getElementById('dataSheetId').value = '';
         document.getElementById('user-modal').classList.remove('hidden');
     }
 
@@ -1084,6 +1119,7 @@
         document.getElementById('role').value = user.role;
         document.getElementById('isActive').checked = user.isActive;
         document.getElementById('password').value = ''; // Don't show password
+        document.getElementById('dataSheetId').value = user.dataSheetId || '';
         document.getElementById('user-modal').classList.remove('hidden');
     };
 
@@ -1101,7 +1137,8 @@
             email: document.getElementById('email').value,
             role: document.getElementById('role').value,
             isActive: document.getElementById('isActive').checked,
-            password: document.getElementById('password').value
+            password: document.getElementById('password').value,
+            dataSheetId: document.getElementById('dataSheetId').value
         };
 
         if (!userData.username || !userData.email) {
@@ -1154,6 +1191,43 @@
     };
 
     // Initialize user management when DOM is ready
-    document.addEventListener('DOMContentLoaded', initUserManagement);
+    document.addEventListener('DOMContentLoaded', function() {
+        initUserManagement();
+        
+        // Maintenance Logic
+        const runMaintenanceBtn = document.getElementById('runMaintenanceBtn');
+        if (runMaintenanceBtn) {
+            runMaintenanceBtn.addEventListener('click', function() {
+                const token = getToken();
+                if (!token) return;
+                
+                const targetId = document.getElementById('maintenanceTargetId').value.trim();
+                const logsDiv = document.getElementById('maintenanceLogs');
+                
+                runMaintenanceBtn.disabled = true;
+                runMaintenanceBtn.textContent = 'Running...';
+                logsDiv.classList.remove('hidden');
+                logsDiv.textContent = 'Starting maintenance check...';
+                
+                google.script.run
+                    .withSuccessHandler(function(response) {
+                        runMaintenanceBtn.disabled = false;
+                        runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
+                        
+                        if (response.success) {
+                            logsDiv.innerHTML = response.logs.map(l => `<div>> ${l}</div>`).join('');
+                        } else {
+                            logsDiv.textContent = 'Error: ' + response.message;
+                        }
+                    })
+                    .withFailureHandler(function(error) {
+                        runMaintenanceBtn.disabled = false;
+                        runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
+                        logsDiv.textContent = 'Error: ' + error.message;
+                    })
+                    .runDatabaseMaintenance(token, targetId);
+            });
+        }
+    });
 
 </script>

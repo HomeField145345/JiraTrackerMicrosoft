@@ -45,20 +45,23 @@ function getCacheInChunks(cache, key) {
 }
 
 // NEW: clear cached project data chunks
-function clearProjectCache() {
+function clearProjectCache(username) {
   try {
     var cache = CacheService.getScriptCache();
-    var prefix = 'project_data';
-    var chunkCountStr = cache.get(prefix + '_chunkCount');
+    // If username is provided, clear that specific cache.
+    // If not, we default to 'global' (though usually username should be provided)
+    var keyBase = 'project_data_' + (username ? username : 'global');
+    
+    var chunkCountStr = cache.get(keyBase + '_chunkCount');
     if (!chunkCountStr) return; // nothing to clear
     var count = parseInt(chunkCountStr, 10);
     var keys = [];
     if (!isNaN(count) && count > 0) {
       for (var i = 0; i < count; i++) {
-        keys.push(prefix + '_chunk_' + i);
+        keys.push(keyBase + '_chunk_' + i);
       }
     }
-    keys.push(prefix + '_chunkCount');
+    keys.push(keyBase + '_chunkCount');
     cache.removeAll(keys);
   } catch (e) {
     // ignore cache clear failures

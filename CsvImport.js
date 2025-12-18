@@ -33,7 +33,24 @@ function importJiraCsv_(fileData, user) {
   }
 
   try {
-    var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), JIRA_DATA_SHEET);
+    // Determine Target Spreadsheet (Global vs Personal)
+    let targetSS = SpreadsheetApp.getActiveSpreadsheet();
+    
+    // Check if user has a personal sheet
+    if (user && user.id) {
+      const fullUser = getUserById(user.id);
+      if (fullUser && fullUser.dataSheetId && String(fullUser.dataSheetId).trim() !== '') {
+        try {
+          const personalSS = SpreadsheetApp.openById(fullUser.dataSheetId);
+          targetSS = personalSS;
+          console.log('Importing into Personal Sheet: ' + fullUser.dataSheetId);
+        } catch (e) {
+          console.warn('Failed to open personal sheet, falling back to global.', e);
+        }
+      }
+    }
+
+    var sheet = getSheetOrThrow(targetSS, JIRA_DATA_SHEET);
     
     var existingDataRange = sheet.getDataRange();
     // *** FIX: Use getValues() to read raw sheet data for comparison with CSV ***
@@ -308,6 +325,11 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   var regularUpdatedItems = updatedItems.filter(function(item) { return !item.wasUnarchived; });
   
   console.log('UPLOAD COMPLETED - Final counts: added=' + addedItems.length + ', updated=' + regularUpdatedItems.length + ', unarchived=' + unarchivedItems.length + ', archived=' + archivedItems.length);
+  
+  // Clear cache for the user so they see new data immediately
+  if (user && typeof clearProjectCache === 'function') {
+      clearProjectCache(user.username);
+  }
   
   return { 
     status: 'success', 

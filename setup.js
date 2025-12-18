@@ -22,7 +22,29 @@ function onOpen() {
     .addItem('Migrate: Add Owner Column', 'addOwnerColumn')
     .addItem('Migrate: Clean Column Headers', 'cleanupColumnHeaders')
     .addItem('Migrate: Upgrade Users Sheet', 'upgradeUsersSheet')
+    .addItem('Migrate: Add Data Sheet ID Column', 'addUserDataSheetColumn')
     .addToUi();
+}
+
+/**
+ * Adds the 'Data Sheet ID' column to Users sheet if missing.
+ */
+function addUserDataSheetColumn() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(USERS_SHEET);
+  if (!sheet) {
+    SpreadsheetApp.getUi().alert('Users sheet not found.');
+    return;
+  }
+  
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  // Check if column 10 (index 9) exists and is named correctly
+  if (headers.length < 10 || headers[9] !== 'Data Sheet ID') {
+      sheet.getRange(1, 10).setValue('Data Sheet ID').setFontWeight('bold');
+      SpreadsheetApp.getUi().alert('Added "Data Sheet ID" column to Users sheet.');
+  } else {
+      SpreadsheetApp.getUi().alert('"Data Sheet ID" column already exists.');
+  }
 }
 
 /**
@@ -54,16 +76,20 @@ function addOwnerColumn() {
 
 /**
  * Creates the required sheets and adds headers if they don't exist.
+ * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [targetSpreadsheet] - Optional spreadsheet to setup. Defaults to Active.
+ * @returns {string[]} Log of actions performed.
  */
-function setupSheets() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+function setupSheets(targetSpreadsheet) {
+  const ss = targetSpreadsheet || SpreadsheetApp.getActiveSpreadsheet();
+  const logs = [];
+  
   const sheets = {
     [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],
-    [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At'],
-    [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration'],
+    [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At', 'Data Sheet ID'],
+    [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration', 'UserID'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']
   };
 
@@ -73,26 +99,25 @@ function setupSheets() {
       sheet = ss.insertSheet(sheetName);
       sheet.getRange(1, 1, 1, sheets[sheetName].length).setValues([sheets[sheetName]]).setFontWeight('bold');
       sheet.setFrozenRows(1);
-      SpreadsheetApp.getUi().alert(`Sheet "${sheetName}" was created successfully.`);
+      logs.push(`Created sheet "${sheetName}".`);
     } else {
       // --- Add missing columns to JiraData if missing ---
       if (sheetName === JIRA_DATA_SHEET) {
         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        let columnsAdded = [];
         
         // Add Acceptance Criteria column (O) if missing
         if (headers.indexOf('Acceptance Criteria') === -1) {
           sheet.insertColumnAfter(headers.length);
           sheet.getRange(1, headers.length + 1).setValue('Acceptance Criteria');
-          columnsAdded.push('Acceptance Criteria (Column O)');
+          logs.push('Added "Acceptance Criteria" to JiraData.');
         }
         
         // Add Target Date column (P) if missing
         const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         if (updatedHeaders.indexOf('Target Date') === -1) {
           sheet.insertColumnAfter(updatedHeaders.length);
-          sheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date'); // Clean header without trailing space
-          columnsAdded.push('Target Date (Column P)');
+          sheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date');
+          logs.push('Added "Target Date" to JiraData.');
         }
         
         // Add Fix Version column (Q) if missing
@@ -100,25 +125,39 @@ function setupSheets() {
         if (updatedHeaders2.indexOf('Fix Version') === -1) {
           sheet.insertColumnAfter(updatedHeaders2.length);
           sheet.getRange(1, updatedHeaders2.length + 1).setValue('Fix Version');
-          columnsAdded.push('Fix Version (Column Q)');
+          logs.push('Added "Fix Version" to JiraData.');
         }
         
-        if (columnsAdded.length > 0) {
-          SpreadsheetApp.getUi().alert('Added columns to JiraData sheet: ' + columnsAdded.join(', '));
+        // Add Owner column if missing
+        const updatedHeaders3 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (updatedHeaders3.indexOf('Owner') === -1) {
+          sheet.insertColumnAfter(updatedHeaders3.length);
+          sheet.getRange(1, updatedHeaders3.length + 1).setValue('Owner').setFontWeight('bold');
+          logs.push('Added "Owner" to JiraData.');
         }
       }
-      SpreadsheetApp.getUi().alert(`Sheet "${sheetName}" already exists.`);
+      
+      // --- Add missing columns to Users if missing ---
+      if (sheetName === USERS_SHEET) {
+         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+         if (headers.indexOf('Data Sheet ID') === -1) {
+             sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
+             logs.push('Added "Data Sheet ID" to Users.');
+         }
+      }
     }
     
     // Create default admin user if Users sheet is empty
     if (sheetName === USERS_SHEET) {
       const userSheet = ss.getSheetByName(USERS_SHEET);
       if (userSheet && userSheet.getLastRow() === 1) {
-        userSheet.appendRow(['admin', 'admin123', 'admin', 'admin@example.com']);
-        SpreadsheetApp.getUi().alert('Default admin user created (admin/admin123).');
+        userSheet.appendRow([Utilities.getUuid(), 'admin', 'admin@example.com', 'Admin', 'admin', true, 'admin123', new Date(), '', '']);
+        logs.push('Created default admin user.');
       }
     }
   }
+  
+  return logs.length > 0 ? logs : ['All sheets and headers are up to date.'];
 }
 
 /**

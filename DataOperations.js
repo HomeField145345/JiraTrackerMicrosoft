@@ -28,7 +28,8 @@ function saveConfiguration_(optionsData) {
   }
 
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    // Config is Global
+    var ss = getGlobalSpreadsheet();
     var sheet = getSheetOrThrow(ss, CONFIG_SHEET);
     
     // Set headers (extend with per-type options; mappings are lists in H/I)
@@ -136,9 +137,10 @@ function saveConfiguration_(optionsData) {
  * @param {string} jiraId - The Jira ID
  * @param {string} field - The field name to update
  * @param {*} value - The value to save
+ * @param {Object} user - The user context
  * @returns {Object} Result object with status and message
  */
-function saveManualData_(jiraId, field, value) {
+function saveManualData_(jiraId, field, value, user) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
@@ -147,7 +149,9 @@ function saveManualData_(jiraId, field, value) {
   }
 
   try {
-    var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), MANUAL_DATA_SHEET);
+    // Manual Data is User-Specific
+    var ss = getDataSpreadsheet(user);
+    var sheet = getSheetOrThrow(ss, MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
     var rowToUpdate = -1;
     
@@ -213,9 +217,9 @@ function saveManualData_(jiraId, field, value) {
  * @param {string} driveLink - The Drive Link URL
  * @returns {Object} Result object with success status
  */
-function updateDriveLink_(jiraId, driveLink) {
+function updateDriveLink_(jiraId, driveLink, user) {
   try {
-    var result = saveManualData_(jiraId, 'Drive Link', driveLink);
+    var result = saveManualData_(jiraId, 'Drive Link', driveLink, user);
     if (result.status === 'success') {
       return { success: true, message: 'Drive Link updated successfully' };
     } else {
@@ -241,7 +245,9 @@ function saveIndependentTask_(taskData, user) {
   }
 
   try {
-    var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), INDEPENDENT_TASKS_SHEET);
+    // Independent Tasks are User-Specific
+    var ss = getDataSpreadsheet(user);
+    var sheet = getSheetOrThrow(ss, INDEPENDENT_TASKS_SHEET);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     
     // If new task, set Owner
@@ -310,9 +316,10 @@ function saveIndependentTask_(taskData, user) {
 /**
  * Update the "Last Checked" timestamp for a Jira item
  * @param {string} jiraId - The Jira ID to update
+ * @param {Object} user - The user context
  * @returns {Object} Result object with status, message, and new timestamp
  */
-function updateLastChecked_(jiraId) {
+function updateLastChecked_(jiraId, user) {
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
@@ -321,7 +328,9 @@ function updateLastChecked_(jiraId) {
   }
 
   try {
-    var sheet = getSheetOrThrow(SpreadsheetApp.getActiveSpreadsheet(), MANUAL_DATA_SHEET);
+    // Manual Data (Last Checked) is User-Specific
+    var ss = getDataSpreadsheet(user);
+    var sheet = getSheetOrThrow(ss, MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
     var rowToUpdate = -1;
     

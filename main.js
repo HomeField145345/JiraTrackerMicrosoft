@@ -93,8 +93,8 @@ function saveConfiguration(token, optionsData) {
 }
 
 function saveManualData(token, jiraId, field, value) {
-  requireAuth(token);
-  return saveManualData_(jiraId, field, value);
+  const auth = requireAuth(token);
+  return saveManualData_(jiraId, field, value, auth.user);
 }
 
 function saveIndependentTask(token, taskData) {
@@ -103,8 +103,8 @@ function saveIndependentTask(token, taskData) {
 }
 
 function updateLastChecked(token, jiraId) {
-  requireAuth(token);
-  return updateLastChecked_(jiraId);
+  const auth = requireAuth(token);
+  return updateLastChecked_(jiraId, auth.user);
 }
 
 function updateSyncIndicators(token, mappingData) {
@@ -119,8 +119,8 @@ function updateSyncIndicators(token, mappingData) {
 }
 
 function updateDriveLink(token, jiraId, driveLink) {
-  requireAuth(token);
-  return updateDriveLink_(jiraId, driveLink);
+  const auth = requireAuth(token);
+  return updateDriveLink_(jiraId, driveLink, auth.user);
 }
 
 // --- User Management API ---
@@ -171,4 +171,23 @@ function deleteUser(token, userId) {
 function impersonateUser(token, targetUserId) {
   // Auth check is inside the implementation to verify admin status
   return impersonateUser_(token, targetUserId);
+}
+
+function runDatabaseMaintenance(token, targetSheetId) {
+  const auth = requireAuth(token);
+  if (auth.role !== 'admin') {
+    throw new Error("Access denied: Admin rights required.");
+  }
+  
+  let targetSS = null;
+  if (targetSheetId) {
+    try {
+      targetSS = SpreadsheetApp.openById(targetSheetId);
+    } catch (e) {
+      return { success: false, message: 'Could not open spreadsheet with ID: ' + targetSheetId };
+    }
+  }
+  
+  const logs = setupSheets(targetSS);
+  return { success: true, logs: logs };
 }

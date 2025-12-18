@@ -37,14 +37,16 @@ function getUserById(userId) {
   const rowIndex = findRowById(sheet, userId, 0);
   if (rowIndex === -1) return null;
   
-  const row = sheet.getRange(rowIndex, 1, 1, 9).getValues()[0];
+  // Read up to column 10 (Index 9) for Data Sheet ID
+  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
   return {
       id: row[0], 
       username: row[1], 
       email: row[2], 
       displayName: row[3], 
       role: row[4], 
-      isActive: row[5]
+      isActive: row[5],
+      dataSheetId: row[9] // New field
   };
 }
 
@@ -58,6 +60,7 @@ function getUsers() {
   const sheet = ss.getSheetByName(USERS_SHEET);
   if (!sheet || sheet.getLastRow() <= 1) return [];
   
+  // Read all data including the new column (Index 9)
   const data = sheet.getDataRange().getValues().slice(1);
   return data.map(row => {
     return { 
@@ -68,7 +71,8 @@ function getUsers() {
       role: row[4], 
       isActive: row[5], 
       createdAt: safeIsoDate(row[7]), 
-      lastLoginAt: safeIsoDate(row[8]) 
+      lastLoginAt: safeIsoDate(row[8]),
+      dataSheetId: row[9] // New field
     };
   }).filter(Boolean);
 }
@@ -228,7 +232,7 @@ function createUser(user) {
     }
     
     const id = generateId();
-    // ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
+    // ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At, Data Sheet ID
     userSheet.appendRow([
       id, 
       user.username, 
@@ -238,7 +242,8 @@ function createUser(user) {
       user.isActive !== undefined ? user.isActive : true, 
       user.password || '123456', 
       new Date(), 
-      ''
+      '',
+      user.dataSheetId || '' // New field
     ]);
     
     return { success: true, message: "User created successfully." };
@@ -260,7 +265,7 @@ function updateUser(userId, updates) {
   // Get current data to check for username change
   const currentUsername = sheet.getRange(rowIndex, 2).getValue();
   
-  // Columns: ID(0), Username(1), Email(2), Display Name(3), Role(4), Is Active(5), Password(6)
+  // Columns: ID(0), Username(1), Email(2), Display Name(3), Role(4), Is Active(5), Password(6), Created(7), LastLogin(8), DataSheetID(9)
   
   if (updates.username) {
       sheet.getRange(rowIndex, 2).setValue(updates.username);
@@ -281,6 +286,11 @@ function updateUser(userId, updates) {
   // Password Update
   if (updates.password && updates.password.trim() !== '') {
       sheet.getRange(rowIndex, 7).setValue(updates.password);
+  }
+
+  // Data Sheet ID Update
+  if (updates.dataSheetId !== undefined) {
+      sheet.getRange(rowIndex, 10).setValue(updates.dataSheetId);
   }
   
   return { success: true };

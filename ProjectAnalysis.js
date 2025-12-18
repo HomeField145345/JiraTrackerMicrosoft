@@ -22,28 +22,37 @@
  * @returns {Object} Complete project data including projects, config, and sprint stats
  */
 function getProjectData_(user, targetUsername) {
-  var data = _getRawProjectData();
+  // Determine the Context User (The owner of the data we want to see)
+  let contextUser = user;
   
-  if (data.error) return data;
-  
-  // Determine which user to filter by
-  // Default to the logged-in user
-  var filterUser = user.username;
-  
-  // If we have a userId, fetch the latest username from the database
-  // This ensures that if the username was changed, we use the new one
-  if (user.id) {
-      var freshUser = getUserById(user.id);
-      if (freshUser) {
-          filterUser = freshUser.username;
+  // Ensure we have the full user object (including dataSheetId)
+  // The 'user' passed from auth might be minimal {id, username, role}
+  if (!contextUser.dataSheetId && contextUser.id) {
+      const fullUser = getUserById(contextUser.id);
+      if (fullUser) {
+          contextUser = fullUser;
       }
   }
   
   // If a target is specified, use it.
   // This allows QA/View Only users to view PM/Admin workspaces.
   if (targetUsername) {
-    filterUser = targetUsername;
+    // We need the full user object to get the dataSheetId
+    // We can't just use the username string anymore.
+    const users = getUsers();
+    const target = users.find(u => u.username === targetUsername);
+    if (target) {
+        contextUser = target;
+    }
   }
+
+  var data = _getRawProjectData(contextUser);
+  
+  if (data.error) return data;
+  
+  // Determine which user to filter by
+  // Default to the logged-in user (or the target if specified)
+  var filterUser = contextUser.username;
   
   // Filter data based on user ownership
   if (filterUser) {
@@ -72,23 +81,39 @@ function getProjectData_(user, targetUsername) {
 /**
  * Internal function to get raw aggregated project data with caching (unfiltered)
  * @private
+ * @param {Object} contextUser - The user whose dataset we are accessing
  * @returns {Object} Complete project data
  */
-function _getRawProjectData() {
+function _getRawProjectData(contextUser) {
   try {
-    // Check cache first
+    // Check cache first (Cache is scoped to the context user)
     var cache = CacheService.getScriptCache();
-    var cacheKey = 'project_data';
+    var cacheKey = 'project_data_' + (contextUser ? contextUser.username : 'global');
     var cachedData = getCacheInChunks(cache, cacheKey);
     if (cachedData) {
       return JSON.parse(cachedData);
     }
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var jiraSheet = getSheetOrThrow(ss, JIRA_DATA_SHEET);
-    var manualDataSheet = getSheetOrThrow(ss, MANUAL_DATA_SHEET);
-    var configSheet = getSheetOrThrow(ss, CONFIG_SHEET);
-    var independentTasksSheet = getSheetOrThrow(ss, INDEPENDENT_TASKS_SHEET);
+    // Data comes from the User's specific spreadsheet (or global fallback)
+    var dataSS;
+    if (contextUser && contextUser.dataSheetId && String(contextUser.dataSheetId).trim() !== '') {
+       try {
+         dataSS = SpreadsheetApp.openById(contextUser.dataSheetId);
+       } catch (e) {
+         console.warn("Could not open personal sheet for " + contextUser.username + ", falling back to global", e);
+         dataSS = SpreadsheetApp.getActiveSpreadsheet();
+       }
+    } else {
+       dataSS = SpreadsheetApp.getActiveSpreadsheet();
+    }
+
+    var jiraSheet = getSheetOrThrow(dataSS, JIRA_DATA_SHEET);
+    var manualDataSheet = getSheetOrThrow(dataSS, MANUAL_DATA_SHEET);
+    var independentTasksSheet = getSheetOrThrow(dataSS, INDEPENDENT_TASKS_SHEET);
+    
+    // Config always comes from the Global Master Spreadsheet
+    var globalSS = SpreadsheetApp.getActiveSpreadsheet();
+    var configSheet = getSheetOrThrow(globalSS, CONFIG_SHEET);
     
     // Load configuration options from sheets
     var config = _loadConfiguration(configSheet);
@@ -133,7 +158,7 @@ function _getRawProjectData() {
  * @returns {Object} Fresh project data
  */
 function forceGetProjectData_(user) {
-  clearProjectCache();
+  clearProjectCache(user ? user.username : null);
   return getProjectData_(user);
 }
 

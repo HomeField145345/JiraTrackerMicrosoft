@@ -232,6 +232,17 @@ function createUser(user) {
     }
     
     const id = generateId();
+    
+    // AUTO-CREATE USER SPREADSHEET (Hub & Spoke)
+    let dataSheetId = '';
+    try {
+      // Create a dedicated spreadsheet for this user
+      dataSheetId = createUserDataSpreadsheet(user);
+    } catch (e) {
+      console.error("Failed to create user spreadsheet: " + e.toString());
+      // Continue anyway, but log error
+    }
+
     // ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At, Data Sheet ID
     userSheet.appendRow([
       id, 
@@ -243,7 +254,7 @@ function createUser(user) {
       user.password || '123456', 
       new Date(), 
       '',
-      user.dataSheetId || '' // New field
+      dataSheetId || '' // Store the Spreadsheet ID
     ]);
     
     return { success: true, message: "User created successfully." };

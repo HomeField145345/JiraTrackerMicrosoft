@@ -953,13 +953,11 @@ function renderTable() {
                 var parentKey = link.trim();
                 if (parentKey && storyLookup[parentKey]) {
                     var parentStory = storyLookup[parentKey];
-                    // Only nest if they belong to the same Epic
-                    if (normalizeString(bug['Epic Link']) === normalizeString(parentStory['Epic Link'])) {
-                        if (!storyBugsMap[parentKey]) storyBugsMap[parentKey] = [];
-                        // Avoid duplicates
-                        if (!storyBugsMap[parentKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
-                            storyBugsMap[parentKey].push(bug);
-                        }
+                    // Nest regardless of Epic Link
+                    if (!storyBugsMap[parentKey]) storyBugsMap[parentKey] = [];
+                    // Avoid duplicates
+                    if (!storyBugsMap[parentKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
+                        storyBugsMap[parentKey].push(bug);
                     }
                 }
             });
@@ -972,15 +970,13 @@ function renderTable() {
                 var childKey = link.trim();
                 if (childKey && bugLookup[childKey]) {
                     var bug = bugLookup[childKey];
-                    // Only nest if they belong to the same Epic
-                    if (normalizeString(bug['Epic Link']) === normalizeString(story['Epic Link'])) {
-                        var storyKey = story['Jira #'];
-                        if (!storyBugsMap[storyKey]) storyBugsMap[storyKey] = [];
-                        
-                        // Avoid duplicates
-                        if (!storyBugsMap[storyKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
-                            storyBugsMap[storyKey].push(bug);
-                        }
+                    // Nest regardless of Epic Link
+                    var storyKey = story['Jira #'];
+                    if (!storyBugsMap[storyKey]) storyBugsMap[storyKey] = [];
+                    
+                    // Avoid duplicates
+                    if (!storyBugsMap[storyKey].some(function(b) { return b['Jira #'] === bug['Jira #']; })) {
+                        storyBugsMap[storyKey].push(bug);
                     }
                 }
             });

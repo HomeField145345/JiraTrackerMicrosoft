@@ -934,9 +934,10 @@ function renderTable() {
     
     var stories = allChildren;
     var storyBugsMap = {};
+    var bugs = [];
     
     if (APP_STATE.nestBugs) {
-        var bugs = allChildren.filter(function(p) { return p['Issue Type'] === 'Bug'; });
+        bugs = allChildren.filter(function(p) { return p['Issue Type'] === 'Bug'; });
         var nonBugs = allChildren.filter(function(p) { return p['Issue Type'] !== 'Bug'; });
         
         // Create lookups for bidirectional linking
@@ -982,13 +983,7 @@ function renderTable() {
             });
         });
         
-        var mappedBugIds = {};
-        Object.keys(storyBugsMap).forEach(function(key) {
-            storyBugsMap[key].forEach(function(b) { mappedBugIds[b['Jira #']] = true; });
-        });
-        var unparentedBugs = bugs.filter(function(b) { return !mappedBugIds[b['Jira #']]; });
-        
-        stories = nonBugs.concat(unparentedBugs);
+        stories = nonBugs;
     }
     
     var epicSummaries = {};
@@ -1008,6 +1003,21 @@ function renderTable() {
         
         return true;
     });
+    
+    var orphanBugs = [];
+    if (APP_STATE.nestBugs) {
+        orphanBugs = bugs.filter(function(p) {
+            // Check Epic Link
+            if (epicSummaries[normalizeString(p['Epic Link'])]) return false;
+            
+            // Check Linked Issues
+            var links = (p['Links'] || p['Linked Issues'] || '').split(',');
+            var hasEpicLink = links.some(function(link) { return epicIds[link.trim()]; });
+            if (hasEpicLink) return false;
+            
+            return true;
+        });
+    }
 
     var body = $('#list-body');
     body.style.display = 'none';
@@ -1105,12 +1115,33 @@ function renderTable() {
             return links.some(function(link) { return link.trim() === epicId; });
         });
         
+        // Find direct bugs for this epic if nestBugs is true
+        var directBugs = [];
+        if (APP_STATE.nestBugs) {
+            directBugs = bugs.filter(function(bug) {
+                // Check Epic Link
+                if (normalizeString(bug['Epic Link']) === normalizeString(epic.Summary)) return true;
+                // Check Linked Issues
+                var links = (bug['Links'] || bug['Linked Issues'] || '').split(',');
+                var epicId = epic['Jira #'];
+                return links.some(function(link) { return link.trim() === epicId; });
+            });
+        }
+        
         var needsAttentionCount = 0;
         childStories.forEach(function(story) {
             var status = getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage'], story['Target Date']).text;
             if (status === 'Needs Review' || status === 'Past Due') {
                 needsAttentionCount++;
             }
+        });
+        
+        // Add attention count from direct bugs
+        directBugs.forEach(function(bug) {
+             var status = getValidationStatus(bug['Planning Stage'], bug['Updated'], bug['Last Checked'], bug['Project Stage'], bug['Target Date']).text;
+             if (status === 'Needs Review' || status === 'Past Due') {
+                 needsAttentionCount++;
+             }
         });
         
         body.appendChild(createRow(epic, 'epic', null, needsAttentionCount));
@@ -1123,7 +1154,9 @@ function renderTable() {
             });
         }
         
-    childStories.sort(sortChildren);
+        var renderedBugIds = {};
+        
+        childStories.sort(sortChildren);
         childStories.forEach(function(story) { 
             var openBugCount = 0;
             var needsAttentionCount = 0;
@@ -1136,6 +1169,7 @@ function renderTable() {
                     if (status === 'Needs Review' || status === 'Past Due') {
                         needsAttentionCount++;
                     }
+                    renderedBugIds[b['Jira #']] = true;
                 });
             }
 
@@ -1155,6 +1189,18 @@ function renderTable() {
                 });
             }
         });
+        
+        // Render Direct Bugs (that weren't rendered as nested bugs)
+        if (APP_STATE.nestBugs && directBugs.length > 0) {
+            directBugs.sort(sortChildren);
+            directBugs.forEach(function(bug) {
+                if (!renderedBugIds[bug['Jira #']]) {
+                    // Render as direct child (using 'story' type to align with stories)
+                    // We pass 0 for openChildrenCount as bugs don't have children
+                    body.appendChild(createRow(bug, 'story', epic['Jira #'], null, false, false, 0));
+                }
+            });
+        }
 
         var footerRow = document.createElement('tr');
         footerRow.className = 'row-epic-footer';
@@ -1165,7 +1211,7 @@ function renderTable() {
         body.appendChild(footerRow);
     }
     
-    if (orphanStories.length > 0) {
+    if (orphanStories.length > 0 || orphanBugs.length > 0) {
         var unassignedEpic = { 'Jira #': 'UNASSIGNED', Summary: 'Unassigned Stories', 'Issue Type': 'Epic' };
         var unassignedAttentionCount = 0;
         orphanStories.forEach(function(story) {
@@ -1175,11 +1221,20 @@ function renderTable() {
             }
         });
         
+        orphanBugs.forEach(function(bug) {
+            var status = getValidationStatus(bug['Planning Stage'], bug['Updated'], bug['Last Checked'], bug['Project Stage'], bug['Target Date']).text;
+            if (status === 'Needs Review' || status === 'Past Due') {
+                unassignedAttentionCount++;
+            }
+        });
+        
         var unassignedEpicRow = createRow(unassignedEpic, 'epic', null, unassignedAttentionCount);
         body.prepend(unassignedEpicRow);
         
         var orphanStoryRows = [];
-    orphanStories.sort(sortChildren).forEach(function(story) {
+        var renderedOrphanBugIds = {};
+        
+        orphanStories.sort(sortChildren).forEach(function(story) {
             var openBugCount = 0;
             var needsAttentionCount = 0;
             var childBugs = [];
@@ -1191,6 +1246,7 @@ function renderTable() {
                     if (status === 'Needs Review' || status === 'Past Due') {
                         needsAttentionCount++;
                     }
+                    renderedOrphanBugIds[b['Jira #']] = true;
                 });
             }
 
@@ -1204,6 +1260,15 @@ function renderTable() {
                 });
             }
         });
+        
+        if (APP_STATE.nestBugs && orphanBugs.length > 0) {
+            orphanBugs.sort(sortChildren);
+            orphanBugs.forEach(function(bug) {
+                if (!renderedOrphanBugIds[bug['Jira #']]) {
+                    orphanStoryRows.push(createRow(bug, 'story', 'UNASSIGNED', null, false, false, 0));
+                }
+            });
+        }
         
         unassignedEpicRow.after.apply(unassignedEpicRow, orphanStoryRows);
 

@@ -85,8 +85,17 @@ function processGanttData(projects) {
         var epic = epics[j];
         
         var normalizedEpicSummary = normalizeString(epic.Summary);
+        var epicId = epic['Jira #'];
+        
         var childStories = ganttItems.filter(function(gi) {
-            return gi.type === 'story' && normalizeString(gi.item['Epic Link']) === normalizedEpicSummary;
+            if (gi.type !== 'story') return false;
+            
+            // Check Epic Link
+            if (normalizeString(gi.item['Epic Link']) === normalizedEpicSummary) return true;
+            
+            // Check Linked Issues
+            var links = (gi.item['Links'] || gi.item['Linked Issues'] || '').split(',');
+            return links.some(function(link) { return link.trim() === epicId; });
         });
 
         if (childStories.length > 0) {

@@ -27,3 +27,68 @@ function formatSprint(sprintString) {
   var match = sprintString.match(/(Sprint\s?\d+)/i);
   return match ? match[1].trim() : '—';
 }
+
+/**
+ * Analyzes project data to generate sprint statistics.
+ * @param {Array<Object>} items - Combined list of projects and independent tasks
+ * @returns {Object} Sprint statistics map
+ */
+function analyzeSprintData(items) {
+  var stats = {};
+  var now = new Date();
+
+  items.forEach(function(item) {
+    var sprint = item.sprint || item.Sprint;
+    if (!sprint) return;
+    
+    // Normalize sprint name
+    var sprintName = formatSprint(sprint);
+    
+    if (!stats[sprintName]) {
+      var dates = parseSprintDates(sprint);
+      stats[sprintName] = {
+        name: sprintName,
+        startDate: dates.start,
+        endDate: dates.end,
+        isActive: dates.start && dates.end && now >= dates.start && now <= dates.end,
+        totalItems: 0,
+        completedItems: 0,
+        totalPoints: 0,
+        completedPoints: 0,
+        items: []
+      };
+    }
+    
+    var s = stats[sprintName];
+    s.totalItems++;
+    s.items.push(item);
+    
+    var points = parseFloat(item['Story Points'] || item.storyPoints || 0);
+    if (!isNaN(points)) {
+      s.totalPoints += points;
+    }
+    
+    // Check completion (simplified logic, ideally should use config)
+    // Checking for common "Done" statuses
+    var status = (item.Status || item.status || '').toLowerCase();
+    var stage = (item['Project Stage'] || item.projectStage || '').toLowerCase();
+    
+    var isClosed = 
+        status === 'done' || 
+        status === 'closed' || 
+        status === 'resolved' || 
+        status === 'fixed' ||
+        stage === 'production' ||
+        stage === 'in production' ||
+        stage === 'canceled';
+        
+    if (isClosed) {
+      s.completedItems++;
+      if (!isNaN(points)) {
+        s.completedPoints += points;
+      }
+    }
+  });
+  
+  return stats;
+}

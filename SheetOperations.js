@@ -61,3 +61,88 @@ function getSheetOrThrow(ss, sheetName) {
   if (!sheet) throw new Error(`Sheet "${sheetName}" not found in spreadsheet "${ss.getName()}"`);
   return sheet;
 }
+
+/**
+ * Reads Jira data from the sheet and returns an array of objects.
+ * @param {Sheet} sheet
+ * @returns {Array<Object>}
+ */
+function readJiraData(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  
+  return rows.map(row => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      if (header) {
+        // Use normalizeValue_ if available, otherwise just raw value
+        obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+      }
+    });
+    return obj;
+  });
+}
+
+/**
+ * Reads Manual Data overrides and returns a map keyed by Jira ID.
+ * @param {Sheet} sheet
+ * @returns {Object} Map of JiraID -> Object
+ */
+function readManualData(sheet) {
+  if (!sheet) return {};
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return {};
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  const map = {};
+  
+  // Find "Jira #" column index
+  const idIndex = headers.indexOf("Jira #");
+  if (idIndex === -1) return {};
+  
+  rows.forEach(row => {
+    const jiraId = row[idIndex];
+    if (jiraId) {
+      const obj = {};
+      headers.forEach((header, index) => {
+        if (header && index !== idIndex) {
+           obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+        }
+      });
+      map[jiraId] = obj;
+    }
+  });
+  
+  return map;
+}
+
+/**
+ * Reads Independent Tasks.
+ * @param {Sheet} sheet
+ * @returns {Array<Object>}
+ */
+function readIndependentTasks(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+  
+  const headers = data[0];
+  const rows = data.slice(1);
+  
+  return rows.map(row => {
+    const obj = {};
+    headers.forEach((header, index) => {
+      if (header) {
+        obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+      }
+    });
+    // Mark as independent task
+    obj.isIndependent = true;
+    return obj;
+  });
+}

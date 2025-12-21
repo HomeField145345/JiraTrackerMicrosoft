@@ -88,6 +88,7 @@ function hideLoading() {
 }
 
 function handleDataLoaded(data) {
+  console.log("Data received from server:", data);
   // Validate data structure
   if (!isValidData(data)) {
     hideLoading();
@@ -121,8 +122,26 @@ function isValidData(data) {
   }
   
   // Check for required data structures
-  if (!data || !data.projects || !data.independentTasks || !data.config) {
-    handleFailure({ message: "Invalid data structure received from server." });
+  if (!data) {
+    handleFailure({ message: "No data received from server." });
+    return false;
+  }
+
+  if (!data.projects) {
+    console.error("Missing 'projects' in data", data);
+    handleFailure({ message: "Invalid data: Missing projects list." });
+    return false;
+  }
+
+  if (!data.independentTasks) {
+    console.error("Missing 'independentTasks' in data", data);
+    handleFailure({ message: "Invalid data: Missing independent tasks list." });
+    return false;
+  }
+
+  if (!data.config) {
+    console.error("Missing 'config' in data", data);
+    handleFailure({ message: "Invalid data: Missing configuration." });
     return false;
   }
   

@@ -65,8 +65,26 @@ function forceGetProjectData(token) {
 }
 
 function getProjectData(token, targetUsername) {
+  console.log("main.js: getProjectData called");
   const auth = requireAuth(token);
-  return getProjectData_(auth.user, targetUsername);
+  console.log("main.js: Auth successful for " + auth.user.username);
+  var result = getProjectData_(auth.user, targetUsername);
+  console.log("main.js: getProjectData_ returned type: " + typeof result);
+  
+  if (result === null) {
+      console.log("main.js: Result is NULL!");
+      return null;
+  }
+  
+  // Force JSON serialization to avoid transport layer issues with complex objects
+  try {
+      var jsonString = JSON.stringify(result);
+      console.log("main.js: Serialized result length: " + jsonString.length);
+      return jsonString;
+  } catch (e) {
+      console.error("main.js: Serialization failed: " + e.toString());
+      throw e;
+  }
 }
 
 function getConfigData(token) {

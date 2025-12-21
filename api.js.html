@@ -88,7 +88,21 @@ function hideLoading() {
 }
 
 function handleDataLoaded(data) {
-  console.log("Data received from server:", data);
+  console.log("Data received from server (raw):", typeof data);
+  
+  // Handle stringified JSON (workaround for transport issues)
+  if (typeof data === 'string') {
+      try {
+          console.log("Parsing JSON string data...");
+          data = JSON.parse(data);
+      } catch (e) {
+          console.error("Failed to parse data string:", e);
+          handleFailure({ message: "Server returned invalid data format." });
+          return false;
+      }
+  }
+
+  console.log("Data object:", data);
   // Validate data structure
   if (!isValidData(data)) {
     hideLoading();

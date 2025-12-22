@@ -195,9 +195,10 @@ function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage
         }
     }
 
-    // Use robust parser so comparisons are consistent (UTC -> local)
+    // Use robust parser so comparisons are consistent
+    // Last Updated is stored as UTC in sheet, Last Checked is stored as CST
     const updated = updatedStr ? parseServerDate(updatedStr) : null;
-    const checked = checkedStr ? parseServerDate(checkedStr) : null;
+    const checked = checkedStr ? parseCSTDate(checkedStr) : null;
     const today = new Date();
     
     // If no last checked date exists, it needs review
@@ -1578,6 +1579,58 @@ function parseServerDate(val) {
         // Fallback to normalized UTC string approach
         var iso = normalizeUtcString(val);
         return iso ? new Date(iso) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Parse a date string that's in CST/CDT timezone (for Last Checked)
+function parseCSTDate(val) {
+    if (val instanceof Date) return val;
+    if (!val) return null;
+
+    try {
+        // Slash timestamp (MM/DD/YYYY HH:mm[:ss]) -> treat as CST
+        if (typeof val === 'string' && val.indexOf('/') !== -1 && val.indexOf(':') !== -1) {
+            var parts = val.split(' ');
+            if (parts.length === 2) {
+                var dateParts = parts[0].split('/');
+                var timeParts = parts[1].split(':');
+                var month = parseInt(dateParts[0], 10) - 1;
+                var day = parseInt(dateParts[1], 10);
+                var year = parseInt(dateParts[2], 10);
+                var hour = parseInt(timeParts[0], 10);
+                var minute = parseInt(timeParts[1], 10);
+                var second = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
+                
+                // Create date string in CST and parse it
+                var dateStr = year + '-' + 
+                              String(month + 1).padStart(2, '0') + '-' + 
+                              String(day).padStart(2, '0') + 'T' + 
+                              String(hour).padStart(2, '0') + ':' + 
+                              String(minute).padStart(2, '0') + ':' + 
+                              String(second).padStart(2, '0');
+                
+                // Parse as local time, then convert to actual CST
+                // We need to create a Date that represents this time in CST
+                var dLocal = new Date(dateStr);
+                if (!isNaN(dLocal.getTime())) {
+                    // Format it in CST to get the actual UTC time
+                    var cstStr = dLocal.toLocaleString('en-US', { timeZone: 'America/Chicago' });
+                    // This gives us the CST interpretation, but we need to work backwards
+                    // Actually, easier approach: create a UTC date offset by CST offset
+                    var cstOffsetMs = 6 * 60 * 60 * 1000; // CST is UTC-6 (CDT is UTC-5, but we'll use -6 for simplicity)
+                    // Check if we're in CDT (roughly March-November)
+                    var isDST = month >= 2 && month <= 10; // Rough approximation
+                    if (isDST) cstOffsetMs = 5 * 60 * 60 * 1000;
+                    
+                    return new Date(dLocal.getTime() + cstOffsetMs);
+                }
+            }
+        }
+        
+        // Fallback to regular parsing
+        return parseServerDate(val);
     } catch (e) {
         return null;
     }

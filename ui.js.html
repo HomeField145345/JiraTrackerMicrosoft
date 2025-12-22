@@ -275,7 +275,13 @@ function createDropdown(options, selectedValue, jiraId, field) {
   return select;
 }
 
+var _debugLogCount = 0;
+
 function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild, openChildrenCount) {
+    if (_debugLogCount < 5) {
+        console.error("[DateDebug] createRow item['Updated']:", item['Updated']);
+        _debugLogCount++;
+    }
     var row = document.createElement('tr');
     row.className = 'row-' + type;
     if (isLastChild) {
@@ -1362,7 +1368,7 @@ function renderBoard() {
 
 // --- DATE/TIME HELPERS ---
 function normalizeUtcString(val) {
-    console.log("[DateDebug] normalizeUtcString called with:", val);
+    console.error("[DateDebug] normalizeUtcString called with:", val);
     if (!val && val !== 0) return null;
     
     // If a Date is passed, return ISO
@@ -1564,8 +1570,10 @@ function formatDateTimeLocal(val) {
         
         // Return the date formatted in the user's local timezone
         var result = d.toLocaleString([], opts);
+        console.error("[DateDebug] formatDateTimeLocal input:", val, "parsed:", d, "result:", result);
         return result;
     } catch (e) {
+        console.error("[DateDebug] formatDateTimeLocal error:", e);
         return '—';
     }
 }

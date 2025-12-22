@@ -1432,7 +1432,8 @@ function normalizeUtcString(val) {
 
     // Handle sheet timestamps with no timezone info (e.g., "6/12/2025 22:04:00")
     // The sheet time is ALREADY in UTC
-    var generalTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})$/;
+    // Updated regex to handle optional seconds
+    var generalTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/;
     var tm = s.match(generalTimestampRe);
     if (tm) {
         // Parse components
@@ -1441,18 +1442,19 @@ function normalizeUtcString(val) {
         var tmYear = parseInt(tm[3], 10);
         var tmHour = parseInt(tm[4], 10);
         var tmMin = parseInt(tm[5], 10);
-        var tmSec = parseInt(tm[6], 10);
+        var tmSec = tm[6] ? parseInt(tm[6], 10) : 0;
         
         // Create Date in UTC directly - the sheet data is ALREADY in UTC
         var utcMs = Date.UTC(tmYear, tmMonth - 1, tmDay, tmHour, tmMin, tmSec);
         var utcDate = new Date(utcMs);
-        var isoResult = utcDate.toISOString();
+        var isoResult = utcDate.toISOString(); console.log("[DateDebug] Parsed result:", isoResult);
         
         return isNaN(utcDate.getTime()) ? null : isoResult;
     }
 
-    // Handle AM/PM format: "9/4/2025 10:21:18 PM"
-    var amPmTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s+(AM|PM)$/i;
+    // Handle AM/PM format: "9/4/2025 10:21:18 PM" or "9/4/2025 10:21 PM"
+    // Updated regex to handle optional seconds
+    var amPmTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s+(AM|PM)$/i;
     var tm2 = s.match(amPmTimestampRe);
     if (tm2) {
         var tmMonth = parseInt(tm2[1], 10);
@@ -1460,7 +1462,7 @@ function normalizeUtcString(val) {
         var tmYear = parseInt(tm2[3], 10);
         var tmHour = parseInt(tm2[4], 10);
         var tmMin = parseInt(tm2[5], 10);
-        var tmSec = parseInt(tm2[6], 10);
+        var tmSec = tm2[6] ? parseInt(tm2[6], 10) : 0;
         var amPm = tm2[7].toUpperCase();
         
         if (amPm === 'PM' && tmHour < 12) tmHour += 12;
@@ -1486,9 +1488,9 @@ function normalizeUtcString(val) {
              var sec = d3.getSeconds();
              
              var utcMs = Date.UTC(year, month, day, hour, min, sec);
-             return new Date(utcMs).toISOString();
+             var res = new Date(utcMs).toISOString(); console.log("[DateDebug] Fallback NoTZ:", res); return res;
         }
-        return d3.toISOString();
+        console.log("[DateDebug] Fallback WithTZ:", d3.toISOString()); return d3.toISOString();
     }
 
     // Final fallback: return null if we can't parse it

@@ -1710,7 +1710,14 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
         // Update Last Checked cell text and class (19th column, index 18)
         var checkedCell = rowToUpdate.cells[18];
         if (checkedCell) {
-            var formattedCheckedDate = checkedIso ? formatDateTimeLocal(checkedIso) : 'Never';
+            // Ensure we treat the input as UTC if it's a string from our update
+            var displayIso = checkedIso;
+            if (!displayIso && newTimestampISO && typeof newTimestampISO === 'string') {
+                 // Fallback: try to normalize again or treat as direct UTC ISO if possible
+                 displayIso = normalizeUtcString(newTimestampISO);
+            }
+            
+            var formattedCheckedDate = displayIso ? formatDateTimeLocal(displayIso) : 'Never';
             checkedCell.textContent = formattedCheckedDate;
             checkedCell.className = validation.checkedClassName || 'recent-check';
         }

@@ -1450,16 +1450,43 @@ function normalizeUtcString(val) {
         
         return isNaN(utcDate.getTime()) ? null : isoResult;
     }
+
+    // Handle AM/PM format: "9/4/2025 10:21:18 PM"
+    var amPmTimestampRe = /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s+(AM|PM)$/i;
+    var tm2 = s.match(amPmTimestampRe);
+    if (tm2) {
+        var tmMonth = parseInt(tm2[1], 10);
+        var tmDay = parseInt(tm2[2], 10);
+        var tmYear = parseInt(tm2[3], 10);
+        var tmHour = parseInt(tm2[4], 10);
+        var tmMin = parseInt(tm2[5], 10);
+        var tmSec = parseInt(tm2[6], 10);
+        var amPm = tm2[7].toUpperCase();
+        
+        if (amPm === 'PM' && tmHour < 12) tmHour += 12;
+        if (amPm === 'AM' && tmHour === 12) tmHour = 0;
+        
+        var utcMs = Date.UTC(tmYear, tmMonth - 1, tmDay, tmHour, tmMin, tmSec);
+        var utcDate = new Date(utcMs);
+        return isNaN(utcDate.getTime()) ? null : utcDate.toISOString();
+    }
     
-    // Fallback: try to parse as-is and append 'Z' to force UTC interpretation
+    // Fallback: try to parse as-is
     var d3 = new Date(s);
     if (!isNaN(d3.getTime())) {
-        // If the string doesn't have timezone info, append 'Z' and re-parse
+        // If the string doesn't have timezone info, we assume it represents UTC time
+        // But d3 was parsed as Local by the browser. We need to extract the components and treat them as UTC.
         if (!/[+-]\d{2}:?\d{2}$|Z$/.test(s)) {
-            var d4 = new Date(s + 'Z');
-            if (!isNaN(d4.getTime())) {
-                return d4.toISOString();
-            }
+             // Extract "face value" components from the local parsing
+             var year = d3.getFullYear();
+             var month = d3.getMonth();
+             var day = d3.getDate();
+             var hour = d3.getHours();
+             var min = d3.getMinutes();
+             var sec = d3.getSeconds();
+             
+             var utcMs = Date.UTC(year, month, day, hour, min, sec);
+             return new Date(utcMs).toISOString();
         }
         return d3.toISOString();
     }
@@ -1551,67 +1578,16 @@ function formatDateLocalDateOnly(val) {
 function formatSheetDateToLocal(val) {
     if (!val) return '—';
     
-    try {
-        // For sheet dates like "9/4/2025 00:21:18" - these are already in UTC time
-        if (typeof val === 'string' && val.indexOf('/') !== -1 && val.indexOf(':') !== -1) {
-            var parts = val.split(' ');
-            if (parts.length === 2) {
-                var dateParts = parts[0].split('/');
-                var timeParts = parts[1].split(':');
-                
-                // Parse as MM/DD/YYYY format
-                var month = parseInt(dateParts[0], 10) - 1; // JS months are 0-indexed
-                var day = parseInt(dateParts[1], 10);
-                var year = parseInt(dateParts[2], 10);
-                
-                var hour = parseInt(timeParts[0], 10);
-                var minute = parseInt(timeParts[1], 10);
-                var second = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
-                
-                // IMPORTANT: We need to create the date correctly from UTC values
-                // Use Date constructor directly with UTC values but make sure browser doesn't apply local timezone offset
-                var utcDate = new Date(Date.UTC(year, month, day, hour, minute, second));
-                
-                // Format it for display in local timezone
-                var opts = {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    year: 'numeric',
-                    month: 'numeric',
-                    day: 'numeric',
-                    timeZoneName: 'short'
-                };
-                
-                return utcDate.toLocaleString([], opts);
-            }
-        }
-        
-        // Handle ISO format dates (like "2025-06-19T21:50:00.000Z")
-        if (typeof val === 'string' && (val.indexOf('T') !== -1 || val.endsWith('Z'))) {
-            // These already have timezone info, so we can parse directly
-            var isoDate = new Date(val);
-            if (!isNaN(isoDate.getTime())) {
-                // Format it for display in local timezone
-                var isoOpts = {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    year: 'numeric',
-                    month: 'numeric',
-                    day: 'numeric',
-                    timeZoneName: 'short'
-                };
-                
-                return isoDate.toLocaleString([], isoOpts);
-            }
-        }
-        
-        // Fallback to general formatter
-        return formatDateTimeLocal(val);
-    } catch (e) {
-        return formatDateTimeLocal(val); // Fallback
+    // Use the robust normalizer to get a valid UTC ISO string
+    var iso = normalizeUtcString(val);
+    
+    // If we got a valid ISO string, format it to local time
+    if (iso) {
+        return formatDateTimeLocal(iso);
     }
+    
+    // Fallback to general formatter
+    return formatDateTimeLocal(val);
 }
 
 // Helper to update parent story/epic badge count when a child changes

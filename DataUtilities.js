@@ -61,13 +61,16 @@ function normalizeValue_(value) {
   
   // Handle Date objects from sheet data
   if (value instanceof Date) {
-    var isoString = value.toISOString();
-    logTimestampOperation("Date to ISO", {
+    // Return "neutral" format (MM/dd/yyyy HH:mm:ss) using the raw UTC values
+    // This preserves the "face value" of the time in the sheet (e.g. 9:44) 
+    // regardless of the sheet's timezone setting.
+    var formatted = Utilities.formatDate(value, "GMT", "MM/dd/yyyy HH:mm:ss");
+    logTimestampOperation("Date to String", {
       sourceDate: value.toString(),
-      convertedToISO: isoString,
+      formatted: formatted,
       sourceType: "Date object"
     });
-    return isoString;
+    return formatted;
   }
   
   var strValue = String(value);

@@ -1513,6 +1513,16 @@ function parseServerDate(val) {
     if (!val) return null;
     
     try {
+        // If we receive an ISO string with Z/offset, treat the clock time as local (prevent double conversion)
+        if (typeof val === 'string' && /Z$/i.test(val)) {
+            // Strip the timezone and parse as local time
+            var localIso = val.replace(/Z$/i, '');
+            var dLocalIso = new Date(localIso);
+            if (!isNaN(dLocalIso.getTime())) {
+                return dLocalIso;
+            }
+        }
+
         // For sheet timestamp format like "9/4/2025 00:21:18"
         if (typeof val === 'string') {
             // If the string contains date and time components with a slash (MM/DD/YYYY format)

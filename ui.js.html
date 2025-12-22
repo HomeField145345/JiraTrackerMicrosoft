@@ -1559,7 +1559,7 @@ function formatDateTimeLocal(val) {
         var d = val instanceof Date ? val : parseServerDate(val);
         if (!d) return '—';
         
-        // Format for local timezone display
+        // Format explicitly in CST/CDT to avoid any browser TZ quirks
         var opts = { 
             hour: '2-digit', 
             minute: '2-digit',
@@ -1567,11 +1567,12 @@ function formatDateTimeLocal(val) {
             year: 'numeric',
             month: 'numeric', 
             day: 'numeric',
-            timeZoneName: 'short'
+            timeZoneName: 'short',
+            timeZone: 'America/Chicago'
         };
         
-        // Return the date formatted in the user's local timezone
-        var result = d.toLocaleString([], opts);
+        // Return the date formatted in CST/CDT
+        var result = d.toLocaleString('en-US', opts);
         
         // Log only the first few conversions to debug timezone issues
         if (!window._dateDebugCount) window._dateDebugCount = 0;

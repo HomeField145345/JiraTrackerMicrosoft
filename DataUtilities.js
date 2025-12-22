@@ -61,13 +61,16 @@ function normalizeValue_(value) {
   
   // Handle Date objects from sheet data
   if (value instanceof Date) {
-    // Format using the Script's timezone (which should match the Sheet's timezone)
-    // to preserve the "face value" of the time (e.g. 12:44).
+    // Format using explicit "America/Chicago" to ensure we get the face value 
+    // of the time as it appears in the sheet (assuming sheet is also Central).
     // We send this as a string so the client can treat it as UTC.
-    var formatted = Utilities.formatDate(value, Session.getScriptTimeZone(), "MM/dd/yyyy HH:mm:ss");
+    var tz = "America/Chicago";
+    var formatted = Utilities.formatDate(value, tz, "MM/dd/yyyy HH:mm:ss");
     logTimestampOperation("Date to String", {
       sourceDate: value.toString(),
       formatted: formatted,
+      usedTimeZone: tz,
+      scriptTimeZone: Session.getScriptTimeZone(),
       sourceType: "Date object"
     });
     return formatted;

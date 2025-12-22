@@ -3,11 +3,23 @@
  * @description Handles all caching operations for the application including chunked cache storage for large datasets.
  */
 
-// --- LOGGING UTILITY (disabled) ---
-// Timestamp logging to the "TimestampLogs" sheet has been disabled.
+// --- LOGGING UTILITY (console) ---
+// Lightweight logging to the execution logs for timestamp debugging.
 function logTimestampOperation(operation, details) {
-  // no-op to disable timestamp logging
-  return false;
+  try {
+    var payload;
+    try {
+      payload = JSON.stringify(details);
+    } catch (serr) {
+      payload = String(details);
+    }
+    if (payload && payload.length > 4000) {
+      payload = payload.substring(0, 4000) + '...';
+    }
+    console.log('[TimestampLog] ' + operation + ': ' + payload);
+  } catch (e) {
+    // swallow logging errors
+  }
 }
 
 // --- CACHING FUNCTIONS ---

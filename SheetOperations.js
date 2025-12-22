@@ -69,18 +69,30 @@ function getSheetOrThrow(ss, sheetName) {
  */
 function readJiraData(sheet) {
   if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const displayData = range.getDisplayValues(); // use display strings to avoid timezone conversion
   if (data.length < 2) return [];
   
-  const headers = data[0];
+  const headers = data[0].map(h => (h ? String(h).trim() : ''));
   const rows = data.slice(1);
+  const displayRows = displayData.slice(1);
   
-  return rows.map(row => {
+  // Timestamp fields to preserve as display values
+  const timestampFields = ['Updated', 'Created', 'Last Checked'];
+  
+  return rows.map((row, rowIdx) => {
     const obj = {};
     headers.forEach((header, index) => {
       if (header) {
-        // Use normalizeValue_ if available, otherwise just raw value
-        obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+        // For timestamp fields, use display value to prevent timezone conversion
+        if (timestampFields.indexOf(header) !== -1) {
+          const displayVal = (displayRows[rowIdx] && displayRows[rowIdx][index] !== undefined) ? displayRows[rowIdx][index] : '';
+          obj[header] = displayVal || '';
+        } else {
+          // Use normalizeValue_ for other fields
+          obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+        }
       }
     });
     return obj;
@@ -94,25 +106,49 @@ function readJiraData(sheet) {
  */
 function readManualData(sheet) {
   if (!sheet) return {};
-  const data = sheet.getDataRange().getValues();
+  const range = sheet.getDataRange();
+  const data = range.getValues();
+  const displayData = range.getDisplayValues(); // use display strings to preserve face value
   if (data.length < 2) return {};
   
   const headers = data[0];
   const rows = data.slice(1);
+  const displayRows = displayData.slice(1);
   const map = {};
+  var manualLogCount = 0;
   
   // Find "Jira #" column index
   const idIndex = headers.indexOf("Jira #");
   if (idIndex === -1) return {};
   
-  rows.forEach(row => {
+  rows.forEach((row, rowIdx) => {
     const jiraId = row[idIndex];
     if (jiraId) {
       const obj = {};
       headers.forEach((header, index) => {
         if (header && index !== idIndex) {
-           obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
-        }
+           // For all timestamp fields, use display value to prevent any conversion
+           const timestampFields = ['Updated', 'Created', 'Last Checked'];
+           if (timestampFields.indexOf(header) !== -1) {
+             var rawVal = row[index];
+             var displayVal = (displayRows[rowIdx] && displayRows[rowIdx][index] !== undefined) ? displayRows[rowIdx][index] : '';
+             var assignedVal = displayVal || '';
+             obj[header] = assignedVal;
+
+             if (header === 'Last Checked' && manualLogCount < 5) {
+               logTimestampOperation('ManualData Last Checked (read)', {
+                 jiraId: jiraId,
+                 rawType: rawVal === null ? 'null' : typeof rawVal,
+                 rawValue: rawVal instanceof Date ? rawVal.toString() : rawVal,
+                 displayValue: displayVal,
+                 assignedValue: assignedVal
+               });
+               manualLogCount++;
+             }
+           } else {
+             obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+           }
+         }
       });
       map[jiraId] = obj;
     }

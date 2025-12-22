@@ -342,45 +342,42 @@ function updateLastChecked_(jiraId, user) {
       }
     }
     
-    // Create a UTC string representation
-    // We want to write a string that looks like "MM/dd/yyyy HH:mm:ss" but represents UTC time.
-    // Example: If it's 10:00 AM CST (16:00 UTC), we want to write "12/22/2025 16:00:00".
-    // This ensures that when we read it back with "America/Chicago" face-value logic,
-    // we get "16:00:00", which the client treats as UTC -> 10:00 AM CST.
-    var utcString = Utilities.formatDate(new Date(), "GMT", "MM/dd/yyyy HH:mm:ss");
+    // Format current time in script timezone for display consistency
+    var now = new Date();
+    var tz = Session.getScriptTimeZone();
+    var formattedTimestamp = Utilities.formatDate(now, tz, 'MM/dd/yyyy HH:mm:ss');
     
     // Log the timestamp we're about to save
     logTimestampOperation("Update Last Checked", {
       jiraId: jiraId,
-      originalDate: new Date().toString(),
-      utcString: utcString,
+      currentTime: now.toString(),
+      formattedForSheet: formattedTimestamp,
+      scriptTimeZone: tz,
       action: rowToUpdate > 0 ? "update_existing_row" : "append_new_row"
     });
     
     if (rowToUpdate > 0) {
       // Update existing row
       var cell = sheet.getRange(rowToUpdate, 5); // Last Checked column
-      cell.setValue(utcString);
+      cell.setValue(formattedTimestamp);
       cell.setNumberFormat("@"); // Force text format to prevent auto-conversion
-      cell.setNote("UTC string set by system on " + new Date().toISOString());
     } else {
       // Create new row
-      sheet.appendRow([jiraId, '', '', '', utcString, null, null, '']);
-      // Add note to the new timestamp cell
+      sheet.appendRow([jiraId, '', '', '', formattedTimestamp, null, null, '']);
+      // Set text format for the new timestamp cell
       if (sheet.getLastRow() > 1) {
         var cell = sheet.getRange(sheet.getLastRow(), 5);
         cell.setNumberFormat("@"); // Force text format
-        cell.setNote("UTC string set by system on " + new Date().toISOString());
       }
     }
     
-    clearProjectCache();
+    clearProjectCache(user ? user.username : null);
     
-    // Return the new timestamp so the UI can update seamlessly
+    // Return the formatted timestamp so the UI can display it directly
     return { 
       status: 'success', 
       message: 'Timestamp updated!', 
-      newTimestamp: utcString 
+      newTimestamp: formattedTimestamp 
     };
   } catch (e) {
     return { status: 'error', message: 'Failed to update timestamp: ' + e.message };

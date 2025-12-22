@@ -496,6 +496,8 @@ function _logTimestampSamples(combinedProjects) {
           jiraId: project["Jira #"],
           updated: project["Updated"],
           lastChecked: project["Last Checked"],
+          updatedType: project["Updated"] === null ? 'null' : typeof project["Updated"],
+          lastCheckedType: project["Last Checked"] === null ? 'null' : typeof project["Last Checked"],
           projectStage: project["Project Stage"]
         });
       }

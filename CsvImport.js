@@ -567,12 +567,36 @@ function _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user
  * @private
  */
 function _applySheetUpdates(sheet, rowsToUpdate, rowsToAdd) {
+  // Timestamp fields that need special formatting
+  var timestampFields = ['Updated', 'Created', 'Resolved', 'Last Checked'];
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
   rowsToUpdate.forEach(function(update) {
+    // Set the values first
     sheet.getRange(update.sheetRowIndex, 1, 1, update.data.length).setValues([update.data]);
+    
+    // Then apply number format to timestamp columns to show both date and time
+    timestampFields.forEach(function(field) {
+      var colIndex = headers.indexOf(field);
+      if (colIndex !== -1 && update.data[colIndex]) {
+        var cell = sheet.getRange(update.sheetRowIndex, colIndex + 1);
+        cell.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+      }
+    });
   });
 
   if (rowsToAdd.length > 0) {
-    sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+    var firstNewRow = sheet.getLastRow() + 1;
+    sheet.getRange(firstNewRow, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
+    
+    // Apply number format to timestamp columns for new rows
+    timestampFields.forEach(function(field) {
+      var colIndex = headers.indexOf(field);
+      if (colIndex !== -1) {
+        var range = sheet.getRange(firstNewRow, colIndex + 1, rowsToAdd.length, 1);
+        range.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+      }
+    });
   }
 }
 

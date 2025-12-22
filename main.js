@@ -80,6 +80,14 @@ function getProjectData(token, targetUsername) {
   try {
       var jsonString = JSON.stringify(result);
       console.log("main.js: Serialized result length: " + jsonString.length);
+      // Quick sample of first project's timestamps to confirm server values pre-UI
+      try {
+        var parsed = JSON.parse(jsonString);
+        if (parsed && parsed.projects && parsed.projects.length) {
+          var p0 = parsed.projects[0];
+          console.log("main.js: Sample[0] Updated=" + p0['Updated'] + " (" + (p0 && typeof p0['Updated']) + "), Last Checked=" + p0['Last Checked'] + " (" + (p0 && typeof p0['Last Checked']) + ")");
+        }
+      } catch (inner) {}
       return jsonString;
   } catch (e) {
       console.error("main.js: Serialization failed: " + e.toString());

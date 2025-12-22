@@ -23,6 +23,7 @@ function onOpen() {
     .addItem('Migrate: Clean Column Headers', 'cleanupColumnHeaders')
     .addItem('Migrate: Upgrade Users Sheet', 'upgradeUsersSheet')
     .addItem('Migrate: Add Data Sheet ID Column', 'addUserDataSheetColumn')
+    .addItem('Migrate: Format Timestamp Columns', 'formatTimestampColumns')
     .addToUi();
 }
 
@@ -498,4 +499,44 @@ function upgradeUsersSheet() {
   }
   
   SpreadsheetApp.getUi().alert('Users sheet upgraded successfully.');
+}
+
+/**
+ * Format timestamp columns to show date and time
+ */
+function formatTimestampColumns() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ui = SpreadsheetApp.getUi();
+  
+  try {
+    // Format JiraData timestamp columns
+    const jiraSheet = ss.getSheetByName(JIRA_DATA_SHEET);
+    if (jiraSheet) {
+      const headers = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      const timestampFields = ['Updated', 'Created', 'Resolved'];
+      
+      timestampFields.forEach(function(field) {
+        const colIndex = headers.indexOf(field);
+        if (colIndex !== -1 && jiraSheet.getLastRow() > 1) {
+          const range = jiraSheet.getRange(2, colIndex + 1, jiraSheet.getLastRow() - 1, 1);
+          range.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+        }
+      });
+    }
+    
+    // Format ManualData Last Checked column
+    const manualSheet = ss.getSheetByName(MANUAL_DATA_SHEET);
+    if (manualSheet) {
+      const headers = manualSheet.getRange(1, 1, 1, manualSheet.getLastColumn()).getValues()[0];
+      const colIndex = headers.indexOf('Last Checked');
+      if (colIndex !== -1 && manualSheet.getLastRow() > 1) {
+        const range = manualSheet.getRange(2, colIndex + 1, manualSheet.getLastRow() - 1, 1);
+        range.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+      }
+    }
+    
+    ui.alert('Timestamp columns formatted successfully!\n\nFormatted columns:\n- JiraData: Updated, Created, Resolved\n- ManualData: Last Checked');
+  } catch (e) {
+    ui.alert('Error formatting columns: ' + e.message);
+  }
 }

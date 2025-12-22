@@ -1362,6 +1362,7 @@ function renderBoard() {
 
 // --- DATE/TIME HELPERS ---
 function normalizeUtcString(val) {
+    console.log("[DateDebug] normalizeUtcString called with:", val);
     if (!val && val !== 0) return null;
     
     // If a Date is passed, return ISO

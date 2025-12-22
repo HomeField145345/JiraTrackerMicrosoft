@@ -366,13 +366,28 @@ function validateSession(token) {
         const role = String(data[i][2]).toLowerCase();
         const userId = data[i][4]; // UserID is at index 4
         
-        return { 
-            valid: true, 
-            username: data[i][1], 
-            role: role,
-            userId: userId,
-            user: { username: data[i][1], role: role, id: userId } // Add user object for convenience
-        };
+        // Fetch full user details to ensure we have dataSheetId
+        // This fixes the issue where manual data writes go to global sheet
+        const fullUser = getUserById(userId);
+        
+        if (fullUser) {
+            return { 
+                valid: true, 
+                username: fullUser.username, 
+                role: fullUser.role,
+                userId: userId,
+                user: fullUser // Contains dataSheetId
+            };
+        } else {
+             // Fallback if user lookup fails (shouldn't happen unless user deleted)
+             return { 
+                valid: true, 
+                username: data[i][1], 
+                role: role,
+                userId: userId,
+                user: { username: data[i][1], role: role, id: userId }
+            };
+        }
       } else {
         // Expired
         return { valid: false, reason: 'expired' };

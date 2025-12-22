@@ -1534,7 +1534,7 @@ function parseServerDate(val) {
                     
                     // Treat the "neutral" string as UTC.
                     // This allows the client to convert it to Local Time.
-                    // Example: "00:44" -> 00:44 UTC -> 18:44 CST.
+                    // Example: "16:00" -> 16:00 UTC -> 10:00 AM CST.
                     var d = new Date(Date.UTC(year, month, day, hour, minute, second));
                     
                     return d;

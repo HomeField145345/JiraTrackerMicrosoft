@@ -380,7 +380,7 @@ function updateLastChecked_(jiraId, user) {
     return { 
       status: 'success', 
       message: 'Timestamp updated!', 
-      newTimestamp: timestamp.toISOString() 
+      newTimestamp: utcString 
     };
   } catch (e) {
     return { status: 'error', message: 'Failed to update timestamp: ' + e.message };

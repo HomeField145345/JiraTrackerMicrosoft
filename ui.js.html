@@ -1689,7 +1689,9 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     }
 
     // Persist canonical ISO and recompute validation
+    console.log("[DateDebug] updateRowTimestamp input:", newTimestampISO);
     var checkedIso = normalizeUtcString(newTimestampISO);
+    console.log("[DateDebug] updateRowTimestamp normalized:", checkedIso);
     
     matchingRows.forEach(function(rowToUpdate) {
         rowToUpdate.dataset.checkedIso = checkedIso || '';

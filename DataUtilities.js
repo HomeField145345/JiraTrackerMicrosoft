@@ -61,10 +61,12 @@ function normalizeValue_(value) {
   
   // Handle Date objects from sheet data
   if (value instanceof Date) {
-    // Format using explicit "America/Chicago" to ensure we get the face value 
-    // of the time as it appears in the sheet (assuming sheet is also Central).
-    // We send this as a string so the client can treat it as UTC.
-    var tz = "America/Chicago";
+    // Format using GMT to ensure we get the UTC representation.
+    // Example: Sheet has 10:00 AM (stored as 16:00 UTC).
+    // We send "16:00:00".
+    // Client treats "16:00:00" as UTC.
+    // Client converts 16:00 UTC -> 10:00 AM Local.
+    var tz = "GMT";
     var formatted = Utilities.formatDate(value, tz, "MM/dd/yyyy HH:mm:ss");
     logTimestampOperation("Date to String", {
       sourceDate: value.toString(),

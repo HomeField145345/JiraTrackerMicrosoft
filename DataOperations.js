@@ -342,27 +342,35 @@ function updateLastChecked_(jiraId, user) {
       }
     }
     
-    var timestamp = new Date();
+    // Create a UTC string representation
+    // We want to write a string that looks like "MM/dd/yyyy HH:mm:ss" but represents UTC time.
+    // Example: If it's 10:00 AM CST (16:00 UTC), we want to write "12/22/2025 16:00:00".
+    // This ensures that when we read it back with "America/Chicago" face-value logic,
+    // we get "16:00:00", which the client treats as UTC -> 10:00 AM CST.
+    var utcString = Utilities.formatDate(new Date(), "GMT", "MM/dd/yyyy HH:mm:ss");
     
     // Log the timestamp we're about to save
     logTimestampOperation("Update Last Checked", {
       jiraId: jiraId,
-      timestamp: timestamp.toString(),
-      timestampIso: timestamp.toISOString(),
+      originalDate: new Date().toString(),
+      utcString: utcString,
       action: rowToUpdate > 0 ? "update_existing_row" : "append_new_row"
     });
     
     if (rowToUpdate > 0) {
       // Update existing row
       var cell = sheet.getRange(rowToUpdate, 5); // Last Checked column
-      cell.setValue(timestamp);
-      cell.setNote("UTC timestamp set by system on " + new Date().toISOString());
+      cell.setValue(utcString);
+      cell.setNumberFormat("@"); // Force text format to prevent auto-conversion
+      cell.setNote("UTC string set by system on " + new Date().toISOString());
     } else {
       // Create new row
-      sheet.appendRow([jiraId, '', '', '', timestamp, null, null, '']);
+      sheet.appendRow([jiraId, '', '', '', utcString, null, null, '']);
       // Add note to the new timestamp cell
       if (sheet.getLastRow() > 1) {
-        sheet.getRange(sheet.getLastRow(), 5).setNote("UTC timestamp set by system on " + new Date().toISOString());
+        var cell = sheet.getRange(sheet.getLastRow(), 5);
+        cell.setNumberFormat("@"); // Force text format
+        cell.setNote("UTC string set by system on " + new Date().toISOString());
       }
     }
     

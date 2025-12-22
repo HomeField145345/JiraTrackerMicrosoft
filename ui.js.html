@@ -300,9 +300,11 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     row.dataset.uatStatus = (item['UAT Status'] || '').toString().trim();
     row.dataset.issueType = item['Issue Type'] || '';
     row.dataset.jiraId = (item['Jira #'] || '').toLowerCase(); // Add Jira ID for search
-    // Store canonical ISO values; both columns are stored in UTC in the sheet
+    // Store canonical ISO values; Last Updated is UTC, Last Checked is CST
     row.dataset.updatedIso = normalizeUtcString(item['Updated']) || '';
     row.dataset.checkedIso = normalizeUtcString(item['Last Checked']) || '';
+    // Also store the original Last Checked format for CST parsing
+    row.dataset.checkedCst = item['Last Checked'] || '';
 
     // Extra debug for first few rows to see normalized values
     if (!window._createRowIsoCount) window._createRowIsoCount = 0;
@@ -1781,6 +1783,8 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     
     matchingRows.forEach(function(rowToUpdate) {
         rowToUpdate.dataset.checkedIso = checkedIso || '';
+        // Store the original CST format for validation
+        rowToUpdate.dataset.checkedCst = newTimestampISO || '';
 
         var planningStage = (rowToUpdate.dataset.planningStage || '');
         var updatedStr = rowToUpdate.dataset.updatedIso || null;
@@ -1793,7 +1797,9 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
         var targetDate = targetDateCell ? targetDateCell.textContent.trim() : '';
         if (targetDate === '—') targetDate = '';
 
-        var validation = getValidationStatus(planningStage, updatedStr, checkedIso, projectStage, targetDate);
+        // Use original CST format for Last Checked validation
+        var checkedStr = rowToUpdate.dataset.checkedCst || checkedIso;
+        var validation = getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDate);
 
         // Update Last Checked cell text and class (19th column, index 18) showing raw value
         var checkedCell = rowToUpdate.cells[18];
@@ -1878,7 +1884,8 @@ function updateRowValidation(jiraId) {
         // Gather current values from dataset/DOM
         var planningStage = (row.dataset.planningStage || '');
         var updatedStr = row.dataset.updatedIso || null;
-        var checkedStr = row.dataset.checkedIso || null;
+        // Use CST format for Last Checked validation
+        var checkedStr = row.dataset.checkedCst || row.dataset.checkedIso || null;
         
         // Find Project Stage select more robustly
         var stageSelect = row.querySelector('select[data-field="Project Stage"]');

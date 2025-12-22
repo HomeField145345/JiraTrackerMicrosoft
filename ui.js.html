@@ -1451,12 +1451,13 @@ function normalizeUtcString(val) {
         var tmMin = parseInt(tm[5], 10);
         var tmSec = tm[6] ? parseInt(tm[6], 10) : 0;
         
-        // Treat "neutral" strings as LOCAL time
-        // This ensures that if the sheet says "9:44", the user sees "9:44" in their local time.
-        var localDate = new Date(tmYear, tmMonth - 1, tmDay, tmHour, tmMin, tmSec);
-        var isoResult = localDate.toISOString();
+        // Treat the "neutral" string as UTC.
+        // This allows the client to convert it to Local Time.
+        var utcMs = Date.UTC(tmYear, tmMonth - 1, tmDay, tmHour, tmMin, tmSec);
+        var utcDate = new Date(utcMs);
+        var isoResult = utcDate.toISOString();
         
-        return isNaN(localDate.getTime()) ? null : isoResult;
+        return isNaN(utcDate.getTime()) ? null : isoResult;
     }
 
     // Handle AM/PM format: "9/4/2025 10:21:18 PM" or "9/4/2025 10:21 PM"
@@ -1531,10 +1532,10 @@ function parseServerDate(val) {
                     var minute = parseInt(timeParts[1], 10);
                     var second = timeParts.length > 2 ? parseInt(timeParts[2], 10) : 0;
                     
-                    // Treat "neutral" strings (MM/DD/YYYY HH:mm:ss) as LOCAL time
-                    // This matches the "Floating Time" strategy where we assume the sheet time
-                    // is intended to be viewed as-is in the user's timezone.
-                    var d = new Date(year, month, day, hour, minute, second);
+                    // Treat the "neutral" string as UTC.
+                    // This allows the client to convert it to Local Time.
+                    // Example: "00:44" -> 00:44 UTC -> 18:44 CST.
+                    var d = new Date(Date.UTC(year, month, day, hour, minute, second));
                     
                     return d;
                 }

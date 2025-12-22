@@ -275,12 +275,12 @@ function createDropdown(options, selectedValue, jiraId, field) {
   return select;
 }
 
-var _debugLogCount = 0;
-
 function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild, openChildrenCount) {
-    if (_debugLogCount < 5) {
+    // Debug logging for the first few rows
+    if (!window._createRowDebugCount) window._createRowDebugCount = 0;
+    if (window._createRowDebugCount < 3) {
         console.error("[DateDebug] createRow item['Updated']:", item['Updated']);
-        _debugLogCount++;
+        window._createRowDebugCount++;
     }
     var row = document.createElement('tr');
     row.className = 'row-' + type;
@@ -1368,7 +1368,7 @@ function renderBoard() {
 
 // --- DATE/TIME HELPERS ---
 function normalizeUtcString(val) {
-    console.error("[DateDebug] normalizeUtcString called with:", val);
+    // console.log("[DateDebug] normalizeUtcString called with:", val); // Commented out to reduce spam
     if (!val && val !== 0) return null;
     
     // If a Date is passed, return ISO
@@ -1570,7 +1570,20 @@ function formatDateTimeLocal(val) {
         
         // Return the date formatted in the user's local timezone
         var result = d.toLocaleString([], opts);
-        console.error("[DateDebug] formatDateTimeLocal input:", val, "parsed:", d, "result:", result);
+        
+        // Log only the first few conversions to debug timezone issues
+        if (!window._dateDebugCount) window._dateDebugCount = 0;
+        if (window._dateDebugCount < 5) {
+            console.error("[DateDebug] formatDateTimeLocal", 
+                "\nInput:", val, 
+                "\nParsed Date:", d.toString(), 
+                "\nISO:", d.toISOString(),
+                "\nResult:", result,
+                "\nBrowser TZ Offset:", d.getTimezoneOffset()
+            );
+            window._dateDebugCount++;
+        }
+        
         return result;
     } catch (e) {
         console.error("[DateDebug] formatDateTimeLocal error:", e);

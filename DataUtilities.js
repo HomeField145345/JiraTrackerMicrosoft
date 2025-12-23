@@ -289,25 +289,15 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
   // Special handling for Date-only fields (Target Date, Due Date, Start Date, End Date)
   // Ignore time/timezone differences if the date part (YYYY-MM-DD) matches
   if (h.indexOf('target date') !== -1 || h.indexOf('due date') !== -1 || h.indexOf('start date') !== -1 || h.indexOf('end date') !== -1) {
-    console.log('[DATE COMPARE] Field: "' + header + '"');
-    console.log('  Existing raw: "' + existingRaw + '" (type: ' + typeof existingRaw + ')');
-    console.log('  Uploaded raw: "' + uploadedRaw + '" (type: ' + typeof uploadedRaw + ')');
-    console.log('  Normalized A: "' + a + '"');
-    console.log('  Normalized B: "' + b + '"');
     
     // Check if both look like ISO dates (which normalizeValue_ produces)
     var isoDateRegex = /^\d{4}-\d{2}-\d{2}T/;
     if (isoDateRegex.test(a) && isoDateRegex.test(b)) {
       var datePartA = a.split('T')[0];
       var datePartB = b.split('T')[0];
-      console.log('  ISO Date Part A: "' + datePartA + '"');
-      console.log('  ISO Date Part B: "' + datePartB + '"');
       if (datePartA === datePartB) {
-        console.log('  RESULT: EQUAL (by ISO date part)');
         return true;
       }
-    } else {
-      console.log('  Not both ISO dates (A matches: ' + isoDateRegex.test(a) + ', B matches: ' + isoDateRegex.test(b) + ')');
     }
     
     // Try parsing both as dates and comparing just the date part
@@ -317,33 +307,20 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
       var yearMatch = dateA.getFullYear() === dateB.getFullYear();
       var monthMatch = dateA.getMonth() === dateB.getMonth();
       var dayMatch = dateA.getDate() === dateB.getDate();
-      console.log('  Date comparison: year=' + yearMatch + ', month=' + monthMatch + ', day=' + dayMatch);
       if (yearMatch && monthMatch && dayMatch) {
-        console.log('  RESULT: EQUAL (by date parsing)');
         return true;
       }
-    } else {
-      console.log('  Could not parse as dates (A valid: ' + !isNaN(dateA.getTime()) + ', B valid: ' + !isNaN(dateB.getTime()) + ')');
     }
-    
-    console.log('  RESULT: NOT EQUAL');
   }
   
   // Special handling for timestamp fields (Updated, Created, Resolved)
   // Compare by date and time, ignoring seconds and milliseconds
   if (h.indexOf('updated') !== -1 || h.indexOf('created') !== -1 || h.indexOf('resolved') !== -1) {
-    console.log('[TIMESTAMP COMPARE] Field: "' + header + '"');
-    console.log('  Existing raw: "' + existingRaw + '" (type: ' + typeof existingRaw + ')');
-    console.log('  Uploaded raw: "' + uploadedRaw + '" (type: ' + typeof uploadedRaw + ')');
-    console.log('  Normalized A: "' + a + '"');
-    console.log('  Normalized B: "' + b + '"');
     
     // Try to parse both as dates and compare by minute precision
     var dateA = new Date(a);
     var dateB = new Date(b);
     if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
-      console.log('  Parsed Date A: ' + dateA.toISOString());
-      console.log('  Parsed Date B: ' + dateB.toISOString());
       
       // Compare year, month, day, hour, minute only (ignore seconds)
       var matchYear = dateA.getFullYear() === dateB.getFullYear();
@@ -352,14 +329,9 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
       var matchHour = dateA.getHours() === dateB.getHours();
       var matchMinute = dateA.getMinutes() === dateB.getMinutes();
       
-      console.log('  Match components: year=' + matchYear + ', month=' + matchMonth + ', day=' + matchDay + ', hour=' + matchHour + ', min=' + matchMinute);
-      
       if (matchYear && matchMonth && matchDay && matchHour && matchMinute) {
-        console.log('  RESULT: EQUAL (by date comparison)');
         return true;
       }
-    } else {
-      console.log('  Could not parse as dates (A valid: ' + !isNaN(dateA.getTime()) + ', B valid: ' + !isNaN(dateB.getTime()) + ')');
     }
     
     // Also try direct string comparison on formatted values (MM/dd/yyyy HH:mm:ss)
@@ -372,20 +344,10 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
     
     var strippedA = stripSeconds(a);
     var strippedB = stripSeconds(b);
-    console.log('  Stripped A: "' + strippedA + '"');
-    console.log('  Stripped B: "' + strippedB + '"');
     
     if (strippedA === strippedB) {
-      console.log('  RESULT: EQUAL (by string comparison)');
       return true;
     }
-    
-    console.log('  RESULT: NOT EQUAL');
-  }
-  
-  // Log differences for debugging only if they're significant
-  if (a !== b) {
-    console.log('FIELD DIFFERENCE [' + header + ']: "' + a + '" vs "' + b + '"');
   }
   
   // Default string equality after normalization already handled

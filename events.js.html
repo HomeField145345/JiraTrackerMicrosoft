@@ -67,7 +67,6 @@ function saveFilterState() {
         };
         
         localStorage.setItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE, JSON.stringify(filterState));
-        console.log("Filter state saved to localStorage");
         return true;
     } catch (e) {
         console.error("Error saving filter state:", e);
@@ -81,7 +80,6 @@ function loadFilterState() {
         if (!savedState) return false;
         
         const state = JSON.parse(savedState);
-        console.log("Loaded filter state:", state);
         
         // Initialize multiSelectFilters if needed
         if (!APP_STATE.multiSelectFilters) {
@@ -1392,13 +1390,6 @@ function convertExcelToCsv(file) {
                 throw new Error('Converted CSV appears to be empty or has no data rows.');
             }
             
-            // Log first few lines for debugging
-            console.log('Excel detection log:', detectionLog.join(' | '));
-            console.log('Converted CSV preview (first 3 lines):');
-            lines.slice(0, 3).forEach(function(line, idx) {
-                console.log('Line ' + (idx + 1) + ':', line.substring(0, 200) + (line.length > 200 ? '...' : ''));
-            });
-            
             // Convert CSV string to data URL format
             var csvBlob = new Blob([csv], { type: 'text/csv' });
             var reader2 = new FileReader();
@@ -2628,11 +2619,8 @@ function updateFilterSelection(filterType) {
 }
 
 function setupMultiSelectDropdowns() {
-  console.log("Setting up filter dropdowns");
-  
   // Get all filter dropdowns
   var filterDropdowns = $$('.filter-dropdown');
-  console.log("Found filter dropdowns:", filterDropdowns.length);
   
   // Remove any existing event listeners by cloning
   filterDropdowns.forEach(function(dropdown) {
@@ -2652,18 +2640,13 @@ function setupMultiSelectDropdowns() {
     var content = dropdown.querySelector('.filter-dropdown-content');
     
     if (!toggle || !content) {
-      console.log("Missing toggle or content for dropdown", dropdown);
       return;
     }
-    
-    console.log("Setting up event listener for", dropdown.dataset.filter);
     
     // Toggle dropdown on click
     toggle.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
-      
-      console.log("Dropdown clicked:", dropdown.dataset.filter);
       
       // Close other dropdowns
       filterDropdowns.forEach(function(otherDropdown) {
@@ -2672,7 +2655,6 @@ function setupMultiSelectDropdowns() {
           var otherContent = otherDropdown.querySelector('.filter-dropdown-content');
           if (otherContent) {
             otherContent.classList.add('hidden');
-            console.log("Hiding other dropdown:", otherDropdown.dataset.filter);
           }
         }
       });
@@ -2680,17 +2662,12 @@ function setupMultiSelectDropdowns() {
       // Toggle this dropdown
       var isOpen = dropdown.classList.toggle('open');
       content.classList.toggle('hidden');
-      
-      console.log("Dropdown state:", dropdown.dataset.filter, 
-                 "open:", isOpen, 
-                 "hidden:", content.classList.contains('hidden'));
     });
   });
   
   // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
     if (!e.target.closest('.filter-dropdown')) {
-      console.log("Click outside dropdowns, closing all");
       filterDropdowns.forEach(function(dropdown) {
         dropdown.classList.remove('open');
         var content = dropdown.querySelector('.filter-dropdown-content');
@@ -2705,7 +2682,6 @@ function setupMultiSelectDropdowns() {
     if (content) {
       content.addEventListener('click', function(e) {
         e.stopPropagation();
-        console.log("Click inside dropdown content:", dropdown.dataset.filter);
       });
     }
   });
@@ -2870,12 +2846,8 @@ function setupEventListeners() {
     var validationBadge = e.target.closest('.validation-clickable[data-clickable="true"]');
     if (validationBadge) { 
       var jiraId = validationBadge.dataset.jiraId;
-      console.log('Validation badge clicked for Jira ID:', jiraId);
-      console.log('Badge element:', validationBadge);
       if (jiraId) {
         updateLastChecked(jiraId, validationBadge);
-      } else {
-        console.error('No Jira ID found on validation badge');
       }
       return; 
     }

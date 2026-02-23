@@ -280,6 +280,15 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   var updatedItems = [];
   var archivedItems = [];
 
+  // *** OPTIMIZATION: Pre-compute column indices to avoid repeated indexOf() calls ***
+  var columnIndices = {
+    owner: headers.indexOf('Owner'),
+    syncStatus: headers.indexOf('Sync Status'),
+    summary: headerMap['Summary'] ? headerMap['Summary'].uploadIndex : -1,
+    issueType: headerMap['Issue Type'] ? headerMap['Issue Type'].uploadIndex : -1,
+    jiraId: headerMap['Jira #'] ? headerMap['Jira #'].uploadIndex : -1
+  };
+
   for (let i = headerRowIndex + 1; i < uploadedValues.length; i++) {
     const uploadedRow = uploadedValues[i];
 
@@ -288,11 +297,10 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
     }
     if (uploadedRow.length < 2) continue;
 
-    var uploadJiraId = headerMap['Jira #'].uploadIndex;
-    var jiraId = uploadedRow[uploadJiraId] ? String(uploadedRow[uploadJiraId]).trim() : null;
+    var jiraId = uploadedRow[columnIndices.jiraId] ? String(uploadedRow[columnIndices.jiraId]).trim() : null;
 
     if (jiraId && existingDataMap.has(jiraId)) {
-      var updateResult = _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user);
+      var updateResult = _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user, columnIndices);
       if (updateResult.shouldUpdate) {
         rowsToUpdate.push({ sheetRowIndex: updateResult.sheetRowIndex, data: updateResult.data });
         if (updateResult.hasChanges) {
@@ -301,12 +309,12 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
       }
       existingDataMap.delete(jiraId);
     } else if (jiraId) {
-      var newRowData = _createNewRowData(uploadedRow, headerMap, headers, user);
+      var newRowData = _createNewRowData(uploadedRow, headerMap, headers, user, columnIndices);
       rowsToAdd.push(newRowData);
       addedItems.push({
         jiraId: jiraId,
-        summary: uploadedRow[headerMap['Summary'].uploadIndex] || '',
-        issueType: uploadedRow[headerMap['Issue Type'].uploadIndex] || ''
+        summary: uploadedRow[columnIndices.summary] || '',
+        issueType: uploadedRow[columnIndices.issueType] || ''
       });
     }
   }
@@ -324,7 +332,10 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   var unarchivedItems = updatedItems.filter(function(item) { return item.wasUnarchived; });
   var regularUpdatedItems = updatedItems.filter(function(item) { return !item.wasUnarchived; });
   
-  console.log('UPLOAD COMPLETED - Final counts: added=' + addedItems.length + ', updated=' + regularUpdatedItems.length + ', unarchived=' + unarchivedItems.length + ', archived=' + archivedItems.length);
+  // Log summary (reduced verbosity for performance)
+  if (addedItems.length > 50 || regularUpdatedItems.length > 50) {
+    console.log('UPLOAD COMPLETED - Large dataset: added=' + addedItems.length + ', updated=' + regularUpdatedItems.length + ', unarchived=' + unarchivedItems.length + ', archived=' + archivedItems.length);
+  }
   
   // Clear cache for the user so they see new data immediately
   if (user && typeof clearProjectCache === 'function') {
@@ -354,7 +365,7 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
  * Process an existing item to determine if it needs updating
  * @private
  */
-function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user) {
+function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, headers, user, columnIndices) {
   var existingRecord = existingDataMap.get(jiraId);
   
   // Check if this item was previously archived
@@ -368,11 +379,10 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
   if (wasArchived) {
     hasChanged = true;
     changedFields.push('Unarchived');
-    console.log('UNARCHIVING item ' + jiraId + ' - was archived but now appears in upload');
   }
 
   // Handle Owner field specifically (Append new owner if needed)
-  var ownerIndex = headers.indexOf('Owner');
+  var ownerIndex = columnIndices.owner;
   var newOwnerValue = ownerIndex !== -1 ? existingRecord.data[ownerIndex] : null;
   
   if (ownerIndex !== -1) {
@@ -394,10 +404,10 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
       if (newOwnerValue !== existingRecord.data[ownerIndex]) {
           hasChanged = true;
           changedFields.push('Owner');
-          console.log('OWNER UPDATE for ' + jiraId + ': ' + existingRecord.data[ownerIndex] + ' -> ' + newOwnerValue);
       }
   }
   
+  // *** OPTIMIZATION: Reduced logging and optimized loop ***
   for (var j = 0; j < headers.length; j++) {
     var header = headers[j];
     // Skip Owner here as we handled it above
@@ -410,17 +420,9 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
       if (!equalFieldValues_(header, existingRaw, uploadedRaw)) {
         hasChanged = true;
         changedFields.push(header);
-        console.log('FIELD CHANGE DETECTED for ' + jiraId + ' in field "' + header + '": ' +
-          'existing="' + existingRaw + '" (type: ' + typeof existingRaw + ') ' +
-          'uploaded="' + uploadedRaw + '" (type: ' + typeof uploadedRaw + ') ' +
-          'normalized existing="' + normalizeValue_(existingRaw) + '" ' +
-          'normalized uploaded="' + normalizeValue_(uploadedRaw) + '"');
       }
     }
   }
-  
-  // Always log the result for debugging
-  console.log('RECORD ' + jiraId + ' hasChanged: ' + hasChanged + ', changedFields: [' + changedFields.join(', ') + ']');
   
   // Only update the row if there are actual changes OR if it was archived
   if (hasChanged) {
@@ -447,17 +449,17 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
       data: updatedRowData,
       itemInfo: {
         jiraId: jiraId,
-        summary: uploadedRow[headerMap['Summary'].uploadIndex] || '',
+        summary: uploadedRow[columnIndices.summary] || '',
         changedFields: changedFields,
         wasUnarchived: wasArchived
       }
     };
   } else {
     // No changes detected, but we should still update sync status to ✅ if it's not already
-    var currentSyncStatus = existingRecord.data[headers.indexOf('Sync Status')];
+    var currentSyncStatus = existingRecord.data[columnIndices.syncStatus];
     if (currentSyncStatus !== '✅') {
       var syncOnlyRowData = existingRecord.data.slice(); // Copy existing data
-      syncOnlyRowData[headers.indexOf('Sync Status')] = '✅'; // Update only sync status
+      syncOnlyRowData[columnIndices.syncStatus] = '✅'; // Update only sync status
       return {
         shouldUpdate: true,
         hasChanges: false,
@@ -474,7 +476,7 @@ function _processExistingItem(jiraId, uploadedRow, existingDataMap, headerMap, h
  * Create new row data for a new item
  * @private
  */
-function _createNewRowData(uploadedRow, headerMap, headers, user) {
+function _createNewRowData(uploadedRow, headerMap, headers, user, columnIndices) {
   var newRowData = [];
   headers.forEach(function(header) {
     if (header === 'Sync Status') {
@@ -571,25 +573,54 @@ function _applySheetUpdates(sheet, rowsToUpdate, rowsToAdd) {
   var timestampFields = ['Updated', 'Created', 'Resolved', 'Last Checked'];
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   
-  rowsToUpdate.forEach(function(update) {
-    // Set the values first
-    sheet.getRange(update.sheetRowIndex, 1, 1, update.data.length).setValues([update.data]);
+  // *** OPTIMIZATION: Batch all updates into a single operation ***
+  if (rowsToUpdate.length > 0) {
+    // Group consecutive rows for batch updates
+    var updateBatches = [];
+    var currentBatch = null;
     
-    // Then apply number format to timestamp columns to show both date and time
-    timestampFields.forEach(function(field) {
-      var colIndex = headers.indexOf(field);
-      if (colIndex !== -1 && update.data[colIndex]) {
-        var cell = sheet.getRange(update.sheetRowIndex, colIndex + 1);
-        cell.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+    // Sort updates by row index for better batching
+    rowsToUpdate.sort(function(a, b) { return a.sheetRowIndex - b.sheetRowIndex; });
+    
+    rowsToUpdate.forEach(function(update) {
+      if (!currentBatch || update.sheetRowIndex !== currentBatch.endRow + 1) {
+        if (currentBatch) updateBatches.push(currentBatch);
+        currentBatch = {
+          startRow: update.sheetRowIndex,
+          endRow: update.sheetRowIndex,
+          data: [update.data]
+        };
+      } else {
+        currentBatch.endRow = update.sheetRowIndex;
+        currentBatch.data.push(update.data);
       }
     });
-  });
+    if (currentBatch) updateBatches.push(currentBatch);
+    
+    // Apply all batches
+    updateBatches.forEach(function(batch) {
+      sheet.getRange(batch.startRow, 1, batch.data.length, batch.data[0].length).setValues(batch.data);
+    });
+    
+    // Apply timestamp formatting once for all updated rows
+    timestampFields.forEach(function(field) {
+      var colIndex = headers.indexOf(field);
+      if (colIndex !== -1) {
+        rowsToUpdate.forEach(function(update) {
+          if (update.data[colIndex]) {
+            var cell = sheet.getRange(update.sheetRowIndex, colIndex + 1);
+            cell.setNumberFormat('MM/dd/yyyy HH:mm:ss');
+          }
+        });
+      }
+    });
+  }
 
   if (rowsToAdd.length > 0) {
     var firstNewRow = sheet.getLastRow() + 1;
     sheet.getRange(firstNewRow, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
     
-    // Apply number format to timestamp columns for new rows
+    // Apply number format to timestamp columns for new rows - single batch operation
     timestampFields.forEach(function(field) {
       var colIndex = headers.indexOf(field);
       if (colIndex !== -1) {

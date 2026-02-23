@@ -16,7 +16,6 @@ function logTimestampOperation(operation, details) {
     if (payload && payload.length > 4000) {
       payload = payload.substring(0, 4000) + '...';
     }
-    console.log('[TimestampLog] ' + operation + ': ' + payload);
   } catch (e) {
     // swallow logging errors
   }

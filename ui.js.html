@@ -277,12 +277,6 @@ function createDropdown(options, selectedValue, jiraId, field) {
 }
 
 function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild, openChildrenCount) {
-    // Debug logging for the first few rows
-    if (!window._createRowDebugCount) window._createRowDebugCount = 0;
-    if (window._createRowDebugCount < 3) {
-        console.error("[DateDebug] createRow item['Updated']:", item['Updated'], "| Last Checked:", item['Last Checked']);
-        window._createRowDebugCount++;
-    }
     var row = document.createElement('tr');
     row.className = 'row-' + type;
     if (isLastChild) {
@@ -305,13 +299,6 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     row.dataset.checkedIso = normalizeUtcString(item['Last Checked']) || '';
     // Also store the original Last Checked format for CST parsing
     row.dataset.checkedCst = item['Last Checked'] || '';
-
-    // Extra debug for first few rows to see normalized values
-    if (!window._createRowIsoCount) window._createRowIsoCount = 0;
-    if (window._createRowIsoCount < 3) {
-        console.error("[DateDebug] normalized updatedIso:", row.dataset.updatedIso, "checkedIso:", row.dataset.checkedIso);
-        window._createRowIsoCount++;
-    }
 
     var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']);
     row.dataset.validation = validation.text;
@@ -431,18 +418,6 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     
     // Last Checked is already in CST from sheet, display as-is
     var lastCheckedDisplay = (item['Last Checked'] !== undefined && item['Last Checked'] !== null && item['Last Checked'] !== '') ? item['Last Checked'] : 'Never';
-
-    // Extra debug for first few rows to see display inputs/outputs
-    if (!window._displayLogCount) window._displayLogCount = 0;
-    if (window._displayLogCount < 5) {
-        console.error('[DateDebug] display row (raw)', {
-            updatedRaw: item['Updated'],
-            updatedDisplay: lastUpdatedDisplay,
-            checkedRaw: item['Last Checked'],
-            checkedDisplay: lastCheckedDisplay
-        });
-        window._displayLogCount++;
-    }
 
     row.innerHTML = '<td class="col-jira">' + jiraCellHtml + '</td>' +
       (function(){
@@ -1404,7 +1379,6 @@ function renderBoard() {
 
 // --- DATE/TIME HELPERS ---
 function normalizeUtcString(val) {
-    // console.log("[DateDebug] normalizeUtcString called with:", val); // Commented out to reduce spam
     if (!val && val !== 0) return null;
     
     // If a Date is passed, return ISO
@@ -1418,13 +1392,6 @@ function normalizeUtcString(val) {
     if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
         var d1 = new Date(s);
         return isNaN(d1.getTime()) ? null : d1.toISOString();
-    }
-
-    // Lightweight logging for first few calls to debug inputs
-    if (!window._normLogCount) window._normLogCount = 0;
-    if (window._normLogCount < 5) {
-        console.error("[DateDebug] normalizeUtcString in:", val);
-        window._normLogCount++;
     }
 
     // Handle common US-style slash date-times as UTC, e.g. "M/D/YYYY HH:mm[:ss]" or with AM/PM
@@ -1538,10 +1505,11 @@ function normalizeUtcString(val) {
              var min = d3.getMinutes();
              var sec = d3.getSeconds();
              
-             var utcMs = Date.UTC(year, month, day, hour, min, sec);
-             var res = new Date(utcMs).toISOString(); console.log("[DateDebug] Fallback NoTZ:", res); return res;
+               var utcMs = Date.UTC(year, month, day, hour, min, sec);
+               var res = new Date(utcMs).toISOString();
+               return res;
         }
-        console.log("[DateDebug] Fallback WithTZ:", d3.toISOString()); return d3.toISOString();
+           return d3.toISOString();
     }
 
     // Final fallback: return null if we can't parse it
@@ -1661,22 +1629,8 @@ function formatDateTimeLocal(val) {
         // Return the date formatted in CST/CDT without timezone abbreviation
         var result = d.toLocaleString('en-US', opts);
         
-        // Log only the first few conversions to debug timezone issues
-        if (!window._dateDebugCount) window._dateDebugCount = 0;
-        if (window._dateDebugCount < 5) {
-            console.error("[DateDebug] formatDateTimeLocal", 
-                "\nInput:", val, 
-                "\nParsed Date:", d.toString(), 
-                "\nISO:", d.toISOString(),
-                "\nResult:", result,
-                "\nBrowser TZ Offset:", d.getTimezoneOffset()
-            );
-            window._dateDebugCount++;
-        }
-        
         return result;
     } catch (e) {
-        console.error("[DateDebug] formatDateTimeLocal error:", e);
         return '—';
     }
 }
@@ -1777,9 +1731,7 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     }
 
     // Persist canonical ISO and recompute validation
-    console.log("[DateDebug] updateRowTimestamp input:", newTimestampISO);
     var checkedIso = normalizeUtcString(newTimestampISO);
-    console.log("[DateDebug] updateRowTimestamp normalized:", checkedIso);
     
     matchingRows.forEach(function(rowToUpdate) {
         rowToUpdate.dataset.checkedIso = checkedIso || '';

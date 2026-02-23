@@ -67,7 +67,7 @@ function saveFilterState() {
         };
         
         localStorage.setItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE, JSON.stringify(filterState));
-        console.log("Filter state saved to localStorage");
+        
         return true;
     } catch (e) {
         console.error("Error saving filter state:", e);
@@ -81,7 +81,7 @@ function loadFilterState() {
         if (!savedState) return false;
         
         const state = JSON.parse(savedState);
-        console.log("Loaded filter state:", state);
+        
         
         // Initialize multiSelectFilters if needed
         if (!APP_STATE.multiSelectFilters) {
@@ -1882,12 +1882,21 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 }            rowVisibility.set(row, isVisible);
         });
 
+        // Pre-build O(1) lookup maps so the display loop below never calls querySelector per row.
+        // Without these, each row in the loop would fire a full DOM scan → O(n²) total.
+        var epicRowById = new Map();
+        var storyRowById = new Map();
+        allRows.forEach(function(r) {
+            if (r.classList.contains('row-epic')) epicRowById.set(r.dataset.id, r);
+            else if (r.classList.contains('row-story')) storyRowById.set(r.dataset.id, r);
+        });
+
         allRows.forEach(function(row) {
             var isVisible = rowVisibility.get(row);
             var isEpic = row.classList.contains('row-epic');
             var isEpicFooter = row.classList.contains('row-epic-footer');
             var parentEpicId = row.dataset.parentEpic;
-            var parentEpic = parentEpicId ? $('tr.row-epic[data-id="' + parentEpicId + '"]') : null;
+            var parentEpic = parentEpicId ? (epicRowById.get(parentEpicId) || null) : null;
             var hasValidParentEpic = !!parentEpic;
             // Only treat as a child row if it has a valid, existing parent epic row
             var isChildRow = (row.classList.contains('row-story') || row.classList.contains('row-task')) && hasValidParentEpic;
@@ -1913,9 +1922,8 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 // Top-level items (no valid epic) should not be gated by epic expansion
                 // Keep isVisible as determined by filters
             } else if (isEpicFooter) {
-                // Epic footers should be visible if their parent epic is visible and expanded
-                var parentEpicId = row.dataset.parentEpic;
-                var parentEpic = parentEpicId ? $('tr.row-epic[data-id="' + parentEpicId + '"]') : null;
+                // Epic footers should be visible if their parent epic is visible and expanded.
+                // parentEpicId / parentEpic are already resolved via epicRowById in the outer scope.
                 if (!parentEpic || !rowVisibility.get(parentEpic) || !parentEpic.classList.contains('expanded')) {
                     isVisible = false;
                 } else {
@@ -1925,7 +1933,7 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 }
             } else if (row.classList.contains('row-bug-child')) {
                 var parentStoryId = row.dataset.parentEpic; // Actually parent Story ID
-                var parentStory = parentStoryId ? $('tr.row-story[data-id="' + parentStoryId + '"]') : null;
+                var parentStory = parentStoryId ? (storyRowById.get(parentStoryId) || null) : null;
                 
                 if (parentStory) {
                     // Check if parent story is expanded

@@ -43,7 +43,6 @@ function importJiraCsv_(fileData, user) {
         try {
           const personalSS = SpreadsheetApp.openById(fullUser.dataSheetId);
           targetSS = personalSS;
-          console.log('Importing into Personal Sheet: ' + fullUser.dataSheetId);
         } catch (e) {
           console.warn('Failed to open personal sheet, falling back to global.', e);
         }
@@ -74,9 +73,6 @@ function importJiraCsv_(fileData, user) {
     // All files are now CSV format (converted on client side if needed)
     var uploadedValues = Utilities.parseCsv(blob.getDataAsString('UTF-8'));
     
-    // Debug: Log total rows in uploaded file
-    console.log('UPLOAD DEBUG: Total rows in uploaded file: ' + uploadedValues.length);
-    
     let headerRowIndex = -1;
     let uploadedHeaders = [];
 
@@ -88,13 +84,10 @@ function importJiraCsv_(fileData, user) {
 
     // Look for a header row that contains a Jira key column. Check a larger window of rows for HTML-based Excel files
     var maxHeaderSearchRows = Math.min(50, uploadedValues.length); // Increased from 20 to 50
-    console.log('HEADER SEARCH: Will search first ' + maxHeaderSearchRows + ' rows for headers');
     
     for (let i = 0; i < maxHeaderSearchRows; i++) {
       var row = uploadedValues[i];
       if (!row || row.length === 0) continue;
-      
-      console.log('HEADER SEARCH ROW ' + (i + 1) + ': [' + (row || []).map(function(cell) { return '"' + (cell || '') + '"'; }).join(', ') + ']');
       
       var foundKey = false;
       for (var j = 0; j < row.length; j++) {
@@ -110,17 +103,12 @@ function importJiraCsv_(fileData, user) {
             colNameRaw.indexOf('data-issue-key') !== -1 ||
             colNameRaw.indexOf('issue-link') !== -1) {
           foundKey = true;
-          console.log('FOUND KEY in row ' + (i + 1) + ', column ' + (j + 1) + ': "' + colNameRaw + '" (normalized: "' + colName + '")');
           break;
         }
       }
       if (foundKey) {
         headerRowIndex = i;
         uploadedHeaders = row.map(function(col) { return col === undefined || col === null ? '' : String(col).trim(); });
-        
-        // Debug: Log where headers were found for troubleshooting
-        console.log('HEADER DETECTION: Found headers on row ' + (i + 1) + ': [' + uploadedHeaders.join(', ') + ']');
-        
         break;
       }
     }
@@ -328,15 +316,6 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   // Apply all updates to the sheet
   _applySheetUpdates(sheet, rowsToUpdate, rowsToAdd);
   
-  // Separate unarchived items from regular updates for reporting
-  var unarchivedItems = updatedItems.filter(function(item) { return item.wasUnarchived; });
-  var regularUpdatedItems = updatedItems.filter(function(item) { return !item.wasUnarchived; });
-  
-  // Log summary (reduced verbosity for performance)
-  if (addedItems.length > 50 || regularUpdatedItems.length > 50) {
-    console.log('UPLOAD COMPLETED - Large dataset: added=' + addedItems.length + ', updated=' + regularUpdatedItems.length + ', unarchived=' + unarchivedItems.length + ', archived=' + archivedItems.length);
-  }
-  
   // Clear cache for the user so they see new data immediately
   if (user && typeof clearProjectCache === 'function') {
       clearProjectCache(user.username);
@@ -526,7 +505,6 @@ function _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user
         if (userIndex === -1) {
           // User is NOT an owner, so do NOT archive (it belongs to someone else)
           shouldArchive = false;
-          console.log('DEBUG: Skipping archive for ' + jiraId + ' (User ' + user.username + ' is not an owner)');
         } else {
           // User IS an owner
           if (owners.length > 1) {
@@ -535,7 +513,6 @@ function _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user
             owners.splice(userIndex, 1);
             newOwnerValue = owners.join(', ');
             updateOwner = true;
-            console.log('DEBUG: Removing ' + user.username + ' from owners of ' + jiraId + '. Remaining: ' + newOwnerValue);
           } else {
             // User is the ONLY owner: Archive it
             shouldArchive = true;
@@ -550,14 +527,11 @@ function _archiveRemainingItems(existingDataMap, sheet, headerMap, headers, user
           jiraId: jiraId,
           summary: staleRecord.data[headerMap['Summary'].sheetIndex] || ''
         });
-        console.log('DEBUG: Archiving item ' + jiraId + ' (was not already archived)');
       } else if (updateOwner) {
         // Update the owner field to remove the current user
         // ownerIndex is 0-based index in data array. Sheet column is index + 1
         sheet.getRange(staleRecord.sheetRowIndex, ownerIndex + 1).setValue(newOwnerValue);
       }
-    } else {
-      console.log('DEBUG: Skipping already archived item ' + jiraId);
     }
   });
   

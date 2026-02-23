@@ -22,7 +22,6 @@
  * @returns {Object} Complete project data including projects, config, and sprint stats
  */
 function getProjectData_(user, targetUsername) {
-  console.log("ProjectAnalysis.js: getProjectData_ called for " + user.username);
   // Determine the Context User (The owner of the data we want to see)
   let contextUser = user;
   
@@ -48,8 +47,6 @@ function getProjectData_(user, targetUsername) {
   }
 
   var data = _getRawProjectData(contextUser);
-  console.log("ProjectAnalysis.js: _getRawProjectData returned type: " + typeof data);
-  if (data === null) console.log("ProjectAnalysis.js: _getRawProjectData returned NULL!");
   
   if (data.error) return data;
   
@@ -66,7 +63,6 @@ function getProjectData_(user, targetUsername) {
   if (contextUser.dataSheetId) shouldFilter = false;
 
   if (filterUser && shouldFilter) {
-    console.log("Filtering data for user: " + filterUser);
     var initialCount = data.projects.length;
 
     // Check if 'Owner' field exists in the data (check first few items)
@@ -76,7 +72,6 @@ function getProjectData_(user, targetUsername) {
     var hasAnyOwnerValue = data.projects.some(function(p) { return p.Owner && String(p.Owner).trim() !== ''; });
     
     if ((!hasOwnerField || !hasAnyOwnerValue) && data.projects.length > 0) {
-        console.warn("Warning: 'Owner' field missing or completely empty. Skipping ownership filtering to prevent hiding all data.");
         // Do not filter projects if Owner field is missing or unused
     } else {
         // Filter projects: include ONLY if owner matches (supports multiple owners comma-separated)
@@ -87,15 +82,13 @@ function getProjectData_(user, targetUsername) {
         });
     }
     
-    console.log("Projects after filtering: " + data.projects.length + " (was " + initialCount + ")");
-
     // Filter independent tasks: include ONLY if owner matches
     // Independent tasks might have different structure, check for Owner there too
     var hasTaskOwner = data.independentTasks.some(function(t) { return t.hasOwnProperty('Owner'); });
     var hasAnyTaskOwnerValue = data.independentTasks.some(function(t) { return t.Owner && String(t.Owner).trim() !== ''; });
     
     if ((!hasTaskOwner || !hasAnyTaskOwnerValue) && data.independentTasks.length > 0) {
-         console.warn("Warning: 'Owner' field missing or empty in independent tasks. Skipping filtering.");
+         // Owner field missing or empty in independent tasks, skipping filtering
     } else {
         data.independentTasks = data.independentTasks.filter(function(t) {
           if (!t.Owner) return false;
@@ -108,7 +101,7 @@ function getProjectData_(user, targetUsername) {
     var allItems = data.projects.concat(data.independentTasks);
     data.sprintStats = analyzeSprintData(allItems);
   } else {
-    console.log("Skipping ownership filtering. Role: " + user.role + ", HasDataSheet: " + !!contextUser.dataSheetId);
+    // Skipping ownership filtering
   }
   
   return data;
@@ -133,7 +126,6 @@ function _getRawProjectData(contextUser) {
         return parsed;
       }
       // If invalid, ignore cache and fetch fresh
-      console.warn("Invalid cached data found, fetching fresh data.");
     }
 
     // Data comes from the User's specific spreadsheet (or global fallback)
@@ -142,7 +134,6 @@ function _getRawProjectData(contextUser) {
        try {
          dataSS = SpreadsheetApp.openById(contextUser.dataSheetId);
        } catch (e) {
-         console.warn("Could not open personal sheet for " + contextUser.username + ", falling back to global", e);
          dataSS = SpreadsheetApp.getActiveSpreadsheet();
        }
     } else {
@@ -150,8 +141,6 @@ function _getRawProjectData(contextUser) {
     }
 
     var jiraSheet = getSheetOrThrow(dataSS, JIRA_DATA_SHEET);
-    console.log("Reading Jira Data from sheet: " + jiraSheet.getName() + " in SS: " + dataSS.getName());
-    console.log("Last Row: " + jiraSheet.getLastRow());
 
     var manualDataSheet = getSheetOrThrow(dataSS, MANUAL_DATA_SHEET);
     var independentTasksSheet = getSheetOrThrow(dataSS, INDEPENDENT_TASKS_SHEET);
@@ -165,7 +154,6 @@ function _getRawProjectData(contextUser) {
     
     // Load all data sources
     var projects = readJiraData(jiraSheet) || [];
-    console.log("Read " + projects.length + " projects from Jira sheet.");
 
     var manualDataMap = readManualData(manualDataSheet) || {};
     var independentTasks = readIndependentTasks(independentTasksSheet) || [];
@@ -191,11 +179,9 @@ function _getRawProjectData(contextUser) {
     
     // Cache the results
     setCacheInChunks(cache, cacheKey, JSON.stringify(finalData), 600);
-    console.log("Returning fresh data");
     return finalData;
 
   } catch (e) {
-    console.error("Error in _getRawProjectData: " + e.toString());
     // Return a structured error object so the client doesn't crash
     return { error: true, message: e.toString(), stack: e.stack };
   }
@@ -294,7 +280,7 @@ function _loadHelpfulLinks(configSheet) {
         }
       });
     } catch (e) {
-      console.error("Error loading helpful links: " + e);
+      // Error loading helpful links
     }
   }
   return helpfulLinks;

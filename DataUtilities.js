@@ -66,12 +66,6 @@ function normalizeValue_(value) {
     // The client treats this string as UTC and renders CST/CDT correctly.
     var tz = Session.getScriptTimeZone();
     var formatted = Utilities.formatDate(value, tz, "MM/dd/yyyy HH:mm:ss");
-    logTimestampOperation("Date to String (sheet tz)", {
-      sourceDate: value.toString(),
-      formatted: formatted,
-      usedTimeZone: tz,
-      sourceType: "Date object"
-    });
     return formatted;
   }
   
@@ -138,15 +132,6 @@ function normalizeValue_(value) {
       var date = new Date(dateStr);
       if (!isNaN(date.getTime())) {
         var isoString = date.toISOString();
-        
-        logTimestampOperation("String Date to ISO", {
-          sourceDate: originalDateStr,
-          normalizedDateStr: dateStr,
-          formatIdentified: formatIdentified,
-          convertedToISO: isoString,
-          sourceType: "String"
-        });
-        
         return isoString;
       }
     } catch (e) { /* keep original */ }
@@ -244,7 +229,6 @@ function parseUtcTimestampString_(val) {
     }
     return null;
   } catch (e) {
-    logTimestampOperation('UTC Parser Error', { input: val, error: e.toString() });
     return null;
   }
 }
@@ -317,16 +301,12 @@ function equalFieldValues_(header, existingRaw, uploadedRaw) {
       var yearMatch = dateA.getFullYear() === dateB.getFullYear();
       var monthMatch = dateA.getMonth() === dateB.getMonth();
       var dayMatch = dateA.getDate() === dateB.getDate();
-      console.log('  Date comparison: year=' + yearMatch + ', month=' + monthMatch + ', day=' + dayMatch);
       if (yearMatch && monthMatch && dayMatch) {
-        console.log('  RESULT: EQUAL (by date parsing)');
         return true;
       }
-    } else {
-      console.log('  Could not parse as dates (A valid: ' + !isNaN(dateA.getTime()) + ', B valid: ' + !isNaN(dateB.getTime()) + ')');
     }
     
-    console.log('  RESULT: NOT EQUAL');
+    return false;
   }
   
   // Special handling for timestamp fields (Updated, Created, Resolved)

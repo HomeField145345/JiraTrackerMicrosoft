@@ -173,24 +173,6 @@ function saveManualData_(jiraId, field, value, user) {
     else if (field === 'Drive Link') colToUpdate = 8;
     else if (field === 'Priority') colToUpdate = 9;
     
-    // Log any date field updates
-    if (field === 'Start Date' || field === 'End Date') {
-      // Get previous value if it exists
-      var previousValue = null;
-      if (rowToUpdate > 0) {
-        previousValue = data[rowToUpdate-1][colToUpdate-1];
-      }
-      
-      logTimestampOperation("Manual Date Field Update", {
-        jiraId: jiraId,
-        field: field,
-        previousValue: previousValue ? (previousValue instanceof Date ? previousValue.toISOString() : String(previousValue)) : null,
-        newValue: value,
-        dateType: typeof value,
-        action: rowToUpdate > 0 ? "update_existing" : "create_new_row"
-      });
-    }
-
     if (rowToUpdate > 0 && colToUpdate) {
       // Update existing row
       sheet.getRange(rowToUpdate, colToUpdate).setValue(value || null);
@@ -346,15 +328,6 @@ function updateLastChecked_(jiraId, user) {
     var now = new Date();
     var tz = Session.getScriptTimeZone();
     var formattedTimestamp = Utilities.formatDate(now, tz, 'MM/dd/yyyy HH:mm:ss');
-    
-    // Log the timestamp we're about to save
-    logTimestampOperation("Update Last Checked", {
-      jiraId: jiraId,
-      currentTime: now.toString(),
-      formattedForSheet: formattedTimestamp,
-      scriptTimeZone: tz,
-      action: rowToUpdate > 0 ? "update_existing_row" : "append_new_row"
-    });
     
     if (rowToUpdate > 0) {
       // Update existing row

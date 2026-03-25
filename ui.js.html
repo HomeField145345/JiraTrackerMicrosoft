@@ -29,6 +29,148 @@ function isStoryObjectClosed(story) {
     return maps.stages.indexOf(projectStage) !== -1 || maps.statuses.indexOf(status) !== -1;
 }
 
+function extractMediaLinks_(rawValue) {
+    var raw = String(rawValue || '').trim();
+    if (!raw) return [];
+
+    var extracted = raw.match(/https?:\/\/[^\s,;]+/ig);
+    if (extracted && extracted.length) {
+        return extracted.map(function(link) { return link.trim(); }).filter(Boolean);
+    }
+
+    return raw
+        .split(/[\n,;]+/)
+        .map(function(part) { return (part || '').trim(); })
+        .filter(Boolean);
+}
+
+function normalizeMediaLinksInput_(rawValue) {
+    var links = extractMediaLinks_(rawValue);
+
+    links = links.map(function(link) {
+        if (!/^https?:\/\//i.test(link)) {
+            return 'https://' + link;
+        }
+        return link;
+    });
+
+    return links.join(', ');
+}
+
+function getGoogleDriveFileId_(url) {
+    var value = String(url || '');
+    var idMatch = value.match(/[?&]id=([^&#]+)/i);
+    if (idMatch && idMatch[1]) return idMatch[1];
+
+    var fileMatch = value.match(/\/file\/d\/([^/?#]+)/i);
+    if (fileMatch && fileMatch[1]) return fileMatch[1];
+
+    return '';
+}
+
+function getGoogleDrivePreviewUrl_(url) {
+    var id = getGoogleDriveFileId_(url);
+    if (!id) return '';
+    return 'https://drive.google.com/file/d/' + id + '/preview';
+}
+
+function getMediaKindForUrl_(url) {
+    var value = String(url || '').toLowerCase();
+
+    if (/youtube\.com\/watch\?v=|youtu\.be\//.test(value)) return 'youtube';
+    if (/drive\.google\.com/.test(value)) return 'drive';
+    if (/\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/.test(value)) return 'video';
+    if (/\.(jpg|jpeg|png|gif|webp|bmp|svg)(\?|#|$)/.test(value)) return 'image';
+
+    return 'link';
+}
+
+function getYoutubeEmbedUrl_(url) {
+    var value = String(url || '');
+    var watchMatch = value.match(/[?&]v=([^&#]+)/i);
+    if (watchMatch && watchMatch[1]) {
+        return 'https://www.youtube.com/embed/' + watchMatch[1];
+    }
+
+    var shortMatch = value.match(/youtu\.be\/([^?&#/]+)/i);
+    if (shortMatch && shortMatch[1]) {
+        return 'https://www.youtube.com/embed/' + shortMatch[1];
+    }
+
+    return '';
+}
+
+function renderStoryInfoDrivePreview_(links) {
+    var previewEl = $('#storyInfoDrivePreview');
+    if (!previewEl) return;
+
+    previewEl.innerHTML = '';
+
+    if (!links || !links.length) {
+        previewEl.style.display = 'none';
+        return;
+    }
+
+    var primaryLink = links[0];
+    var mediaKind = getMediaKindForUrl_(primaryLink);
+    previewEl.style.display = 'block';
+
+    if (mediaKind === 'drive') {
+        var drivePreview = getGoogleDrivePreviewUrl_(primaryLink);
+        if (drivePreview) {
+            previewEl.innerHTML = '<iframe class="story-info-media-frame" src="' + drivePreview + '" allow="autoplay" allowfullscreen></iframe>';
+            return;
+        }
+    }
+
+    if (mediaKind === 'youtube') {
+        var ytEmbed = getYoutubeEmbedUrl_(primaryLink);
+        if (ytEmbed) {
+            previewEl.innerHTML = '<iframe class="story-info-media-frame" src="' + ytEmbed + '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>';
+            return;
+        }
+    }
+
+    if (mediaKind === 'video') {
+        previewEl.innerHTML = '<video class="story-info-media-video" controls preload="metadata" src="' + primaryLink + '"></video>';
+        return;
+    }
+
+    if (mediaKind === 'image') {
+        previewEl.innerHTML = '<img class="story-info-media-image" src="' + primaryLink + '" alt="Attachment preview" loading="lazy" />';
+        return;
+    }
+
+    previewEl.style.display = 'none';
+}
+
+function updateStoryInfoDriveLinkUi_(rawLinkValue) {
+    var rawLink = String(rawLinkValue || '').trim();
+    var driveLinks = extractMediaLinks_(rawLink);
+    var primaryLink = driveLinks.length ? driveLinks[0] : '';
+    var driveLinkElement = $('#storyInfoDriveLink');
+    var driveLinkText = $('#storyInfoDriveLinkText');
+
+    driveLinkElement.dataset.rawLink = rawLink;
+
+    if (primaryLink) {
+        driveLinkElement.href = primaryLink;
+        driveLinkText.textContent = driveLinks.length > 1 ? 'Open Attachment (1/' + driveLinks.length + ')' : 'Open Attachment';
+        driveLinkElement.classList.remove('no-link');
+        driveLinkElement.onclick = null;
+    } else {
+        driveLinkElement.href = '#';
+        driveLinkText.textContent = 'No Drive Link set';
+        driveLinkElement.classList.add('no-link');
+        driveLinkElement.onclick = function(e) {
+            e.preventDefault();
+            return false;
+        };
+    }
+
+    renderStoryInfoDrivePreview_(driveLinks);
+}
+
 // --- MODAL UI ---
 function openModal(title, type) {
   type = type || 'task';
@@ -105,25 +247,8 @@ function openStoryInfoModal(jiraId) {
   $('#storyInfoAcceptanceCriteria').textContent = acceptanceCriteria;
   
   // Populate Drive Link
-  var driveLink = story['Drive Link'] || '';
-  var driveLinkElement = $('#storyInfoDriveLink');
-  var driveLinkText = $('#storyInfoDriveLinkText');
-  
-  if (driveLink) {
-    driveLinkElement.href = driveLink;
-    driveLinkText.textContent = 'Drive Link';
-    driveLinkElement.classList.remove('no-link');
-    driveLinkElement.onclick = null; // Allow default click behavior
-  } else {
-    driveLinkElement.href = '#';
-    driveLinkText.textContent = 'No Drive Link set';
-    driveLinkElement.classList.add('no-link');
-    // Prevent click when no link
-    driveLinkElement.onclick = function(e) {
-      e.preventDefault();
-      return false;
-    };
-  }
+    var driveLink = story['Drive Link'] || '';
+    updateStoryInfoDriveLinkUi_(driveLink);
   
   // Store the current jiraId for saving later
   $('#storyInfoModal').dataset.currentJiraId = jiraId;

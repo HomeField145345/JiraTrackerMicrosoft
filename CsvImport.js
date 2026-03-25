@@ -320,6 +320,13 @@ function _processUploadedRows(uploadedValues, headerRowIndex, headerMap, headers
   if (user && typeof clearProjectCache === 'function') {
       clearProjectCache(user.username);
   }
+
+  var unarchivedItems = updatedItems.filter(function(item) {
+    return item && item.wasUnarchived;
+  });
+  var regularUpdatedItems = updatedItems.filter(function(item) {
+    return item && !item.wasUnarchived;
+  });
   
   return { 
     status: 'success', 

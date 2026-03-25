@@ -1299,114 +1299,119 @@ function handleFileUpload() {
 
 function convertExcelToCsv(file) {
     updateProgress(20, 'Converting Excel to CSV...');
+
+    function parseWorkbookToCsvAndUpload(workbook) {
+        // --- Auto-detect sheet and header row that contains a Jira key column ---
+        var selectedSheetName = null;
+        var detectedHeaderRowIndex = -1;
+        var detectionLog = [];
+        var KEY_MATCH = function(v){
+            if (v === undefined || v === null) return false;
+            var s = String(v).replace(/^[\uFEFF\u00A0]+/, '').trim().toLowerCase();
+            return s === 'key' || s === 'issue key' || s === 'issuekey' || s === 'jira key' || s.indexOf('key') !== -1;
+        };
+
+        for (var si = 0; si < workbook.SheetNames.length; si++) {
+            var sheetName = workbook.SheetNames[si];
+            var ws = workbook.Sheets[sheetName];
+            if (!ws) continue;
+            var rows;
+            try {
+                rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false });
+            } catch (eConv) {
+                detectionLog.push('Skip sheet ' + sheetName + ': ' + eConv.message);
+                continue;
+            }
+            var maxSearch = Math.min(200, rows.length);
+            for (var i = 0; i < maxSearch; i++) {
+                var row = Array.isArray(rows[i]) ? rows[i] : [];
+                for (var j = 0; j < row.length; j++) {
+                    if (KEY_MATCH(row[j])) {
+                        selectedSheetName = sheetName;
+                        detectedHeaderRowIndex = i;
+                        detectionLog.push('Selected sheet "' + sheetName + '" with header at row ' + (i + 1));
+                        break;
+                    }
+                }
+                if (selectedSheetName) break;
+            }
+            if (selectedSheetName) break;
+            detectionLog.push('No key header found in first ' + maxSearch + ' rows of sheet ' + sheetName);
+        }
+
+        // Fallback: use first sheet if none matched; header assumed at first row
+        if (!selectedSheetName) {
+            selectedSheetName = workbook.SheetNames[0];
+            detectedHeaderRowIndex = 0;
+            detectionLog.push('Fallback to first sheet: ' + selectedSheetName + ' (no key header detected)');
+        }
+
+        var worksheet = workbook.Sheets[selectedSheetName];
+        if (!worksheet) {
+            throw new Error('No worksheet found in the Excel file.');
+        }
+
+        // Build trimmed rows from detected header to end and convert to CSV
+        updateProgress(28, 'Converting to CSV format...');
+        var allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false });
+        var trimmedRows = allRows.slice(Math.max(0, detectedHeaderRowIndex));
+        if (trimmedRows.length < 2) {
+            throw new Error('Detected header but no data rows found. Check the export.');
+        }
+        var newWs = XLSX.utils.aoa_to_sheet(trimmedRows);
+        var csv = XLSX.utils.sheet_to_csv(newWs, {
+            dateNF: 'yyyy-mm-dd hh:mm:ss',
+            rawNumbers: false,
+            blankrows: false
+        });
+
+        // Basic validation of CSV content
+        var lines = csv.split('\n').filter(function(line) { return line.trim().length > 0; });
+        if (lines.length < 2) {
+            throw new Error('Converted CSV appears to be empty or has no data rows.');
+        }
+
+        // Log first few lines for debugging
+        console.log('Excel detection log:', detectionLog.join(' | '));
+        console.log('Converted CSV preview (first 3 lines):');
+        lines.slice(0, 3).forEach(function(line, idx) {
+            console.log('Line ' + (idx + 1) + ':', line.substring(0, 200) + (line.length > 200 ? '...' : ''));
+        });
+
+        // Convert CSV string to data URL format
+        var csvBlob = new Blob([csv], { type: 'text/csv' });
+        var reader2 = new FileReader();
+        reader2.onload = function(e2) {
+            updateProgress(30, 'Preparing data...');
+            processFileData(e2.target.result, file.name.replace(/\.(xls|xlsx)$/i, '.csv'), 'text/csv');
+        };
+        reader2.onerror = function() {
+            hideUploadProgress();
+            alert('Converted file could not be prepared for upload. Please try saving as CSV and uploading directly.');
+        };
+        reader2.readAsDataURL(csvBlob);
+    }
+
+    function parseExcelBuffer(bufferLike) {
+        var data = new Uint8Array(bufferLike);
+        var workbook;
+        try {
+            // Preferred binary Excel path
+            workbook = XLSX.read(data, { type: 'array' });
+        } catch (binaryError) {
+            // Fallback for some HTML/text-based .xls exports
+            updateProgress(26, 'Trying HTML parsing...');
+            var textData = new TextDecoder('utf-8').decode(data);
+            workbook = XLSX.read(textData, { type: 'string' });
+        }
+        parseWorkbookToCsvAndUpload(workbook);
+    }
     
     var reader = new FileReader();
     reader.onload = function(e) {
         try {
             updateProgress(25, 'Parsing Excel file...');
-            
-            var data = new Uint8Array(e.target.result);
-            var workbook;
-            
-            try {
-                // Try to read as binary Excel first
-                workbook = XLSX.read(data, { type: 'array' });
-            } catch (binaryError) {
-                // If binary parsing fails, try reading as HTML/text (for HTML-based .xls files)
-                updateProgress(26, 'Trying HTML parsing...');
-                var textData = new TextDecoder('utf-8').decode(data);
-                try {
-                    workbook = XLSX.read(textData, { type: 'string' });
-                } catch (htmlError) {
-                    throw new Error('Unable to parse Excel file. This may be an HTML-based export. Original errors: Binary: ' + binaryError.message + ', HTML: ' + htmlError.message);
-                }
-            }
-            
-            // --- NEW: Auto-detect sheet and header row that contains a Jira key column ---
-            var selectedSheetName = null;
-            var detectedHeaderRowIndex = -1;
-            var detectionLog = [];
-            var KEY_MATCH = function(v){
-                if (v === undefined || v === null) return false;
-                var s = String(v).replace(/^[\uFEFF\u00A0]+/, '').trim().toLowerCase();
-                return s === 'key' || s === 'issue key' || s === 'issuekey' || s === 'jira key' || s.indexOf('key') !== -1;
-            };
-
-            for (var si = 0; si < workbook.SheetNames.length; si++) {
-                var sheetName = workbook.SheetNames[si];
-                var ws = workbook.Sheets[sheetName];
-                if (!ws) continue;
-                var rows;
-                try {
-                    rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false });
-                } catch (eConv) {
-                    detectionLog.push('Skip sheet ' + sheetName + ': ' + eConv.message);
-                    continue;
-                }
-                var maxSearch = Math.min(200, rows.length);
-                for (var i = 0; i < maxSearch; i++) {
-                    var row = Array.isArray(rows[i]) ? rows[i] : [];
-                    for (var j = 0; j < row.length; j++) {
-                        if (KEY_MATCH(row[j])) {
-                            selectedSheetName = sheetName;
-                            detectedHeaderRowIndex = i;
-                            detectionLog.push('Selected sheet "' + sheetName + '" with header at row ' + (i + 1));
-                            break;
-                        }
-                    }
-                    if (selectedSheetName) break;
-                }
-                if (selectedSheetName) break;
-                detectionLog.push('No key header found in first ' + maxSearch + ' rows of sheet ' + sheetName);
-            }
-
-            // Fallback: use first sheet if none matched; header assumed at first row
-            if (!selectedSheetName) {
-                selectedSheetName = workbook.SheetNames[0];
-                detectedHeaderRowIndex = 0;
-                detectionLog.push('Fallback to first sheet: ' + selectedSheetName + ' (no key header detected)');
-            }
-            
-            var worksheet = workbook.Sheets[selectedSheetName];
-            if (!worksheet) {
-                throw new Error('No worksheet found in the Excel file.');
-            }
-            
-            // Build trimmed rows from detected header to end and convert to CSV
-            updateProgress(28, 'Converting to CSV format...');
-            var allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false });
-            var trimmedRows = allRows.slice(Math.max(0, detectedHeaderRowIndex));
-            if (trimmedRows.length < 2) {
-                throw new Error('Detected header but no data rows found. Check the export.');
-            }
-            var newWs = XLSX.utils.aoa_to_sheet(trimmedRows);
-            var csv = XLSX.utils.sheet_to_csv(newWs, {
-                dateNF: 'yyyy-mm-dd hh:mm:ss',
-                rawNumbers: false,
-                blankrows: false
-            });
-            
-            // Basic validation of CSV content
-            var lines = csv.split('\n').filter(function(line) { return line.trim().length > 0; });
-            if (lines.length < 2) {
-                throw new Error('Converted CSV appears to be empty or has no data rows.');
-            }
-            
-            // Log first few lines for debugging
-            console.log('Excel detection log:', detectionLog.join(' | '));
-            console.log('Converted CSV preview (first 3 lines):');
-            lines.slice(0, 3).forEach(function(line, idx) {
-                console.log('Line ' + (idx + 1) + ':', line.substring(0, 200) + (line.length > 200 ? '...' : ''));
-            });
-            
-            // Convert CSV string to data URL format
-            var csvBlob = new Blob([csv], { type: 'text/csv' });
-            var reader2 = new FileReader();
-            reader2.onload = function(e2) {
-                updateProgress(30, 'Preparing data...');
-                processFileData(e2.target.result, file.name.replace(/\.(xls|xlsx)$/i, '.csv'), 'text/csv');
-            };
-            reader2.readAsDataURL(csvBlob);
+            parseExcelBuffer(e.target.result);
             
         } catch (error) {
             hideUploadProgress();
@@ -1415,11 +1420,42 @@ function convertExcelToCsv(file) {
     };
     
     reader.onerror = function() {
-        hideUploadProgress();
-        alert('Error reading Excel file. Please try again.');
+        // Fallback path for browsers/environments where readAsArrayBuffer intermittently fails
+        updateProgress(24, 'Primary read failed, trying fallback...');
+        var fallbackReader = new FileReader();
+        fallbackReader.onload = function(eFallback) {
+            try {
+                var dataUrl = eFallback.target.result || '';
+                var base64 = String(dataUrl).split(',')[1] || '';
+                if (!base64) {
+                    throw new Error('Could not decode file data in fallback reader.');
+                }
+                var binary = atob(base64);
+                var len = binary.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                updateProgress(25, 'Parsing Excel file (fallback)...');
+                parseExcelBuffer(bytes.buffer);
+            } catch (fallbackError) {
+                hideUploadProgress();
+                alert('Error reading Excel file: ' + fallbackError.message + '. Please try saving as CSV format and upload that file directly.');
+            }
+        };
+        fallbackReader.onerror = function() {
+            hideUploadProgress();
+            alert('Error reading Excel file. Please try saving as CSV format and upload directly.');
+        };
+        fallbackReader.readAsDataURL(file);
     };
-    
-    reader.readAsArrayBuffer(file);
+
+    try {
+        reader.readAsArrayBuffer(file);
+    } catch (startReadError) {
+        // Some environments throw synchronously when array buffer reads are not supported
+        reader.onerror(startReadError);
+    }
 }
 
 function processFileData(dataUrl, fileName, mimeType) {
@@ -3029,7 +3065,7 @@ function setupEventListeners() {
   // Drive Link Edit handlers
   $('#storyInfoDriveLinkEdit').addEventListener('click', function() {
     var driveLinkElement = $('#storyInfoDriveLink');
-    var currentLink = driveLinkElement.href && driveLinkElement.href !== '#' ? driveLinkElement.href : '';
+        var currentLink = (driveLinkElement.dataset && driveLinkElement.dataset.rawLink) || (driveLinkElement.href && driveLinkElement.href !== '#' ? driveLinkElement.href : '');
     $('#storyInfoDriveLinkInput').value = currentLink;
     $('#storyInfoDriveLinkView').style.display = 'none';
     $('#storyInfoDriveLinkEditView').style.display = 'flex';
@@ -3052,12 +3088,13 @@ function setupEventListeners() {
       return;
     }
     
-    // Validate and fix URL format - ensure it has a protocol
-    if (newLink && !newLink.match(/^https?:\/\//i)) {
-      newLink = 'https://' + newLink;
-      // Update the input field to show the corrected URL
-      $('#storyInfoDriveLinkInput').value = newLink;
-    }
+        // Normalize one or multiple links and ensure each has a protocol.
+        if (typeof normalizeMediaLinksInput_ === 'function') {
+            newLink = normalizeMediaLinksInput_(newLink);
+        } else if (newLink && !newLink.match(/^https?:\/\//i)) {
+            newLink = 'https://' + newLink;
+        }
+        $('#storyInfoDriveLinkInput').value = newLink;
     
     // Show loading state
     $('#storyInfoDriveLinkSave').disabled = true;
@@ -3070,25 +3107,10 @@ function setupEventListeners() {
     google.script.run
       .withSuccessHandler(function(result) {
         if (result.success) {
-          // Update the link in the view
-          var driveLinkElement = $('#storyInfoDriveLink');
-          var driveLinkText = $('#storyInfoDriveLinkText');
-          
-          if (newLink) {
-            driveLinkElement.href = newLink;
-            driveLinkText.textContent = 'Drive Link';
-            driveLinkElement.classList.remove('no-link');
-            driveLinkElement.onclick = null; // Allow default click behavior
-          } else {
-            driveLinkElement.href = '#';
-            driveLinkText.textContent = 'No Drive Link set';
-            driveLinkElement.classList.add('no-link');
-            // Prevent click when no link
-            driveLinkElement.onclick = function(e) {
-              e.preventDefault();
-              return false;
-            };
-          }
+                    // Update the link/preview in the view
+                    if (typeof updateStoryInfoDriveLinkUi_ === 'function') {
+                        updateStoryInfoDriveLinkUi_(newLink);
+                    }
           
           // Update the story data in APP_STATE
           if (APP_STATE.allData && APP_STATE.allData.projects) {

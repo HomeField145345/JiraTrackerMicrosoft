@@ -9,6 +9,15 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
     const SCRIPT_URL = "<?= url ?>";
+    
+    // Early authentication check - redirect to login if not authenticated
+    (function() {
+      const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+      if (!user.token) {
+        // User is not authenticated, redirect to login page
+        window.location.href = SCRIPT_URL + "?page=login";
+      }
+    })();
   </script>
   <?!= include('Gantt.css'); ?>
   <?!= include('Dashboard.css'); ?>
@@ -748,6 +757,7 @@
                   <button id="storyInfoDriveLinkCancel" class="btn btn-sm">Cancel</button>
                 </div>
               </div>
+              <div id="storyInfoDrivePreview" class="story-info-media-preview" style="display: none;"></div>
             </div>
           </div>
         </div>

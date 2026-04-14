@@ -6,7 +6,12 @@
 
 // --- AUTHENTICATION ---
 function getToken() {
-  const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  const user = (typeof getStoredProjectHubUser === 'function')
+    ? getStoredProjectHubUser()
+    : (function() {
+        try { return JSON.parse(localStorage.getItem('projectHubUser') || '{}'); }
+        catch (e) { try { localStorage.removeItem('projectHubUser'); } catch (inner) {} return {}; }
+      })();
   return user.token;
 }
 

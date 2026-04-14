@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
   setupEventListeners(); // Set up all user interaction listeners
   
   // Check user role and setup workspace selector if needed
-  const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
   const userRole = String(user.role || '').toLowerCase().replace(/\s+/g, '_');
   
   // Hide Config button for non-admins
@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupWorkspaceSelector() {
   const token = checkAuth();
   if (!token) return;
-  const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  const currentUser = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
   const currentUsername = currentUser.username || '';
 
   const container = document.getElementById('workspace-selector-container');

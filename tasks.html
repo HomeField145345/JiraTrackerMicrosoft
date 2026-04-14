@@ -6,9 +6,21 @@
   <title>My Tasks</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
+    function getStoredProjectHubUser() {
+      try {
+        const raw = localStorage.getItem('projectHubUser');
+        if (!raw) return {};
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : {};
+      } catch (e) {
+        try { localStorage.removeItem('projectHubUser'); } catch (inner) {}
+        return {};
+      }
+    }
+
     // Early authentication check - redirect to login if not authenticated
     (function() {
-      const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+      const user = getStoredProjectHubUser();
       if (!user.token) {
         // User is not authenticated, redirect to login page
         const currentUrl = window.location.href;

@@ -9,10 +9,27 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
     const SCRIPT_URL = "<?= url ?>";
+
+    function safeParseStorageItem(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : fallback;
+      } catch (e) {
+        try { localStorage.removeItem(key); } catch (inner) {}
+        return fallback;
+      }
+    }
+
+    // Shared helper for included scripts
+    window.getStoredProjectHubUser = function() {
+      return safeParseStorageItem('projectHubUser', {});
+    };
     
     // Early authentication check - redirect to login if not authenticated
     (function() {
-      const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+      const user = window.getStoredProjectHubUser();
       if (!user.token) {
         // User is not authenticated, redirect to login page
         window.location.href = SCRIPT_URL + "?page=login";

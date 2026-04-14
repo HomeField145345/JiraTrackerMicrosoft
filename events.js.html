@@ -148,6 +148,7 @@ function loadFilterState() {
         return true;
     } catch (e) {
         console.error("Error loading filter state:", e);
+        try { localStorage.removeItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE); } catch (inner) {}
         return false;
     }
 }
@@ -2756,7 +2757,7 @@ function setupMultiSelectDropdowns() {
 }
 
 function initUserDropdown() {
-    const storedData = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+    const storedData = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
     if (storedData.username) {
         const displayEl = document.getElementById('currentUserDisplay');
         const emailEl = document.getElementById('currentUserEmail');
@@ -2772,7 +2773,7 @@ function initUserDropdown() {
 function handleLogout() {
     if (!confirm('Are you sure you want to sign out?')) return;
     
-    const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+    const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
     const token = user.token;
     
     // Clear local storage immediately

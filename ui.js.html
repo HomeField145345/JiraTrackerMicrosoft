@@ -2188,7 +2188,7 @@ function checkImpersonationStatus() {
     const bannerText = document.getElementById('impersonation-text');
     
     if (originalAdmin && banner) {
-        const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+        const currentUser = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
         banner.classList.remove('hidden');
         banner.classList.add('flex');
         if (bannerText) {

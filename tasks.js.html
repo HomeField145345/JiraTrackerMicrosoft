@@ -28,7 +28,7 @@ function initTasksView() {
             if (priorityEl) priorityEl.value = 'Medium';
             
             // Set current user as assignee and owner
-            const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+            const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
             const username = user.username || '';
             const assigneeEl = document.getElementById('t-assignee');
             if (assigneeEl) assigneeEl.value = username;
@@ -77,7 +77,7 @@ function renderTasksView() {
         return;
     }
 
-    const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+    const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
     const username = (user.username || '').toLowerCase();
     const displayName = (user.displayName || '').toLowerCase();
     

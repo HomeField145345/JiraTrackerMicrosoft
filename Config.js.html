@@ -2,7 +2,7 @@
     // --- AUTHENTICATION ---
     // (Redundant in Dashboard context, but kept for safety)
     function getToken() {
-      const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+            const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
       return user.token;
     }
 
@@ -913,7 +913,7 @@
     var editingUserId = null;
 
     function initUserManagement() {
-        const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+        const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
         // Check for admin role (case-insensitive)
         const role = (user.role || '').toLowerCase().trim();
         
@@ -1036,7 +1036,7 @@
         if (!token) return;
 
         // Save current admin if not already saved
-        const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+        const currentUser = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
         if (!localStorage.getItem('originalAdmin')) {
             localStorage.setItem('originalAdmin', JSON.stringify(currentUser));
         }

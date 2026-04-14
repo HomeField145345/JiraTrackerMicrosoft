@@ -3144,7 +3144,7 @@ function setupEventListeners() {
         $('#storyInfoDriveLinkSave').disabled = false;
         $('#storyInfoDriveLinkSave').textContent = 'Save';
       })
-      .updateDriveLink(token, jiraId, newLink);
+            .updateDriveLink(token, jiraId, newLink, (typeof getSelectedWorkspaceUsername === 'function' ? getSelectedWorkspaceUsername() : null));
   });
 }
 </script>

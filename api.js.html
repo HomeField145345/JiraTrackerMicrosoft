@@ -20,6 +20,11 @@ function checkAuth() {
   return token;
 }
 
+function getSelectedWorkspaceUsername() {
+  const selector = document.getElementById('workspace-select');
+  return (selector && selector.value) ? selector.value : null;
+}
+
 function showSessionExpiredModal() {
     // Hide loading overlay if it's visible
     hideLoading();
@@ -274,6 +279,7 @@ function forceRefreshData() {
 function saveTask(taskData) {
   const token = checkAuth();
   if (!token) return;
+  const targetUsername = getSelectedWorkspaceUsername();
 
   google.script.run
     .withSuccessHandler(function(response) {
@@ -298,12 +304,13 @@ function saveTask(taskData) {
             if (saveBtn.dataset.originalText) saveBtn.textContent = saveBtn.dataset.originalText;
         }
     })
-    .saveIndependentTask(token, taskData);
+    .saveIndependentTask(token, taskData, targetUsername);
 }
 
 function saveManualField(jiraId, field, value) {
   const token = checkAuth();
   if (!token) return;
+  const targetUsername = getSelectedWorkspaceUsername();
 
   // Create a unique key for this field on this item
   const key = 'save-' + jiraId + '-' + field;
@@ -340,13 +347,14 @@ function saveManualField(jiraId, field, value) {
                 statusEl.className = 'text-red-600';
             }
         })
-        .saveManualData(token, jiraId, field, value);
+        .saveManualData(token, jiraId, field, value, targetUsername);
   }, 1000);
 }
 
 function updateLastChecked(jiraId, element) {
   const token = checkAuth();
   if (!token) return;
+  const targetUsername = getSelectedWorkspaceUsername();
 
   // Element can be either a button or a validation badge
   var isButton = element && element.tagName === 'BUTTON';
@@ -407,12 +415,13 @@ function updateLastChecked(jiraId, element) {
         }
       }
     })
-    .updateLastChecked(token, jiraId);
+    .updateLastChecked(token, jiraId, targetUsername);
 }
 
 function uploadCsvData(fileData) {
     const token = checkAuth();
     if (!token) return;
+  const targetUsername = getSelectedWorkspaceUsername();
 
     updateProgress(75, 'Processing data on server...');
     
@@ -474,6 +483,6 @@ function uploadCsvData(fileData) {
             });
             handleFailure(error);
         })
-        .importJiraFile(token, fileData);
+        .importJiraFile(token, fileData, targetUsername);
 }
 </script>

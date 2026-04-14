@@ -34,20 +34,8 @@ function importJiraCsv_(fileData, user) {
 
   try {
     // Determine Target Spreadsheet (Global vs Personal)
-    let targetSS = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // Check if user has a personal sheet
-    if (user && user.id) {
-      const fullUser = getUserById(user.id);
-      if (fullUser && fullUser.dataSheetId && String(fullUser.dataSheetId).trim() !== '') {
-        try {
-          const personalSS = SpreadsheetApp.openById(fullUser.dataSheetId);
-          targetSS = personalSS;
-        } catch (e) {
-          console.warn('Failed to open personal sheet, falling back to global.', e);
-        }
-      }
-    }
+    // Strict mode prevents silent fallback to global when personal workspace cannot be opened.
+    const targetSS = getDataSpreadsheet(user, true);
 
     var sheet = getSheetOrThrow(targetSS, JIRA_DATA_SHEET);
     

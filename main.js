@@ -59,6 +59,39 @@ function requireAuth(token) {
   return auth;
 }
 
+function resolveDataContextUser(authUser, targetUsername) {
+  let contextUser = authUser;
+
+  // Ensure we have full user info (especially dataSheetId)
+  if (contextUser && !contextUser.dataSheetId && contextUser.id) {
+    const fullUser = getUserById(contextUser.id);
+    if (fullUser) contextUser = fullUser;
+  }
+
+  if (!targetUsername || String(targetUsername).trim() === '') {
+    return contextUser;
+  }
+
+  if (contextUser && contextUser.username === targetUsername) {
+    return contextUser;
+  }
+
+  const role = String((contextUser && contextUser.role) || '').toLowerCase().replace(/\s+/g, '_');
+  const canWriteToSelectedWorkspace = role === 'admin' || role === 'project_manager' || role.indexOf('qa') !== -1 || role.indexOf('tester') !== -1 || role.indexOf('view') !== -1;
+
+  if (!canWriteToSelectedWorkspace) {
+    throw new Error('Access denied: Cannot write to another workspace.');
+  }
+
+  const users = getUsers();
+  const targetUser = users.find(function(u) { return u.username === targetUsername; });
+  if (!targetUser) {
+    throw new Error('Target workspace user not found: ' + targetUsername);
+  }
+
+  return targetUser;
+}
+
 function forceGetProjectData(token) {
   const auth = requireAuth(token);
   return forceGetProjectData_(auth.user);
@@ -93,14 +126,16 @@ function getConfigData(token) {
   return getConfigData_(auth.user);
 }
 
-function importJiraCsv(token, csvData) {
+function importJiraCsv(token, csvData, targetUsername) {
   const auth = requireAuth(token);
-  return importJiraCsv_(csvData, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return importJiraCsv_(csvData, contextUser);
 }
 
-function importJiraFile(token, fileData) {
+function importJiraFile(token, fileData, targetUsername) {
   const auth = requireAuth(token);
-  return importJiraCsv_(fileData, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return importJiraCsv_(fileData, contextUser);
 }
 
 function saveConfiguration(token, optionsData) {
@@ -111,19 +146,22 @@ function saveConfiguration(token, optionsData) {
   return saveConfiguration_(optionsData);
 }
 
-function saveManualData(token, jiraId, field, value) {
+function saveManualData(token, jiraId, field, value, targetUsername) {
   const auth = requireAuth(token);
-  return saveManualData_(jiraId, field, value, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return saveManualData_(jiraId, field, value, contextUser);
 }
 
-function saveIndependentTask(token, taskData) {
+function saveIndependentTask(token, taskData, targetUsername) {
   const auth = requireAuth(token);
-  return saveIndependentTask_(taskData, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return saveIndependentTask_(taskData, contextUser);
 }
 
-function updateLastChecked(token, jiraId) {
+function updateLastChecked(token, jiraId, targetUsername) {
   const auth = requireAuth(token);
-  return updateLastChecked_(jiraId, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return updateLastChecked_(jiraId, contextUser);
 }
 
 function updateSyncIndicators(token, mappingData) {
@@ -137,9 +175,10 @@ function updateSyncIndicators(token, mappingData) {
   return { status: 'success', message: 'Sync indicators updated' };
 }
 
-function updateDriveLink(token, jiraId, driveLink) {
+function updateDriveLink(token, jiraId, driveLink, targetUsername) {
   const auth = requireAuth(token);
-  return updateDriveLink_(jiraId, driveLink, auth.user);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return updateDriveLink_(jiraId, driveLink, contextUser);
 }
 
 // --- User Management API ---
@@ -158,8 +197,8 @@ function getWorkspaceOwners(token) {
   const allUsers = getUsers();
   // Filter for Admins and Project Managers (Case Insensitive)
   return allUsers.filter(u => {
-    const r = String(u.role || '').toLowerCase();
-    return r === 'admin' || r === 'project manager';
+    const r = String(u.role || '').toLowerCase().replace(/\s+/g, '_');
+    return (r === 'admin' || r === 'project_manager') && u.isActive !== false;
   }).map(u => ({ username: u.username, displayName: u.displayName }));
 }
 

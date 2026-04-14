@@ -150,7 +150,7 @@ function saveManualData_(jiraId, field, value, user) {
 
   try {
     // Manual Data is User-Specific
-    var ss = getDataSpreadsheet(user);
+    var ss = getDataSpreadsheet(user, true);
     var sheet = getSheetOrThrow(ss, MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
     var rowToUpdate = -1;
@@ -228,7 +228,7 @@ function saveIndependentTask_(taskData, user) {
 
   try {
     // Independent Tasks are User-Specific
-    var ss = getDataSpreadsheet(user);
+    var ss = getDataSpreadsheet(user, true);
     var sheet = getSheetOrThrow(ss, INDEPENDENT_TASKS_SHEET);
     var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     
@@ -311,7 +311,7 @@ function updateLastChecked_(jiraId, user) {
 
   try {
     // Manual Data (Last Checked) is User-Specific
-    var ss = getDataSpreadsheet(user);
+    var ss = getDataSpreadsheet(user, true);
     var sheet = getSheetOrThrow(ss, MANUAL_DATA_SHEET);
     var data = sheet.getDataRange().getValues();
     var rowToUpdate = -1;

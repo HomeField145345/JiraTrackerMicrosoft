@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function() {
   
   // Check user role and setup workspace selector if needed
   const user = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
-  const userRole = (user.role || '').toLowerCase();
+  const userRole = String(user.role || '').toLowerCase().replace(/\s+/g, '_');
   
   // Hide Config button for non-admins
   if (userRole !== 'admin') {
@@ -18,7 +18,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (configBtn) configBtn.style.display = 'none';
   }
 
-  if (userRole.includes('qa') || userRole.includes('tester') || userRole.includes('view')) {
+  const canSwitchWorkspace = userRole === 'admin' || userRole === 'project_manager' || userRole.includes('qa') || userRole.includes('tester') || userRole.includes('view');
+  if (canSwitchWorkspace) {
     setupWorkspaceSelector();
   } else {
     refreshData();       // Fetch the initial data from the server
@@ -37,12 +38,16 @@ document.addEventListener('DOMContentLoaded', function() {
 function setupWorkspaceSelector() {
   const token = checkAuth();
   if (!token) return;
+  const currentUser = JSON.parse(localStorage.getItem('projectHubUser') || '{}');
+  const currentUsername = currentUser.username || '';
 
   const container = document.getElementById('workspace-selector-container');
   const selector = document.getElementById('workspace-select');
   
   if (container && selector) {
     container.classList.remove('hidden');
+    // Keep only the placeholder option before repopulating
+    selector.innerHTML = '<option value="" disabled>Select Workspace</option>';
     
     // Fetch workspace owners
     google.script.run
@@ -63,19 +68,26 @@ function setupWorkspaceSelector() {
           }
         });
         
-        // Automatically select the first owner and load data
+        // Select current user's workspace first (if available), otherwise first owner
         if (owners.length > 0) {
-            selector.selectedIndex = 0; // Select first option (after the disabled one if present, but here I appended directly. Wait, I have a disabled option in HTML)
-            // The HTML has <option value="" disabled selected>Select Workspace</option>
-            // So owners are appended after.
-            // Let's select the first actual owner (index 1)
-            if (selector.options.length > 1) {
-                selector.selectedIndex = 1;
-                refreshData(selector.value);
+            let preferredOptionIndex = -1;
+            for (let i = 0; i < selector.options.length; i++) {
+              if (selector.options[i].value === currentUsername) {
+                preferredOptionIndex = i;
+                break;
+              }
+            }
+
+            if (preferredOptionIndex === -1 && selector.options.length > 1) {
+              preferredOptionIndex = 1;
+            }
+
+            if (preferredOptionIndex > 0) {
+              selector.selectedIndex = preferredOptionIndex;
+              refreshData(selector.value);
             } else {
-                 // No owners found?
-                 hideLoading();
-                 alert("No workspaces found to view.");
+              hideLoading();
+              alert("No workspaces found to view.");
             }
         } else {
              hideLoading();

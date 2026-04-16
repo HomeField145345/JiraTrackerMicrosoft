@@ -19,10 +19,18 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   const canSwitchWorkspace = userRole === 'admin' || userRole === 'project_manager' || userRole.includes('qa') || userRole.includes('tester') || userRole.includes('view');
+  const currentUsername = user.username || '';
+
   if (canSwitchWorkspace) {
-    setupWorkspaceSelector();
+    const usedPreloadedData = currentUsername ? tryConsumePreloadedData(currentUsername) : false;
+    if (!usedPreloadedData && currentUsername) {
+      refreshData(currentUsername);
+    }
+    setupWorkspaceSelector(currentUsername);
   } else {
-    refreshData();       // Fetch the initial data from the server
+    if (!tryConsumePreloadedData(currentUsername)) {
+      refreshData();
+    }
   }
   
   // Add event listener to save filter state and perform cleanup before leaving the page
@@ -35,11 +43,11 @@ document.addEventListener('DOMContentLoaded', function() {
   }, false, 'beforeunload_handler');
 });
 
-function setupWorkspaceSelector() {
+function setupWorkspaceSelector(initialUsername) {
   const token = checkAuth();
   if (!token) return;
   const currentUser = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
-  const currentUsername = currentUser.username || '';
+  const currentUsername = initialUsername || currentUser.username || '';
 
   const container = document.getElementById('workspace-selector-container');
   const selector = document.getElementById('workspace-select');
@@ -61,12 +69,15 @@ function setupWorkspaceSelector() {
         });
         
         // Add change listener
-        selector.addEventListener('change', function() {
-          const selectedUser = this.value;
-          if (selectedUser) {
-            refreshData(selectedUser);
-          }
-        });
+        if (!selector.dataset.workspaceListenerBound) {
+          selector.addEventListener('change', function() {
+            const selectedUser = this.value;
+            if (selectedUser) {
+              refreshData(selectedUser);
+            }
+          });
+          selector.dataset.workspaceListenerBound = 'true';
+        }
         
         // Select current user's workspace first (if available), otherwise first owner
         if (owners.length > 0) {
@@ -84,7 +95,9 @@ function setupWorkspaceSelector() {
 
             if (preferredOptionIndex > 0) {
               selector.selectedIndex = preferredOptionIndex;
-              refreshData(selector.value);
+              if (APP_STATE.currentWorkspaceUsername !== selector.value) {
+                refreshData(selector.value);
+              }
             } else {
               hideLoading();
               alert("No workspaces found to view.");

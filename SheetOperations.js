@@ -62,6 +62,70 @@ function getSheetOrThrow(ss, sheetName) {
   return sheet;
 }
 
+function getTimestampDisplayColumns_(sheet, headers, rowCount) {
+  if (!sheet || !headers || rowCount <= 0) return {};
+
+  var timestampFieldSet = {
+    'Updated': true,
+    'Created': true,
+    'Last Checked': true
+  };
+  var displayColumns = {};
+
+  for (var headerIndex = 0; headerIndex < headers.length; headerIndex++) {
+    var header = headers[headerIndex];
+    if (!timestampFieldSet[header]) continue;
+
+    displayColumns[header] = sheet.getRange(2, headerIndex + 1, rowCount, 1)
+      .getDisplayValues()
+      .map(function(row) { return row[0] || ''; });
+  }
+
+  return displayColumns;
+}
+
+function normalizeSheetCellValue_(value, header) {
+  if (value === null || value === undefined) return '';
+
+  if (value instanceof Date) {
+    return normalizeValue_(value);
+  }
+
+  if (typeof value === 'number') {
+    return String(value);
+  }
+
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  var stringValue = String(value);
+  if (!stringValue) return '';
+
+  var looksDateLike = header && /date|target|due|start|end/i.test(header);
+  if (looksDateLike) {
+    return normalizeValue_(stringValue);
+  }
+
+  if (stringValue.indexOf('&') !== -1 && /&(?:#\d+|#x[0-9a-fA-F]+|apos|quot|lt|gt|amp);/.test(stringValue)) {
+    stringValue = decodeHtmlEntities_(stringValue);
+  }
+
+  if (/^[\s\u00A0\u200B-\u200D\uFEFF]|[\s\u00A0\u200B-\u200D\uFEFF]$|\u00A0|[\u200B-\u200D\uFEFF]|\s{2,}/.test(stringValue)) {
+    stringValue = stringValue
+      .replace(/[\u200B-\u200D\uFEFF]/g, '')
+      .replace(/\u00A0/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  if (stringValue.length > 1 && stringValue.charAt(0) === '"' && stringValue.charAt(stringValue.length - 1) === '"') {
+    stringValue = stringValue.slice(1, -1).trim();
+  }
+
+  return stringValue;
+}
+
 /**
  * Reads Jira data from the sheet and returns an array of objects.
  * @param {Sheet} sheet
@@ -71,12 +135,11 @@ function readJiraData(sheet) {
   if (!sheet) return [];
   const range = sheet.getDataRange();
   const data = range.getValues();
-  const displayData = range.getDisplayValues(); // use display strings to avoid timezone conversion
   if (data.length < 2) return [];
   
   const headers = data[0].map(h => (h ? String(h).trim() : ''));
   const rows = data.slice(1);
-  const displayRows = displayData.slice(1);
+  const timestampDisplayColumns = getTimestampDisplayColumns_(sheet, headers, rows.length);
   
   // Timestamp fields to preserve as display values
   const timestampFields = ['Updated', 'Created', 'Last Checked'];
@@ -87,11 +150,10 @@ function readJiraData(sheet) {
       if (header) {
         // For timestamp fields, use display value to prevent timezone conversion
         if (timestampFields.indexOf(header) !== -1) {
-          const displayVal = (displayRows[rowIdx] && displayRows[rowIdx][index] !== undefined) ? displayRows[rowIdx][index] : '';
+          const displayVal = timestampDisplayColumns[header] ? timestampDisplayColumns[header][rowIdx] : '';
           obj[header] = displayVal || '';
         } else {
-          // Use normalizeValue_ for other fields
-          obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+          obj[header] = normalizeSheetCellValue_(row[index], header);
         }
       }
     });
@@ -108,12 +170,11 @@ function readManualData(sheet) {
   if (!sheet) return {};
   const range = sheet.getDataRange();
   const data = range.getValues();
-  const displayData = range.getDisplayValues(); // use display strings to preserve face value
   if (data.length < 2) return {};
   
   const headers = data[0];
   const rows = data.slice(1);
-  const displayRows = displayData.slice(1);
+  const timestampDisplayColumns = getTimestampDisplayColumns_(sheet, headers, rows.length);
   const map = {};
   var manualLogCount = 0;
   
@@ -131,7 +192,7 @@ function readManualData(sheet) {
            const timestampFields = ['Updated', 'Created', 'Last Checked'];
            if (timestampFields.indexOf(header) !== -1) {
              var rawVal = row[index];
-             var displayVal = (displayRows[rowIdx] && displayRows[rowIdx][index] !== undefined) ? displayRows[rowIdx][index] : '';
+             var displayVal = timestampDisplayColumns[header] ? timestampDisplayColumns[header][rowIdx] : '';
              var assignedVal = displayVal || '';
              obj[header] = assignedVal;
 
@@ -146,7 +207,7 @@ function readManualData(sheet) {
                manualLogCount++;
              }
            } else {
-             obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+             obj[header] = normalizeSheetCellValue_(row[index], header);
            }
          }
       });
@@ -174,7 +235,7 @@ function readIndependentTasks(sheet) {
     const obj = {};
     headers.forEach((header, index) => {
       if (header) {
-        obj[header] = typeof normalizeValue_ === 'function' ? normalizeValue_(row[index]) : row[index];
+        obj[header] = normalizeSheetCellValue_(row[index], header);
       }
     });
     // Mark as independent task

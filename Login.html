@@ -134,10 +134,10 @@
         document.getElementById('login-container').classList.add('hidden');
         
         // Automatically load dashboard
-        loadDashboard();
+        loadDashboard(result);
     }
 
-    function loadDashboard() {
+    function loadDashboard(result) {
         google.script.run
             .withSuccessHandler(function(html) {
                 document.open();
@@ -145,7 +145,7 @@
                 document.close();
             })
             .withFailureHandler(function(e) {
-                // If dashboard load fails, show the manual continue button/error
+                // If dashboard load fails, show manual continue UI
                 document.getElementById('loading-overlay').classList.add('hidden');
                 document.getElementById('login-container').classList.remove('hidden');
                 document.getElementById('loginForm').classList.add('hidden');
@@ -153,14 +153,13 @@
                 
                 showError("Failed to load dashboard automatically: " + e);
                 
-                // Re-enable the continue button just in case they want to try again
                 var btn = document.getElementById('continueBtn');
                 btn.disabled = false;
                 btn.textContent = "Continue to Dashboard";
                 btn.onclick = function() {
                     btn.disabled = true;
                     btn.textContent = "Loading Dashboard...";
-                    loadDashboard();
+                    loadDashboard(result);
                 };
             })
             .getPageHtml('dashboard');

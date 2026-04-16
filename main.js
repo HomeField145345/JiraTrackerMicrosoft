@@ -49,6 +49,21 @@ function getPageHtml(page) {
     .getContent();
 }
 
+function getDeferredAsset(token, filename) {
+  requireAuth(token);
+
+  var allowedFiles = {
+    'gantt.js.html': true,
+    'Config.js.html': true
+  };
+
+  if (!allowedFiles[filename]) {
+    throw new Error('Asset not allowed: ' + filename);
+  }
+
+  return include(filename);
+}
+
 // --- Client-Callable API Functions ---
 
 function requireAuth(token) {
@@ -248,4 +263,79 @@ function runDatabaseMaintenance(token, targetSheetId) {
   
   const logs = setupSheets(targetSS);
   return { success: true, logs: logs };
+}
+
+/**
+ * Time-driven trigger entrypoint.
+ * Kept intentionally defensive: no uncaught errors, bounded runtime,
+ * and independent step failures so one issue doesn't fail the whole trigger.
+ */
+function runScheduledSync() {
+  var lock = LockService.getScriptLock();
+  var summary = {
+    ok: true,
+    startedAt: new Date().toISOString(),
+    steps: [],
+    errors: []
+  };
+
+  try {
+    lock.tryLock(10000);
+    if (!lock.hasLock()) {
+      summary.ok = false;
+      summary.errors.push('Skipped: another scheduled sync is already running.');
+      return summary;
+    }
+
+    var started = Date.now();
+    var maxMs = 4 * 60 * 1000; // keep well below trigger hard limits
+
+    function canContinue_() {
+      return (Date.now() - started) < maxMs;
+    }
+
+    function runStep_(name, fn) {
+      if (!canContinue_()) {
+        summary.ok = false;
+        summary.steps.push({ step: name, status: 'skipped_timeout' });
+        return;
+      }
+
+      var t0 = Date.now();
+      try {
+        fn();
+        summary.steps.push({ step: name, status: 'ok', ms: Date.now() - t0 });
+      } catch (e) {
+        summary.ok = false;
+        var msg = (e && e.message) ? e.message : String(e);
+        summary.steps.push({ step: name, status: 'error', ms: Date.now() - t0, message: msg });
+        summary.errors.push(name + ': ' + msg);
+      }
+    }
+
+    // 1) Expired sessions cleanup
+    runStep_('cleanupSessions', function() {
+      cleanupSessions();
+    });
+
+    // 2) Clear core caches to avoid stale dashboard data across long-running apps
+    runStep_('clearCaches', function() {
+      clearProjectCache();
+      clearUsersCache();
+      clearConfigCache();
+    });
+
+    summary.finishedAt = new Date().toISOString();
+    summary.durationMs = Date.now() - started;
+    return summary;
+  } catch (fatal) {
+    summary.ok = false;
+    summary.finishedAt = new Date().toISOString();
+    summary.errors.push('fatal: ' + ((fatal && fatal.message) ? fatal.message : String(fatal)));
+    return summary;
+  } finally {
+    try {
+      if (lock && lock.hasLock()) lock.releaseLock();
+    } catch (e) {}
+  }
 }

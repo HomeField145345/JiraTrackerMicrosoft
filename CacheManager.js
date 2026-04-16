@@ -3,6 +3,11 @@
  * @description Handles all caching operations for the application including chunked cache storage for large datasets.
  */
 
+var USERS_CACHE_KEY = 'users_list_v1';
+var USERS_CACHE_TTL_SECONDS = 300;
+var CONFIG_CACHE_KEY = 'config_data_v1';
+var CONFIG_CACHE_TTL_SECONDS = 600;
+
 // --- LOGGING UTILITY (console) ---
 // Lightweight logging to the execution logs for timestamp debugging.
 function logTimestampOperation(operation, details) {
@@ -74,6 +79,22 @@ function clearProjectCache(username) {
     }
     keys.push(keyBase + '_chunkCount');
     cache.removeAll(keys);
+  } catch (e) {
+    // ignore cache clear failures
+  }
+}
+
+function clearUsersCache() {
+  try {
+    CacheService.getScriptCache().remove(USERS_CACHE_KEY);
+  } catch (e) {
+    // ignore cache clear failures
+  }
+}
+
+function clearConfigCache() {
+  try {
+    CacheService.getScriptCache().remove(CONFIG_CACHE_KEY);
   } catch (e) {
     // ignore cache clear failures
   }

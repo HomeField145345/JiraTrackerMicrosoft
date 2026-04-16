@@ -123,6 +123,7 @@ function saveConfiguration_(optionsData) {
       sheet.getRange(2, 10, pairRows.length, 2).setValues(pairRows);
     }
     
+    clearConfigCache();
     clearProjectCache();
     return { status: 'success', message: 'Configuration saved!' };
   } catch (e) {

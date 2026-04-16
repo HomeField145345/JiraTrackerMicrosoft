@@ -30,24 +30,16 @@ function findRowById(sheet, id, idColIndex = 0) {
  * @returns {Object|null} User object or null
  */
 function getUserById(userId) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = ss.getSheetByName(USERS_SHEET);
-  if (!sheet) return null;
-  
-  const rowIndex = findRowById(sheet, userId, 0);
-  if (rowIndex === -1) return null;
-  
-  // Read up to column 10 (Index 9) for Data Sheet ID
-  const row = sheet.getRange(rowIndex, 1, 1, 10).getValues()[0];
-  return {
-      id: row[0], 
-      username: row[1], 
-      email: row[2], 
-      displayName: row[3], 
-      role: row[4], 
-      isActive: row[5],
-      dataSheetId: row[9] // New field
-  };
+  if (!userId) return null;
+
+  const users = getUsers();
+  for (var i = 0; i < users.length; i++) {
+    if (users[i] && users[i].id === userId) {
+      return users[i];
+    }
+  }
+
+  return null;
 }
 
 // --- USER MANAGEMENT ---
@@ -56,13 +48,28 @@ function getUserById(userId) {
  * Gets all users from the Users sheet.
  */
 function getUsers() {
+  const usersCacheKey = (typeof USERS_CACHE_KEY !== 'undefined') ? USERS_CACHE_KEY : 'users_list_v1';
+  const usersCacheTtlSeconds = (typeof USERS_CACHE_TTL_SECONDS !== 'undefined') ? USERS_CACHE_TTL_SECONDS : 300;
+  const cache = CacheService.getScriptCache();
+  const cachedUsers = cache.get(usersCacheKey);
+  if (cachedUsers) {
+    try {
+      const parsedUsers = JSON.parse(cachedUsers);
+      if (Array.isArray(parsedUsers)) {
+        return parsedUsers;
+      }
+    } catch (e) {
+      // Fall through to rebuild cache
+    }
+  }
+
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(USERS_SHEET);
   if (!sheet || sheet.getLastRow() <= 1) return [];
   
   // Read all data including the new column (Index 9)
   const data = sheet.getDataRange().getValues().slice(1);
-  return data.map(row => {
+  const users = data.map(row => {
     return { 
       id: row[0], 
       username: row[1], 
@@ -75,6 +82,14 @@ function getUsers() {
       dataSheetId: row[9] // New field
     };
   }).filter(Boolean);
+
+  try {
+    cache.put(usersCacheKey, JSON.stringify(users), usersCacheTtlSeconds);
+  } catch (e) {
+    // Ignore cache write failures
+  }
+
+  return users;
 }
 
 /**
@@ -256,6 +271,8 @@ function createUser(user) {
       '',
       dataSheetId || '' // Store the Spreadsheet ID
     ]);
+
+    clearUsersCache();
     
     return { success: true, message: "User created successfully." };
   } finally {
@@ -303,6 +320,8 @@ function updateUser(userId, updates) {
   if (updates.dataSheetId !== undefined) {
       sheet.getRange(rowIndex, 10).setValue(updates.dataSheetId);
   }
+
+  clearUsersCache();
   
   return { success: true };
 }

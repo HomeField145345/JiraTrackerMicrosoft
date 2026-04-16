@@ -36,7 +36,7 @@ function getProjectData_(user, targetUsername) {
   
   // If a target is specified, use it.
   // This allows QA/View Only users to view PM/Admin workspaces.
-  if (targetUsername) {
+  if (targetUsername && (!contextUser || contextUser.username !== targetUsername)) {
     // We need the full user object to get the dataSheetId
     // We can't just use the username string anymore.
     const users = getUsers();
@@ -150,7 +150,7 @@ function _getRawProjectData(contextUser) {
     var configSheet = getSheetOrThrow(globalSS, CONFIG_SHEET);
     
     // Load configuration options from sheets
-    var config = _loadConfiguration(configSheet);
+    var config = _loadConfigurationCached(configSheet);
     
     // Load all data sources
     var projects = readJiraData(jiraSheet) || [];
@@ -204,33 +204,98 @@ function forceGetProjectData_(user) {
  * @returns {Object} Configuration object with all options and settings
  */
 function _loadConfiguration(configSheet) {
-  var flatten = function(arr) { 
-    return arr.reduce(function(acc, val) { 
-      return acc.concat(val); 
-    }, []); 
-  };
-  
-  // Load basic configuration options
-  var actPctOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("A2:A" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var planningStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("B2:B" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var projectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("C2:C" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var kpiProjectStages = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("P2:P" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var independentTaskStatusOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("Q2:Q" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var inProgressStatuses = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("R2:R" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  
-  // Per-type project stage options (optional)
-  var epicProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("E2:E" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var storyProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("F2:F" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var bugProjectStageOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("G2:G" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  var priorityOptions = configSheet.getLastRow() > 1 ? flatten(configSheet.getRange("M2:M" + configSheet.getLastRow()).getValues()).filter(String) : [];
-  
-  // Load complex configuration (JSON and mappings)
-  var helpfulLinks = _loadHelpfulLinks(configSheet);
-  var closedProjectStages = _loadClosedProjectStages(configSheet);
-  var closedStatuses = _loadClosedStatuses(configSheet);
-  var pastSprintClosedStages = _loadPastSprintClosedStages(configSheet);
-  var pastDueExemptStages = _loadPastDueExemptStages(configSheet);
-  var stageStatusMappings = _loadStageStatusMappings(configSheet);
+  var lastRow = configSheet.getLastRow();
+  var values = lastRow > 1 ? configSheet.getRange(2, 1, lastRow - 1, 18).getValues() : [];
+
+  function getColumnValues(columnIndex) {
+    var result = [];
+    for (var rowIndex = 0; rowIndex < values.length; rowIndex++) {
+      var value = values[rowIndex][columnIndex];
+      if (value !== null && value !== undefined && String(value).trim() !== '') {
+        result.push(String(value).trim());
+      }
+    }
+    return result;
+  }
+
+  function parseLegacyJson(columnIndex) {
+    if (!values.length) return [];
+    var rawValue = values[0][columnIndex];
+    if (!rawValue || typeof rawValue !== 'string') return [];
+
+    try {
+      var parsed = JSON.parse(rawValue);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  var actPctOptions = getColumnValues(0);
+  var planningStageOptions = getColumnValues(1);
+  var projectStageOptions = getColumnValues(2);
+  var epicProjectStageOptions = getColumnValues(4);
+  var storyProjectStageOptions = getColumnValues(5);
+  var bugProjectStageOptions = getColumnValues(6);
+  var priorityOptions = getColumnValues(12);
+  var pastDueExemptStages = getColumnValues(14);
+  var kpiProjectStages = getColumnValues(15);
+  var independentTaskStatusOptions = getColumnValues(16);
+  var inProgressStatuses = getColumnValues(17);
+
+  var helpfulLinks = [];
+  for (var helpfulIndex = 0; helpfulIndex < values.length; helpfulIndex++) {
+    var helpfulCell = values[helpfulIndex][3];
+    if (!helpfulCell) continue;
+
+    try {
+      var parsedLink = JSON.parse(helpfulCell);
+      if (Array.isArray(parsedLink)) {
+        helpfulLinks = helpfulLinks.concat(parsedLink);
+      } else if (parsedLink && typeof parsedLink === 'object') {
+        helpfulLinks.push(parsedLink);
+      }
+    } catch (e) {
+      helpfulLinks.push({ title: helpfulCell, url: helpfulCell });
+    }
+  }
+
+  var closedProjectStages = getColumnValues(7);
+  if (closedProjectStages.length === 0) {
+    closedProjectStages = parseLegacyJson(7);
+  }
+
+  var closedStatuses = getColumnValues(8);
+  if (closedStatuses.length === 0) {
+    closedStatuses = parseLegacyJson(8);
+  }
+
+  var pastSprintClosedStages = getColumnValues(11);
+
+  var stageStatusMappings = [];
+  for (var mappingIndex = 0; mappingIndex < values.length; mappingIndex++) {
+    var stageValue = String(values[mappingIndex][9] || '').trim();
+    var statusValue = String(values[mappingIndex][10] || '').trim();
+
+    if (stageValue) {
+      stageStatusMappings.push({
+        stage: stageValue,
+        expectedStatuses: statusValue ? statusValue.split(',').map(function(s) { return s.trim(); }).filter(String) : []
+      });
+    }
+  }
+
+  if (stageStatusMappings.length === 0) {
+    var legacyMappings = parseLegacyJson(9);
+    if (legacyMappings.length > 0) {
+      stageStatusMappings = legacyMappings.map(function(mapping) {
+        return {
+          stage: mapping.stage,
+          expectedStatuses: mapping.keywords || mapping.expectedStatuses || []
+        };
+      });
+    }
+  }
   
   return { 
     actPctOptions: actPctOptions,
@@ -250,6 +315,29 @@ function _loadConfiguration(configSheet) {
     pastDueExemptStages: pastDueExemptStages,
     inProgressStatuses: inProgressStatuses
   };
+}
+
+function _loadConfigurationCached(configSheet) {
+  var cache = CacheService.getScriptCache();
+  var cachedConfig = cache.get(CONFIG_CACHE_KEY);
+  if (cachedConfig) {
+    try {
+      var parsedConfig = JSON.parse(cachedConfig);
+      if (parsedConfig && typeof parsedConfig === 'object') {
+        return parsedConfig;
+      }
+    } catch (e) {
+      // Fall through to rebuild cache
+    }
+  }
+
+  var config = _loadConfiguration(configSheet);
+  try {
+    cache.put(CONFIG_CACHE_KEY, JSON.stringify(config), CONFIG_CACHE_TTL_SECONDS);
+  } catch (e) {
+    // Ignore cache write failures
+  }
+  return config;
 }
 
 /**

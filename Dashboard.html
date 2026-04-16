@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Project Tracker Dashboard</title>
-  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <script>
     const SCRIPT_URL = "<?= url ?>";
+    window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
     function safeParseStorageItem(key, fallback) {
       try {
@@ -26,6 +26,55 @@
     window.getStoredProjectHubUser = function() {
       return safeParseStorageItem('projectHubUser', {});
     };
+
+    function injectDeferredAssetHtml(html) {
+      var container = document.createElement('div');
+      container.innerHTML = html;
+      Array.prototype.slice.call(container.childNodes).forEach(function(node) {
+        if (node.nodeType !== 1) return;
+
+        if (node.tagName === 'SCRIPT') {
+          var script = document.createElement('script');
+          if (node.src) {
+            script.src = node.src;
+          } else {
+            script.text = node.textContent || '';
+          }
+          document.body.appendChild(script);
+        } else if (node.tagName === 'STYLE') {
+          document.head.appendChild(node.cloneNode(true));
+        }
+      });
+    }
+
+    function loadDeferredDashboardAsset(filename) {
+      if (window.__deferredDashboardAssets[filename]) {
+        return window.__deferredDashboardAssets[filename];
+      }
+
+      var user = window.getStoredProjectHubUser();
+      if (!user || !user.token) {
+        return Promise.reject(new Error('Missing auth token'));
+      }
+
+      window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(function(html) {
+            try {
+              injectDeferredAssetHtml(html);
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          })
+          .withFailureHandler(function(error) {
+            reject(error);
+          })
+          .getDeferredAsset(user.token, filename);
+      });
+
+      return window.__deferredDashboardAssets[filename];
+    }
     
     // Early authentication check - redirect to login if not authenticated
     (function() {
@@ -1221,13 +1270,10 @@
   <?!= include('AppCleanup.js.html'); ?>
   <?!= include('state.js.html'); ?>
   <?!= include('utils.js.html'); ?>
-  <?!= include('gantt.js.html'); ?>
-  <?!= include('tasks.js.html'); ?>
   <?!= include('ui.js.html'); ?>
   <?!= include('api.js.html'); ?>
   <?!= include('events.js.html'); ?>
   <?!= include('Dashboard.js.html'); ?>
-  <?!= include('Config.js.html'); ?>
   
   <script>
     // Config Modal Logic
@@ -1240,10 +1286,15 @@
 
         function openConfig() {
             configModal.classList.remove('hidden');
-            // Trigger data load if needed
-            if (typeof loadConfigData === 'function') {
+          loadDeferredDashboardAsset('Config.js.html')
+            .then(function() {
+              if (typeof loadConfigData === 'function') {
                 loadConfigData();
-            }
+              }
+            })
+            .catch(function(error) {
+              alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
+            });
         }
 
         function closeConfig() {

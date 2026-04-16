@@ -78,6 +78,30 @@ window.redirectToLogin = function() {
     }
 };
 
+function tryConsumePreloadedData(targetUsername) {
+  if (!targetUsername || typeof sessionStorage === 'undefined') {
+    return false;
+  }
+
+  try {
+    var raw = sessionStorage.getItem('dashboardInitialData');
+    if (!raw) return false;
+
+    var payload = JSON.parse(raw);
+    if (!payload || payload.targetUsername !== targetUsername || !payload.data) {
+      return false;
+    }
+
+    sessionStorage.removeItem('dashboardInitialData');
+    APP_STATE.currentWorkspaceUsername = targetUsername;
+    handleDataLoaded(payload.data);
+    return true;
+  } catch (e) {
+    try { sessionStorage.removeItem('dashboardInitialData'); } catch (inner) {}
+    return false;
+  }
+}
+
 // --- DATA FETCHING & CALLBACKS ---
 function showLoading(message) {
   var overlay = $('#loading-overlay');
@@ -121,9 +145,16 @@ function handleDataLoaded(data) {
   
   // Store the data
   APP_STATE.allData = data;
-  
-  // Initialize the UI components
-  initializeUI();
+
+  try {
+    // Initialize the UI components
+    initializeUI();
+  } catch (initError) {
+    console.error('Initialization error:', initError);
+    hideLoading();
+    handleFailure({ message: 'Failed while initializing the dashboard UI. Please refresh. Details: ' + (initError && initError.message ? initError.message : initError) });
+    return false;
+  }
   
   // Hide loading indicator after a short delay to ensure smooth transition
   TimerManager.setTimeout(function() {
@@ -249,6 +280,8 @@ function refreshData(targetUsername) {
       targetUsername = selector.value;
     }
   }
+
+  APP_STATE.currentWorkspaceUsername = targetUsername || null;
 
   google.script.run
     .withSuccessHandler(handleDataLoaded)

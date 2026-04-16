@@ -29,6 +29,94 @@ function isStoryObjectClosed(story) {
     return maps.stages.indexOf(projectStage) !== -1 || maps.statuses.indexOf(status) !== -1;
 }
 
+function escapeHtml_(value) {
+    return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function splitVersionValues_(rawValue) {
+    return String(rawValue || '')
+        .split(/[\n,;|]+/)
+        .map(function(part) { return String(part || '').trim(); })
+        .filter(Boolean);
+}
+
+function extractSprintValues_(rawValue) {
+    var raw = String(rawValue || '');
+    if (!raw) return [];
+
+    var matches = raw.match(/Sprint\s*\d+/ig);
+    if (!matches || !matches.length) {
+        var single = raw.trim();
+        return single ? [single] : [];
+    }
+
+    var unique = {};
+    var values = [];
+    matches.forEach(function(m) {
+        var normalized = String(m || '').replace(/\s+/g, ' ').trim();
+        var key = normalized.toLowerCase();
+        if (!normalized || unique[key]) return;
+        unique[key] = true;
+        values.push(normalized);
+    });
+
+    return values;
+}
+
+function getLatestSprintValue_(values) {
+    if (!values || !values.length) return '';
+
+    var bestIndex = -1;
+    var bestNumber = -1;
+
+    for (var i = 0; i < values.length; i++) {
+        var formatted = (typeof formatSprint === 'function') ? formatSprint(values[i]) : null;
+        var candidate = formatted || values[i];
+        var match = String(candidate).match(/Sprint\s*(\d+)/i);
+        if (!match) continue;
+
+        var n = parseInt(match[1], 10);
+        if (!isNaN(n) && n >= bestNumber) {
+            bestNumber = n;
+            bestIndex = i;
+        }
+    }
+
+    if (bestIndex !== -1) {
+        return values[bestIndex];
+    }
+
+    return values[values.length - 1];
+}
+
+function buildLatestWithHistoryHtml_(rawValue, options) {
+    options = options || {};
+    var values = options.valuesResolver ? options.valuesResolver(rawValue) : splitVersionValues_(rawValue);
+    if (!values.length) return '—';
+
+    var latestRaw = options.latestResolver ? options.latestResolver(values) : values[values.length - 1];
+    var displayFormatter = options.displayFormatter || function(v) { return v; };
+    var label = options.historyLabel || 'Other values';
+
+    var latestDisplay = displayFormatter(latestRaw || '') || '—';
+    var others = values.filter(function(v) { return v !== latestRaw; });
+
+    if (!others.length) {
+        return escapeHtml_(latestDisplay);
+    }
+
+    var historyLines = others.map(function(v) { return '• ' + displayFormatter(v); });
+    var tooltip = label + ':\n' + historyLines.join('\n');
+
+    return escapeHtml_(latestDisplay) +
+        ' <span class="text-gray-400" style="cursor:help;" title="' + escapeHtml_(tooltip) + '" aria-label="Show other values">ⓘ</span>';
+}
+
 function extractMediaLinks_(rawValue) {
     var raw = String(rawValue || '').trim();
     if (!raw) return [];
@@ -509,7 +597,20 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     };
 
     // Removed separate check button - validation badge is now clickable
-    var sprintDisplayText = item['sprint'] || '—';
+    var sprintCellHtml = buildLatestWithHistoryHtml_(item['sprint'], {
+        valuesResolver: extractSprintValues_,
+        latestResolver: getLatestSprintValue_,
+        displayFormatter: function(v) {
+            var f = (typeof formatSprint === 'function') ? formatSprint(v) : null;
+            return f || v;
+        },
+        historyLabel: 'Other sprints'
+    });
+
+    var fixVersionCellHtml = buildLatestWithHistoryHtml_(item['Fix Version'], {
+        historyLabel: 'Other fix versions'
+    });
+
     var assignedPm = item['PM Lead'] || '—';
     var assignedDev = item['Assignee'] || '—';
     var storyPoints = item['Story Points'] || '—';
@@ -649,7 +750,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     typeCellHtml + 
     createCellWithDropdown(APP_STATE.allData.config.priorityOptions, item['Priority'], item['Jira #'], 'Priority', 'col-priority') +
     '<td class="col-story-points">' + storyPoints + '</td>' +
-    '<td class="col-pm-lead">' + assignedPm + '</td>' + '<td class="col-dev-assignee">' + assignedDev + '</td>' + '<td class="col-sprint">' + sprintDisplayText + '</td>' +
+    '<td class="col-pm-lead">' + assignedPm + '</td>' + '<td class="col-dev-assignee">' + assignedDev + '</td>' + '<td class="col-sprint">' + sprintCellHtml + '</td>' +
     '<td class="col-target-date">' + (function() {
         var targetDate = item['Target Date'] || item['Target Date '];
         if (!targetDate) return '—';
@@ -669,7 +770,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
             return targetDate;
         }
     })() + '</td>' +
-    '<td class="col-fix-version">' + (item['Fix Version'] || '—') + '</td>' +
+    '<td class="col-fix-version">' + fixVersionCellHtml + '</td>' +
     createCellWithDropdown(APP_STATE.allData.config.actPctOptions, item['ACT/PCT'], item['Jira #'], 'ACT/PCT', 'col-act-pct') +
     createDateInputCell(item['Start Date'], item['Jira #'], 'Start Date', 'col-start-date') +
     createDateInputCell(item['End Date'], item['Jira #'], 'End Date', 'col-end-date') +
@@ -741,7 +842,24 @@ function renderApp() {
     } else if (APP_STATE.currentView === 'board') {
         renderBoard();
     } else if (APP_STATE.currentView === 'gantt') {
-        renderGanttChart(APP_STATE.allData.projects);
+        if (typeof renderGanttChart === 'function') {
+            renderGanttChart(APP_STATE.allData.projects);
+        } else if (typeof loadDeferredDashboardAsset === 'function') {
+            var wrapper = $('#content-wrapper');
+            if (wrapper) {
+                wrapper.innerHTML = '<div class="p-8 text-center text-gray-500">Loading Gantt view...</div>';
+            }
+            loadDeferredDashboardAsset('gantt.js.html')
+                .then(function() {
+                    renderApp();
+                })
+                .catch(function(error) {
+                    if (wrapper) {
+                        wrapper.innerHTML = '<div class="p-8 text-center text-red-500">Failed to load Gantt view.</div>';
+                    }
+                    console.error('Failed to load Gantt module', error);
+                });
+        }
     } else if (APP_STATE.currentView === 'tasks') {
         if (typeof renderTasksView === 'function') {
             renderTasksView();

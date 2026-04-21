@@ -144,18 +144,20 @@
     /* Story Row */
     .row-story {
         background-color: #f8fafc; /* Very light gray */
+        animation: openDrawerStory 0.22s ease-out forwards;
+        will-change: opacity, transform;
+        backface-visibility: hidden;
     }
     
-    /* Apply animation to cells for height expansion effect */
+    /* Keep cell spacing static; animation runs on the row for better performance */
     .row-story td {
         border-top: 1px solid #f1f5f9;
         padding-top: 1rem;
         padding-bottom: 1rem;
-        animation: openDrawerStory 0.3s ease-out forwards;
     }
 
-    .row-story.closing td {
-        animation: closeDrawerStory 0.2s ease-in forwards;
+    .row-story.closing {
+        animation: closeDrawerStory 0.16s ease-in forwards;
     }
     
     .row-story td:first-child {
@@ -191,6 +193,9 @@
     /* Bug Row */
     .row-bug-child {
         background-color: #ffffff; /* White - Clean look */
+        animation: openDrawerBug 0.2s ease-out forwards;
+        will-change: opacity, transform;
+        backface-visibility: hidden;
     }
     
     .row-bug-child:hover {
@@ -202,11 +207,10 @@
         padding-bottom: 0.5rem;
         border-bottom: none;
         color: var(--muted);
-        animation: openDrawerBug 0.3s ease-out forwards;
     }
 
-    .row-bug-child.closing td {
-        animation: closeDrawerBug 0.2s ease-in forwards;
+    .row-bug-child.closing {
+        animation: closeDrawerBug 0.14s ease-in forwards;
     }
 
     .row-bug-child td:first-child {
@@ -277,7 +281,7 @@
         display: inline-flex; 
         align-items: center; 
         justify-content: center; 
-        transition: all 0.2s; 
+        transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease; 
         width: 1.5rem; 
         height: 1.5rem; 
         border-radius: 4px;
@@ -1727,6 +1731,7 @@
         cursor: not-allowed;
     }
     /* Performance Optimization: Disable animations on specific rows */
+    tr.no-animate,
     tr.no-animate td {
         animation: none !important;
         transition: none !important;

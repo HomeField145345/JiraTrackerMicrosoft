@@ -69,13 +69,167 @@
     var availableStatuses = [];
 
     // Expose globally so Dashboard can call it
+    var _configUiInitialized = false;
+    function _initConfigUI() {
+        if (_configUiInitialized) return;
+        _configUiInitialized = true;
+
+        // Tabs: simple toggling between panels
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
+                document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.add('hidden'); });
+                btn.classList.add('active');
+                btn.setAttribute('aria-selected', 'true');
+                var target = document.querySelector(btn.dataset.target);
+                if (target) target.classList.remove('hidden');
+            });
+        });
+
+        // Clean buttons: dedupe, trim, sort
+        document.querySelectorAll('[data-clean-for]').forEach(function(el) {
+            el.addEventListener('click', function() {
+                var id = el.getAttribute('data-clean-for');
+                var ta = document.getElementById(id);
+                if (!ta) return;
+                var cleaned = (ta.value || '')
+                    .split('\n')
+                    .map(function(s) { return s.trim(); })
+                    .filter(Boolean);
+                var seen = {};
+                var result = [];
+                cleaned.forEach(function(v) { var key = v.toLowerCase(); if (!seen[key]) { seen[key] = true; result.push(v); } });
+                result.sort(function(a, b) { return a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0; });
+                ta.value = result.join('\n');
+            });
+        });
+
+        // KPI stage selector live update
+        var stageInputs = ['projectStageOptions', 'epicProjectStageOptions', 'storyProjectStageOptions', 'bugProjectStageOptions'];
+        function updateKpiSelectorOptions() {
+            var groupedStages = { global: [], epic: [], story: [], bug: [] };
+            var getStages = function(id) {
+                var el = document.getElementById(id);
+                return el ? el.value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean).sort() : [];
+            };
+            groupedStages.global = getStages('projectStageOptions');
+            groupedStages.epic   = getStages('epicProjectStageOptions');
+            groupedStages.story  = getStages('storyProjectStageOptions');
+            groupedStages.bug    = getStages('bugProjectStageOptions');
+            var currentSelected = Array.from(document.querySelectorAll('#kpiStageSelector input[type="checkbox"]:checked')).map(function(cb) { return cb.value; });
+            renderKpiStageSelector(groupedStages, currentSelected);
+        }
+        stageInputs.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('input', updateKpiSelectorOptions);
+        });
+
+        // Save button
+        var saveBtn = document.getElementById('saveConfigBtn');
+        var statusEl = document.getElementById('configStatus');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', function() {
+                const token = checkAuth();
+                if (!token) return;
+
+                saveBtn.disabled = true;
+                saveBtn.textContent = 'Saving...';
+                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-sm text-gray-500'; }
+
+                var linksData = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
+                    return { title: el.querySelector('span').textContent, url: el.getAttribute('data-url') };
+                });
+
+                var optionsData = {
+                    actPctOptions: document.getElementById('actPctOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    planningStageOptions: document.getElementById('planningStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    projectStageOptions: document.getElementById('projectStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    kpiProjectStages: Array.from(document.querySelectorAll('#kpiStageSelector input[type="checkbox"]:checked')).map(function(cb) { return cb.value; }),
+                    epicProjectStageOptions: (document.getElementById('epicProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    storyProjectStageOptions: (document.getElementById('storyProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    bugProjectStageOptions: (document.getElementById('bugProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    priorityOptions: (document.getElementById('priorityOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    independentTaskStatusOptions: (document.getElementById('independentTaskStatusOptions') ? document.getElementById('independentTaskStatusOptions').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    inProgressStatuses: (document.getElementById('inProgressStatuses') ? document.getElementById('inProgressStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    helpfulLinks: linksData,
+                    stageStatusMappings: getCurrentMappingsAsArray()
+                };
+
+                google.script.run
+                    .withSuccessHandler(function(response) {
+                        if (response.status === 'success') {
+                            if (statusEl) { statusEl.textContent = response.message || 'Configuration Saved!'; statusEl.className = 'text-sm text-green-600'; }
+                        } else {
+                            handleFailure(new Error(response.message));
+                        }
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = 'Save Configuration';
+                        setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
+                    })
+                    .withFailureHandler(handleFailure)
+                    .saveConfiguration(token, optionsData);
+            });
+        }
+
+        // Add Link button
+        var addLinkBtn = document.getElementById('addLinkBtn');
+        if (addLinkBtn) {
+            addLinkBtn.addEventListener('click', function() {
+                var titleInput = document.getElementById('newLinkTitle');
+                var urlInput = document.getElementById('newLinkUrl');
+                var title = titleInput ? titleInput.value.trim() : '';
+                var url = urlInput ? urlInput.value.trim() : '';
+                if (title && url) {
+                    var newLink = { title: title, url: url };
+                    var currentLinks = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
+                        return { title: el.querySelector('span').textContent, url: el.getAttribute('data-url') };
+                    });
+                    currentLinks.push(newLink);
+                    renderLinks(currentLinks);
+                    if (titleInput) titleInput.value = '';
+                    if (urlInput) urlInput.value = '';
+                }
+            });
+        }
+
+        // Links list remove
+        var linksListEl = document.getElementById('linksList');
+        if (linksListEl) {
+            linksListEl.addEventListener('click', function(e) {
+                if (e.target.classList.contains('remove-link-btn')) {
+                    e.target.parentElement.remove();
+                }
+            });
+        }
+
+        // Mapping refresh button
+        var refreshBtn = document.getElementById('refreshMappingDataBtn');
+        if (refreshBtn) refreshBtn.addEventListener('click', extractDataFromProjects);
+
+        // Mapping type tabs (epic / story / bug)
+        document.querySelectorAll('.mapping-tab-btn').forEach(function(btn) {
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                switchMappingTab(btn.getAttribute('data-type'));
+            });
+        });
+
+        // User management
+        initUserManagement();
+    }
+
     window.loadConfigData = function() {
         const token = getToken();
         if (!token) return;
-        
+
+        _initConfigUI();
+
         var statusEl = document.getElementById('configStatus');
         if (statusEl) statusEl.textContent = 'Loading configuration...';
-        
+
         google.script.run
             .withSuccessHandler(onConfigDataLoaded)
             .withFailureHandler(handleFailure)
@@ -697,183 +851,7 @@
     }
 
     // Legacy functions removed - now using visual mapping interface
-
-    document.addEventListener('DOMContentLoaded', function() {
-        const token = checkAuth();
-        if (!token) return;
-
-        // Update KPI selector when ANY Project Stage Options change
-        var stageInputs = ['projectStageOptions', 'epicProjectStageOptions', 'storyProjectStageOptions', 'bugProjectStageOptions'];
-        
-        function updateKpiSelectorOptions() {
-            var groupedStages = {
-                global: [],
-                epic: [],
-                story: [],
-                bug: []
-            };
-
-            var getStages = function(id) {
-                var el = document.getElementById(id);
-                return el ? el.value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean).sort() : [];
-            };
-
-            groupedStages.global = getStages('projectStageOptions');
-            groupedStages.epic = getStages('epicProjectStageOptions');
-            groupedStages.story = getStages('storyProjectStageOptions');
-            groupedStages.bug = getStages('bugProjectStageOptions');
-            
-            // Get currently selected stages to preserve selection if possible
-            var currentSelected = Array.from(document.querySelectorAll('#kpiStageSelector input[type="checkbox"]:checked')).map(function(cb) { return cb.value; });
-            renderKpiStageSelector(groupedStages, currentSelected);
-        }
-
-        stageInputs.forEach(function(id) {
-            var el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', updateKpiSelectorOptions);
-            }
-        });
-
-        var statusEl = document.getElementById('configStatus');
-        if (statusEl) {
-            statusEl.textContent = 'Loading configuration…';
-            statusEl.className = 'text-sm text-gray-500';
-        }
-        // Tabs: simple toggling between panels
-        document.querySelectorAll('.tab-btn').forEach(function(btn){
-            btn.addEventListener('click', function(){
-                document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-selected','false'); });
-                document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.add('hidden'); });
-                btn.classList.add('active');
-                btn.setAttribute('aria-selected','true');
-                var target = document.querySelector(btn.dataset.target);
-                if (target) target.classList.remove('hidden');
-            });
-        });
-
-        // Clean buttons: dedupe, trim, sort
-        document.querySelectorAll('[data-clean-for]').forEach(function(el){
-            el.addEventListener('click', function(){
-                var id = el.getAttribute('data-clean-for');
-                var ta = document.getElementById(id);
-                if (!ta) return;
-                var cleaned = (ta.value || '')
-                    .split('\n')
-                    .map(function(s){ return s.trim(); })
-                    .filter(Boolean);
-                var seen = {};
-                var result = [];
-                cleaned.forEach(function(v){ var key = v.toLowerCase(); if(!seen[key]) { seen[key]=true; result.push(v); } });
-                result.sort(function(a,b){ return a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0; });
-                ta.value = result.join('\n');
-            });
-        });
-
-        google.script.run
-            .withSuccessHandler(onConfigDataLoaded)
-            .withFailureHandler(handleFailure)
-            .forceGetProjectData(token);
-    
-        
-        var saveBtn = document.getElementById('saveConfigBtn');
-        var statusEl = document.getElementById('configStatus');
-        
-        document.getElementById('addLinkBtn').addEventListener('click', function() {
-            var titleInput = document.getElementById('newLinkTitle');
-            var urlInput = document.getElementById('newLinkUrl');
-            var title = titleInput.value.trim();
-            var url = urlInput.value.trim();
-
-            if (title && url) {
-                var newLink = { title: title, url: url };
-                var currentLinks = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
-                    return {
-                        title: el.querySelector('span').textContent,
-                        url: el.getAttribute('data-url')
-                    };
-                });
-                currentLinks.push(newLink);
-                renderLinks(currentLinks);
-                titleInput.value = '';
-                urlInput.value = '';
-            }
-        });
-
-        document.getElementById('linksList').addEventListener('click', function(e) {
-            if (e.target.classList.contains('remove-link-btn')) {
-                e.target.parentElement.remove();
-            }
-        });
-
-        // Add mapping refresh button
-        document.getElementById('refreshMappingDataBtn').addEventListener('click', extractDataFromProjects);
-
-        // Add tab functionality (only once)
-        var tabsInitialized = false;
-        if (!tabsInitialized) {
-            document.querySelectorAll('.mapping-tab-btn').forEach(function(btn) {
-                btn.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    var type = btn.getAttribute('data-type');
-                    
-                    switchMappingTab(type);
-                });
-            });
-            tabsInitialized = true;
-        }
-
-        saveBtn.addEventListener('click', function() {
-            const token = checkAuth();
-            if (!token) return;
-
-            saveBtn.disabled = true;
-            saveBtn.textContent = 'Saving...';
-            statusEl.textContent = '';
-            statusEl.className = 'text-sm text-gray-500';
-            
-            var linksData = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
-                return {
-                    title: el.querySelector('span').textContent,
-                    url: el.getAttribute('data-url')
-                };
-            });
-            
-            var optionsData = {
-                actPctOptions: document.getElementById('actPctOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                planningStageOptions: document.getElementById('planningStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                projectStageOptions: document.getElementById('projectStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                kpiProjectStages: Array.from(document.querySelectorAll('#kpiStageSelector input[type="checkbox"]:checked')).map(function(cb) { return cb.value; }),
-                epicProjectStageOptions: (document.getElementById('epicProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                storyProjectStageOptions: (document.getElementById('storyProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                bugProjectStageOptions: (document.getElementById('bugProjectStageOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                priorityOptions: (document.getElementById('priorityOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                independentTaskStatusOptions: (document.getElementById('independentTaskStatusOptions') ? document.getElementById('independentTaskStatusOptions').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                inProgressStatuses: (document.getElementById('inProgressStatuses') ? document.getElementById('inProgressStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
-                // closedStatuses removed: stage-only logic
-                helpfulLinks: linksData,
-                stageStatusMappings: getCurrentMappingsAsArray()
-            };
-
-            google.script.run
-                .withSuccessHandler(function(response) {
-                    if (response.status === 'success') {
-                        statusEl.textContent = response.message || 'Configuration Saved!';
-                        statusEl.className = 'text-sm text-green-600';
-                    } else {
-                        handleFailure(new Error(response.message));
-                    }
-                    saveBtn.disabled = false;
-                    saveBtn.textContent = 'Save Configuration';
-                    setTimeout(function() { statusEl.textContent = ''; }, 3000);
-                })
-                .withFailureHandler(handleFailure)
-                .saveConfiguration(token, optionsData);
-        });
-    });
+    // (All DOM wiring is in _initConfigUI(), called from loadConfigData())
 
     // Function to trigger real-time sync indicator updates
     function triggerSyncIndicatorUpdate() {

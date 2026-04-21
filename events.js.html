@@ -97,6 +97,10 @@ function loadFilterState() {
             if (!APP_STATE.multiSelectFilters.uatStatus) {
                 APP_STATE.multiSelectFilters.uatStatus = [];
             }
+            // Ensure fixVersion is initialized if missing from saved state
+            if (!APP_STATE.multiSelectFilters.fixVersion) {
+                APP_STATE.multiSelectFilters.fixVersion = [];
+            }
 
             // Update checkboxes in the UI
             Object.keys(APP_STATE.multiSelectFilters).forEach(function(filterType) {
@@ -253,12 +257,14 @@ function hasActiveFilters() {
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
     var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
     var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
     
     var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
     var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
     var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
+    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
     
     return !!(
         searchTerm ||
@@ -268,11 +274,13 @@ function hasActiveFilters() {
         validationFilters.length ||
         projectStageFilters.length ||
         uatStatusFilters.length ||
+        fixVersionFilters.length ||
         assignedPMFilters.length ||
         assignedDevFilters.length ||
         (includeStories === false) ||
         (includeBugs === false) ||
-        showOnlyInProgress
+        showOnlyInProgress ||
+        showOnlyPastSprint
     );
 }
 
@@ -287,6 +295,8 @@ function updateActiveFiltersIndicator() {
     var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
     var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
     var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
     
@@ -294,6 +304,9 @@ function updateActiveFiltersIndicator() {
     var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
     var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
     var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
+    var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
+    var showOnlyOutOfSync = APP_STATE.showOnlyOutOfSync || false;
+    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
     
     if (searchTerm) {
         activeFilterCount++;
@@ -319,6 +332,14 @@ function updateActiveFiltersIndicator() {
         activeFilterCount++;
         filterLabels.push('Project Stage');
     }
+    if (uatStatusFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('UAT Status');
+    }
+    if (fixVersionFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Fix Version');
+    }
     if (assignedPMFilters.length > 0) {
         activeFilterCount++;
         filterLabels.push('Assigned PM');
@@ -341,6 +362,18 @@ function updateActiveFiltersIndicator() {
     if (!includeBugs) {
         activeFilterCount++;
         filterLabels.push('Exclude Bugs');
+    }
+    if (showOnlyInProgress) {
+        activeFilterCount++;
+        filterLabels.push('In Progress Only');
+    }
+    if (showOnlyOutOfSync) {
+        activeFilterCount++;
+        filterLabels.push('Out of Sync');
+    }
+    if (showOnlyPastSprint) {
+        activeFilterCount++;
+        filterLabels.push('Past Sprint');
     }
     
     var activeFiltersIndicator = $('#activeFiltersIndicator');
@@ -395,6 +428,8 @@ function handleClearFilters() {
         case 'planningStage': label.textContent = 'All Planning Stages'; break;
         case 'validation': label.textContent = 'All Validations'; break;
         case 'projectStage': label.textContent = 'All Project Stages'; break;
+                case 'uatStatus': label.textContent = 'All UAT Statuses'; break;
+                case 'fixVersion': label.textContent = 'All Fix Versions'; break;
         case 'assignedPM': label.textContent = 'All PMs'; break;
         case 'assignedDev': label.textContent = 'All Devs'; break;
       }
@@ -431,6 +466,7 @@ function handleClearFilters() {
   
   // Reset Out of Sync filter
   APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.showOnlyPastSprint = false;
   
   applyFilters();
 }
@@ -515,8 +551,8 @@ function handleExpandCollapseAll(shouldExpand) {
     }
   });
   
-  // Apply filters with skipAnimation=false (default), but pass visibleParentIds
-  applyFilters(false, visibleParentIds);
+    // Apply filters with targeted animation and skip KPI recompute (data did not change)
+    applyFilters(false, visibleParentIds, true);
 }
 
 function handleKPICardClick(card) {
@@ -581,130 +617,10 @@ function handleKPICardClick(card) {
 }
 
 function handlePastSprintFilter() {
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    var today = new Date();
-    var sprints = {}; // Cache for parsed sprint dates
-    
-    var parseSprintDates = function(sprintString) {
-        try {
-            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
-            var normalized = sprintString.replace(/[–—]/g, '-');
-            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
-            var m = normalized.match(re);
-            if (!m) return { start: null, end: null };
-            var currentYear = today.getFullYear();
-            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
-            var sy = m[3] ? parseInt(m[3],10) : currentYear;
-            if (sy < 100) sy += 2000;
-            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
-            var ey = m[6] ? parseInt(m[6],10) : sy;
-            if (ey < 100) ey += 2000;
-            var start = new Date(sy, sm - 1, sd);
-            var end = new Date(ey, em - 1, ed);
-            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
-            end.setHours(23,59,59,999);
-            return { start: start, end: end };
-        } catch(e) { return { start: null, end: null }; }
-    };
-
-    // First, parse all sprint dates to determine which ones are past sprints
-    var allProjects = APP_STATE.allData.projects || [];
-    allProjects.forEach(function(project) {
-        var sprintString = project.sprint || project.Sprint || '';
-        if (sprintString && typeof sprintString === 'string') {
-            sprintString.split(',').forEach(function(sprintStr) {
-                var trimmedSprint = sprintStr.trim();
-                if (trimmedSprint && !sprints[trimmedSprint]) {
-                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
-                }
-            });
-        }
-    });
-
-    // Determine current sprint end date for comparison
-    var currentSprintEndDate = null;
-    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
-        for (var sprintFullName in sprints) {
-            if (sprints.hasOwnProperty(sprintFullName)) {
-                var dates = sprints[sprintFullName];
-                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
-                    currentSprintEndDate = dates.end;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Now select sprint filters for sprints that ended before current sprint/today
-    var sprintDropdown = $('[data-filter="sprint"]');
-    if (sprintDropdown) {
-        var checkboxes = sprintDropdown.querySelectorAll('.filter-checkbox');
-        checkboxes.forEach(function(checkbox) {
-            var sprintValue = checkbox.value;
-            if (sprintValue === 'Select All') {
-                checkbox.checked = false;
-                return;
-            }
-            
-            // Check if this sprint value corresponds to a past sprint
-            var isPastSprint = false;
-            for (var sprintFullName in sprints) {
-                if (sprints.hasOwnProperty(sprintFullName)) {
-                    var dates = sprints[sprintFullName];
-                    // Check if the checkbox value matches this sprint (by name or contains sprint number)
-                    var sprintMatches = sprintValue.indexOf(sprintFullName) !== -1 || 
-                                       sprintFullName.indexOf(sprintValue) !== -1;
-                    
-                    if (sprintMatches && dates.end) {
-                        var compareDate = currentSprintEndDate || today;
-                        if (dates.end < compareDate) {
-                            isPastSprint = true;
-                            break;
-                        }
-                    }
-                }
-            }
-            
-            checkbox.checked = isPastSprint;
-        });
-        updateFilterSelection('sprint');
-    }
-
-    // Apply Project Stage filter to exclude closed stages defined in config
-    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
-    var pastClosedStages = cfg.pastSprintClosedStages || [];
-    
-    if (pastClosedStages.length > 0) {
-        var closedSet = new Set(pastClosedStages.map(function(s) { return s.toLowerCase().trim(); }));
-        var stageDropdown = $('[data-filter="projectStage"]');
-        
-        if (stageDropdown) {
-            var checkboxes = stageDropdown.querySelectorAll('.filter-checkbox');
-            var hasChanges = false;
-            
-            checkboxes.forEach(function(checkbox) {
-                if (checkbox.value === 'Select All') {
-                    checkbox.checked = false;
-                    return;
-                }
-                
-                // If the stage is NOT in the closed set, check it. Otherwise uncheck it.
-                var stage = checkbox.value.trim();
-                var shouldBeChecked = !closedSet.has(stage.toLowerCase());
-                
-                if (checkbox.checked !== shouldBeChecked) {
-                    checkbox.checked = shouldBeChecked;
-                    hasChanges = true;
-                }
-            });
-            
-            // Only update if we actually changed something or if we want to enforce the filter
-            updateFilterSelection('projectStage');
-        }
-    }
-
-    updateActiveFiltersIndicator(); // Update filter indicator
+    // Dedicated KPI filter: only rows whose latest sprint is older
+    // than the current sprint should remain visible.
+    APP_STATE.showOnlyPastSprint = true;
+    applyFilters();
 }
 
 function handlePastDueFilter() {
@@ -1174,11 +1090,19 @@ function handleRowExpand(expander) {
     if (!row) {
         return;
     }
+
+    // Limit animations to just the hierarchy impacted by this click.
+    // This reduces large-table layout/paint spikes during collapse/expand.
+    var affectedParentIds = new Set();
     
     // Check current state and determine new state
     var wasExpanded = row.classList.contains('expanded');
     var shouldExpand = !wasExpanded;
     var id = row.dataset.id;
+
+    if (id) {
+        affectedParentIds.add(id);
+    }
     
     // Force the class to the new state
     if (shouldExpand) {
@@ -1197,6 +1121,14 @@ function handleRowExpand(expander) {
         // If collapsing an Epic, also collapse all its expanded stories
         if (row.classList.contains('row-epic')) {
              var epicId = row.dataset.id;
+             // Include child story ids so bug-child rows under expanded stories can animate too.
+             var allChildStories = document.querySelectorAll('.row-story[data-parent-epic="' + epicId + '"]');
+             allChildStories.forEach(function(storyRow) {
+                 if (storyRow && storyRow.dataset && storyRow.dataset.id) {
+                     affectedParentIds.add(storyRow.dataset.id);
+                 }
+             });
+
              var childStories = document.querySelectorAll('.row-story[data-parent-epic="' + epicId + '"].expanded');
              childStories.forEach(function(storyRow) {
                  storyRow.classList.remove('expanded');
@@ -1209,8 +1141,8 @@ function handleRowExpand(expander) {
         }
     }
     
-    // Apply filters - this maintains visibility settings based on the new expanded state
-    applyFilters();
+    // Apply filters with targeted animation; skip KPI recompute (data did not change)
+    applyFilters(false, affectedParentIds, true);
     
     // Ensure the class state wasn't changed by applyFilters
     if (shouldExpand && !row.classList.contains('expanded')) {
@@ -1609,7 +1541,7 @@ function showUploadResults(response) {
 
 
 // --- FILTERING AND VIEW SWITCHING ---
-function applyFilters(skipAnimation, visibleParentIds) {
+function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
     var searchTerm = ($('#q') ? $('#q').value : '').toLowerCase();
     
     // Get multi-select filter values
@@ -1619,6 +1551,7 @@ function applyFilters(skipAnimation, visibleParentIds) {
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
     var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
     var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
     
@@ -1667,11 +1600,13 @@ function applyFilters(skipAnimation, visibleParentIds) {
         validationFilters.length ||
         projectStageFilters.length ||
         uatStatusFilters.length ||
+        fixVersionFilters.length ||
         assignedPMFilters.length ||
         assignedDevFilters.length ||
         (includeStories === false) ||
         (includeBugs === false) ||
-        showOnlyInProgress
+        showOnlyInProgress ||
+        (APP_STATE.showOnlyPastSprint === true)
     );
 
     // Update active filters indicator
@@ -1685,6 +1620,22 @@ function applyFilters(skipAnimation, visibleParentIds) {
         var latestSprintNumber = Math.max.apply(null, sprintNumbers);
         return 'Sprint ' + latestSprintNumber;
     };
+
+    var getLatestSprintNumber = function(sprintString) {
+        var latest = getLatestSprint(sprintString);
+        if (!latest) return null;
+        var m = latest.match(/Sprint\s?(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    };
+
+    var getCurrentSprintNumberFromStats = function() {
+        var sprintStats = APP_STATE.allData.sprintStats || {};
+        var currentSprintName = sprintStats.currentSprintName || '';
+        var m = String(currentSprintName).match(/Sprint\s?(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    };
+
+    var currentSprintNumber = getCurrentSprintNumberFromStats();
 
     // Parse all sprint entries to normalized labels (e.g., "Sprint 123") for multi-sprint membership checks
     var getSprintLabels = function(sprintString) {
@@ -1758,6 +1709,8 @@ function applyFilters(skipAnimation, visibleParentIds) {
             var _matchValidation = matchesMultiSelectFilter(row.dataset.validation, validationFilters);
             var _matchProjectStage = matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters);
             var _matchUatStatus = matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters);
+            var rowFixVersions = splitVersionValues_(row.dataset.fixVersion || '');
+            var _matchFixVersion = (fixVersionFilters.length === 0) || rowFixVersions.some(function(v){ return fixVersionFilters.includes(v); });
             var _matchPM = matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters);
             var _matchDev = matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
 
@@ -1802,6 +1755,17 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 }
             }
 
+            // Past Sprint Filter (KPI): item latest sprint must be older than current sprint.
+            var _matchPastSprint = true;
+            if (APP_STATE.showOnlyPastSprint) {
+                var rowLatestSprintNumber = getLatestSprintNumber(row.dataset.sprint || '');
+                _matchPastSprint = (
+                    currentSprintNumber !== null &&
+                    rowLatestSprintNumber !== null &&
+                    rowLatestSprintNumber < currentSprintNumber
+                );
+            }
+
             var isVisible = _matchesSearch &&
                             _matchStatus &&
                             _matchSprint &&
@@ -1809,10 +1773,12 @@ function applyFilters(skipAnimation, visibleParentIds) {
                             _matchValidation &&
                             _matchProjectStage &&
                             _matchUatStatus &&
+                            _matchFixVersion &&
                             _matchPM &&
                             _matchDev &&
                             (shouldShowBasedOnType || !!searchTerm) &&
-                            _matchOutOfSync;
+                            _matchOutOfSync &&
+                            _matchPastSprint;
             
             // Apply "Show Only In Progress" filter
             if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
@@ -1903,6 +1869,7 @@ function applyFilters(skipAnimation, visibleParentIds) {
                                    matchesMultiSelectFilter(row.dataset.validation, validationFilters) &&
                                    matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters) &&
                                    matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters) &&
+                                   ((fixVersionFilters.length === 0) || splitVersionValues_(row.dataset.fixVersion || '').some(function(v){ return fixVersionFilters.includes(v); })) &&
                                    matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters) &&
                                    matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
             
@@ -2018,17 +1985,20 @@ function applyFilters(skipAnimation, visibleParentIds) {
             }
             
             if (isVisible) {
-                if (row.style.display === 'none') {
+                // If this row was in the middle of a close animation from a prior interaction,
+                // cancel it immediately so it can render without delayed pop-in.
+                if (row.classList.contains('closing')) {
                     row.classList.remove('closing');
-                    
-                    // Determine if we should animate this row
-                    var shouldAnimate = true;
-                    if (visibleParentIds) {
-                        // If visibleParentIds is provided (e.g. during Expand All), only animate if parent is visible
+                }
+
+                if (row.style.display === 'none') {
+                    // Determine if we should animate this row.
+                    // For normal filter changes (no visibleParentIds), show instantly to avoid jank.
+                    // Keep animation only for targeted expand/collapse interactions.
+                    var shouldAnimate = false;
+                    if (!skipAnimation && visibleParentIds) {
                         var parentId = row.dataset.parentEpic;
-                        if (!parentId || !visibleParentIds.has(parentId)) {
-                            shouldAnimate = false;
-                        }
+                        shouldAnimate = !!(parentId && visibleParentIds.has(parentId));
                     }
                     
                     if (!shouldAnimate) {
@@ -2053,12 +2023,12 @@ function applyFilters(skipAnimation, visibleParentIds) {
                 var isAnimatedRow = row.classList.contains('row-story') || row.classList.contains('row-bug-child');
                 
                 // Determine if we should animate out
-                var shouldAnimateOut = !skipAnimation;
-                if (visibleParentIds && isAnimatedRow) {
-                     var parentId = row.dataset.parentEpic;
-                     if (!parentId || !visibleParentIds.has(parentId)) {
-                         shouldAnimateOut = false;
-                     }
+                // For normal filter changes (no visibleParentIds), hide instantly.
+                // Keep animation only for targeted expand/collapse interactions.
+                var shouldAnimateOut = false;
+                if (!skipAnimation && visibleParentIds && isAnimatedRow) {
+                    var parentId = row.dataset.parentEpic;
+                    shouldAnimateOut = !!(parentId && visibleParentIds.has(parentId));
                 }
 
                 if (shouldAnimateOut && row.style.display !== 'none' && isAnimatedRow && !row.classList.contains('closing')) {
@@ -2080,13 +2050,13 @@ function applyFilters(skipAnimation, visibleParentIds) {
                     };
                     row.addEventListener('animationend', onAnimationEnd);
                     
-                    // Safety timeout slightly longer than animation
+                    // Safety timeout slightly longer than close animation
                     setTimeout(function() {
                         if (row.classList.contains('closing')) {
                             cleanup();
                             row.removeEventListener('animationend', onAnimationEnd);
                         }
-                    }, 450);
+                    }, 260);
                 } else if (!row.classList.contains('closing')) {
                     // If not animating (or already closed), hide immediately
                     row.style.display = 'none';
@@ -2095,20 +2065,14 @@ function applyFilters(skipAnimation, visibleParentIds) {
         });
     }
     
-    // Count all items (including hidden children of collapsed epics)
+    // Count items using the already-cached row list (avoid extra full-DOM queries)
     var totalCount = 0;
-    $$('tr.row-epic, tr.row-story, tr.row-task').forEach(function(row) {
-        if (!row.classList.contains('row-epic-footer')) {
-            totalCount++;
-        }
-    });
-    
-    // Count visible items for display info
     var visibleCount = 0;
-    $$('tr.row-epic, tr.row-story, tr.row-task').forEach(function(row) {
-        if (!row.classList.contains('row-epic-footer') && row.style.display === 'table-row') {
-            visibleCount++;
-        }
+    allRows.forEach(function(row) {
+        if (row.classList.contains('row-epic-footer')) return;
+        if (!(row.classList.contains('row-epic') || row.classList.contains('row-story') || row.classList.contains('row-task'))) return;
+        totalCount++;
+        if (row.style.display === 'table-row') visibleCount++;
     });
     
     if ($('#count')) {
@@ -2141,8 +2105,22 @@ function applyFilters(skipAnimation, visibleParentIds) {
         }
     }
     
-    updateEpicFooters();
-    updateKPICards();
+    // For interaction-driven expand/collapse, defer expensive footer/KPI refresh
+    // so rows can paint immediately (reduces "empty gap then pop-in" effect).
+    var shouldDeferPostWork = !!visibleParentIds || !!skipKpiUpdate;
+    if (shouldDeferPostWork) {
+        requestAnimationFrame(function() {
+            updateEpicFooters();
+            if (!skipKpiUpdate) {
+                updateKPICards();
+            }
+        });
+    } else {
+        updateEpicFooters();
+        if (!skipKpiUpdate) {
+            updateKPICards();
+        }
+    }
 }
 
 // Update KPI card values
@@ -2631,6 +2609,8 @@ function hasActiveFilters() {
     var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
     var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
     var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
     
@@ -2639,14 +2619,14 @@ function hasActiveFilters() {
     var hideStories = $('#filter-toggle-stories') ? !$('#filter-toggle-stories').classList.contains('active') : false;
     var hideBugs = $('#filter-toggle-bugs') ? !$('#filter-toggle-bugs').classList.contains('active') : false;
     var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
-    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
     var showOnlyOutOfSync = APP_STATE.showOnlyOutOfSync || false;
+    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
     
     return !!(searchTerm || statusFilters.length || sprintFilters.length || 
               planningStageFilters.length || validationFilters.length || 
               projectStageFilters.length || assignedPMFilters.length || 
-              assignedDevFilters.length || uatStatusFilters.length ||
-              showClosed || hideStories || hideBugs || showOnlyInProgress || showOnlyOutOfSync);
+              assignedDevFilters.length || uatStatusFilters.length || fixVersionFilters.length ||
+              showClosed || hideStories || hideBugs || showOnlyInProgress || showOnlyOutOfSync || showOnlyPastSprint);
 }
 
 

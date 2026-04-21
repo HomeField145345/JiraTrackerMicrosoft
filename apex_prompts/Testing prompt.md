@@ -1,0 +1,1 @@
+A critical microservice, responsible for processing $\text{70\%}$ of user transactions, experienced a full outage for $\text{4}$ hours last night. Initial reports indicate high memory consumption led to an automatic restart loop.

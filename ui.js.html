@@ -501,6 +501,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     row.dataset.status = (item.Status || '').toString().trim();
     row.dataset.planningStage = (item['Planning Stage'] || '').toString().trim();
     row.dataset.projectStage = (item['Project Stage'] || '').toString().trim();
+    row.dataset.fixVersion = (item['Fix Version'] || '').toString().trim();
     // Prefer Assigned PM/Dev; fall back to PM Lead/Assignee; always trim
     row.dataset.assignedPM = ((item['Assigned PM'] || item['PM Lead'] || '') + '').trim();
     row.dataset.assignedDev = ((item['Assigned Dev'] || item['Assignee'] || '') + '').trim();
@@ -921,7 +922,7 @@ function populateLinksDropdown() {
 function populateFilters() {
     var allItems = [].concat(APP_STATE.allData.projects, APP_STATE.allData.independentTasks);
     var allStatuses = {}, allSprints = {}, allPlanningStages = {}, allValidations = {};
-    var allProjectStages = {}, allAssignedPMs = {}, allAssignedDevs = {}, allUatStatuses = {};
+    var allProjectStages = {}, allAssignedPMs = {}, allAssignedDevs = {}, allUatStatuses = {}, allFixVersions = {};
     
     for (var i = 0; i < allItems.length; i++) {
         var item = allItems[i];
@@ -936,6 +937,10 @@ function populateFilters() {
         if (adv && adv !== '—' && adv.toLowerCase() !== 'none') allAssignedDevs[adv] = true;
         var uat = (item['UAT Status'] || '').toString().trim();
         if (uat && uat !== '—') allUatStatuses[uat] = true;
+        var fixVersions = splitVersionValues_(item['Fix Version']);
+        fixVersions.forEach(function(v) {
+            if (v && v !== '—' && v.toLowerCase() !== 'none' && v.toLowerCase() !== 'n/a') allFixVersions[v] = true;
+        });
         
         var validationText = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']).text;
         allValidations[validationText] = true;
@@ -961,6 +966,7 @@ function populateFilters() {
     populateMultiSelectDropdown('validation', Object.keys(allValidations).sort(), 'All Validations');
     populateMultiSelectDropdown('projectStage', Object.keys(allProjectStages).sort(), 'All Project Stages');
     populateMultiSelectDropdown('uatStatus', Object.keys(allUatStatuses).sort(), 'All UAT Statuses');
+    populateMultiSelectDropdown('fixVersion', Object.keys(allFixVersions).sort(), 'All Fix Versions');
     populateMultiSelectDropdown('assignedPM', Object.keys(allAssignedPMs).sort(), 'All PMs');
     populateMultiSelectDropdown('assignedDev', Object.keys(allAssignedDevs).sort(), 'All Devs');
     
@@ -1126,6 +1132,7 @@ function updateFilterLabel(filterType, defaultLabel) {
             case 'validation': defaultLabel = 'All Validations'; break;
             case 'projectStage': defaultLabel = 'All Project Stages'; break;
             case 'uatStatus': defaultLabel = 'All UAT Statuses'; break;
+            case 'fixVersion': defaultLabel = 'All Fix Versions'; break;
             case 'assignedPM': defaultLabel = 'All PMs'; break;
             case 'assignedDev': defaultLabel = 'All Devs'; break;
             default: defaultLabel = 'All Items';
@@ -1174,6 +1181,7 @@ function getDefaultLabel(filterType) {
         'validation': 'All Validations',
         'projectStage': 'All Project Stages',
         'uatStatus': 'All UAT Statuses',
+        'fixVersion': 'All Fix Versions',
         'assignedPM': 'All PMs',
         'assignedDev': 'All Devs'
     };

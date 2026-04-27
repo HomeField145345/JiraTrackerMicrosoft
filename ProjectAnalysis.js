@@ -190,11 +190,19 @@ function _getRawProjectData(contextUser) {
 /**
  * Force refresh project data by clearing cache
  * @param {Object} user - The user requesting the data
+ * @param {string} [targetUsername] - Optional workspace username to refresh
  * @returns {Object} Fresh project data
  */
-function forceGetProjectData_(user) {
-  clearProjectCache(user ? user.username : null);
-  return getProjectData_(user);
+function forceGetProjectData_(user, targetUsername) {
+  var usernameToClear = null;
+  if (targetUsername && String(targetUsername).trim() !== '') {
+    usernameToClear = String(targetUsername).trim();
+  } else if (user && user.username) {
+    usernameToClear = user.username;
+  }
+
+  clearProjectCache(usernameToClear);
+  return getProjectData_(user, targetUsername);
 }
 
 /**

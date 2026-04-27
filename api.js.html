@@ -295,6 +295,7 @@ function refreshData(targetUsername) {
 function forceRefreshData() {
   const token = checkAuth();
   if (!token) return;
+  const targetUsername = getSelectedWorkspaceUsername();
 
   showLoading('Fetching latest data from sheet...');
   showToast('Fetching latest data from sheet...');
@@ -311,7 +312,7 @@ function forceRefreshData() {
         handleFailure(error);
         if(btn) btn.disabled = false;
     })
-    .forceGetProjectData(token);
+    .forceGetProjectData(token, targetUsername);
 }
 
 function saveTask(taskData) {

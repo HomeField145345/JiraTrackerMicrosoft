@@ -107,9 +107,9 @@ function resolveDataContextUser(authUser, targetUsername) {
   return targetUser;
 }
 
-function forceGetProjectData(token) {
+function forceGetProjectData(token, targetUsername) {
   const auth = requireAuth(token);
-  return forceGetProjectData_(auth.user);
+  return forceGetProjectData_(auth.user, targetUsername);
 }
 
 function getProjectData(token, targetUsername) {

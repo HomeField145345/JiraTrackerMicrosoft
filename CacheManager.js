@@ -60,25 +60,48 @@ function getCacheInChunks(cache, key) {
   }
 }
 
+function clearProjectCacheByKeyBase_(cache, keyBase) {
+  var chunkCountStr = cache.get(keyBase + '_chunkCount');
+  if (!chunkCountStr) return;
+
+  var count = parseInt(chunkCountStr, 10);
+  var keys = [];
+  if (!isNaN(count) && count > 0) {
+    for (var i = 0; i < count; i++) {
+      keys.push(keyBase + '_chunk_' + i);
+    }
+  }
+  keys.push(keyBase + '_chunkCount');
+  cache.removeAll(keys);
+}
+
 // NEW: clear cached project data chunks
 function clearProjectCache(username) {
   try {
     var cache = CacheService.getScriptCache();
-    // If username is provided, clear that specific cache.
-    // If not, we default to 'global' (though usually username should be provided)
-    var keyBase = 'project_data_' + (username ? username : 'global');
-    
-    var chunkCountStr = cache.get(keyBase + '_chunkCount');
-    if (!chunkCountStr) return; // nothing to clear
-    var count = parseInt(chunkCountStr, 10);
-    var keys = [];
-    if (!isNaN(count) && count > 0) {
-      for (var i = 0; i < count; i++) {
-        keys.push(keyBase + '_chunk_' + i);
+    if (username) {
+      clearProjectCacheByKeyBase_(cache, 'project_data_' + username);
+      return;
+    }
+
+    // Broad clear: clear legacy global cache plus all known user-scoped caches.
+    clearProjectCacheByKeyBase_(cache, 'project_data_global');
+
+    var users = [];
+    try {
+      if (typeof getUsers === 'function') {
+        users = getUsers() || [];
+      }
+    } catch (eUsers) {
+      users = [];
+    }
+
+    for (var u = 0; u < users.length; u++) {
+      var uname = users[u] && users[u].username ? String(users[u].username).trim() : '';
+      if (uname) {
+        clearProjectCacheByKeyBase_(cache, 'project_data_' + uname);
       }
     }
-    keys.push(keyBase + '_chunkCount');
-    cache.removeAll(keys);
   } catch (e) {
     // ignore cache clear failures
   }

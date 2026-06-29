@@ -43,6 +43,24 @@ function importJiraCsv_(fileData, user) {
     // *** FIX: Use getValues() to read raw sheet data for comparison with CSV ***
     var existingValues = existingDataRange.getValues(); 
     var headers = existingValues.shift();
+
+    // Ensure extra import-backed columns exist so incoming CSV fields can be persisted
+    ['Labels', 'Description'].forEach(function(columnName) {
+      if (headers.indexOf(columnName) === -1) {
+        sheet.getRange(1, headers.length + 1).setValue(columnName);
+        headers.push(columnName);
+      }
+    });
+
+    // Keep all existing rows aligned to current header length
+    existingValues = existingValues.map(function(row) {
+      var normalizedRow = row.slice();
+      while (normalizedRow.length < headers.length) {
+        normalizedRow.push('');
+      }
+      return normalizedRow;
+    });
+
     var jiraIdColIndex = headers.indexOf('Jira #');
     if (jiraIdColIndex === -1) {
       return { status: 'error', message: 'Could not find "Jira #" column in the sheet.' };
@@ -183,7 +201,9 @@ function _buildHeaderMapping(headers, uploadedHeaders) {
     'Resolution': 'Resolution',
     'Acceptance Criteria': 'Acceptance Critera', // Map to existing sheet header (with typo)
     'Acceptance Critera': 'Acceptance Critera', // Also support if import has the typo
-    'Links': 'Links', 'Linked Issues': 'Links', 'Issue Links': 'Links' // Map various link headers to 'Links'
+    'Links': 'Links', 'Linked Issues': 'Links', 'Issue Links': 'Links', // Map various link headers to 'Links'
+    'Labels': 'Labels', 'Label': 'Labels', // Map Labels column
+    'Description': 'Description', 'Issue Description': 'Description' // Map Description column
   };
   
   const headerMap = {};

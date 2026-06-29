@@ -141,6 +141,7 @@
                 });
 
                 var optionsData = {
+                    notInProgressStatuses: (document.getElementById('inProgressStatuses') ? document.getElementById('inProgressStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     actPctOptions: document.getElementById('actPctOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     planningStageOptions: document.getElementById('planningStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     projectStageOptions: document.getElementById('projectStageOptions').value.split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
@@ -153,6 +154,7 @@
                     closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    // Legacy key retained for compatibility with existing config pipeline
                     inProgressStatuses: (document.getElementById('inProgressStatuses') ? document.getElementById('inProgressStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     helpfulLinks: linksData,
                     stageStatusMappings: getCurrentMappingsAsArray()
@@ -162,6 +164,15 @@
                     .withSuccessHandler(function(response) {
                         if (response.status === 'success') {
                             if (statusEl) { statusEl.textContent = response.message || 'Configuration Saved!'; statusEl.className = 'text-sm text-green-600'; }
+                            try {
+                                // Apply new config immediately across the dashboard.
+                                if (typeof refreshData === 'function') {
+                                    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
+                                    refreshData(targetUsername);
+                                }
+                            } catch (refreshError) {
+                                console.warn('Config saved, but refresh failed:', refreshError);
+                            }
                         } else {
                             handleFailure(new Error(response.message));
                         }
@@ -766,64 +777,6 @@
             
         }
 
-    // Legacy functions removed - now using visual mapping interface
-    
-    function selectStage(stage) {
-        selectedStage = stage;
-        
-        // Update stage button styles
-        document.querySelectorAll('.stage-btn').forEach(function(btn) {
-            btn.classList.remove('bg-blue-100', 'border-blue-500', 'font-medium');
-            if (btn.textContent === stage) {
-                btn.classList.add('bg-blue-100', 'border-blue-500', 'font-medium');
-            }
-        });
-        
-        // Update status button styles to show current mappings
-        updateStatusButtonStyles();
-    }
-    
-    function updateStatusButtonStyles() {
-        var mappedStatuses = selectedStage ? (currentMappings[selectedStage] || []) : [];
-        
-        document.querySelectorAll('.status-btn').forEach(function(btn) {
-            btn.classList.remove('bg-green-100', 'border-green-500', 'font-medium');
-            if (mappedStatuses.includes(btn.textContent)) {
-                btn.classList.add('bg-green-100', 'border-green-500', 'font-medium');
-            }
-        });
-    }
-    
-    function toggleStatusForSelectedStage(status) {
-        if (!selectedStage) {
-            alert('Please select a Project Stage first');
-            return;
-        }
-        
-        if (!currentMappings[selectedStage]) {
-            currentMappings[selectedStage] = [];
-        }
-        
-        var mappedStatuses = currentMappings[selectedStage];
-        var index = mappedStatuses.indexOf(status);
-        
-        if (index === -1) {
-            // Add status to mapping
-            mappedStatuses.push(status);
-        } else {
-            // Remove status from mapping
-            mappedStatuses.splice(index, 1);
-            
-            // If no statuses left, remove the mapping entirely
-            if (mappedStatuses.length === 0) {
-                delete currentMappings[selectedStage];
-            }
-        }
-        
-        updateStatusButtonStyles();
-        renderCurrentMappings();
-    }
-
     function getCurrentMappingsAsArray() {
         var result = [];
         Object.keys(currentMappings).forEach(function(type) {
@@ -931,6 +884,17 @@
                 if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Error loading users: ' + error.message + '</td></tr>';
             })
             .getUsersList(token);
+
+        google.script.run
+            .withSuccessHandler(function(url) {
+                const linkEl = document.getElementById('global-sheet-link');
+                if (linkEl && url) {
+                    linkEl.href = url;
+                    linkEl.textContent = 'Open global spreadsheet ↗';
+                }
+            })
+            .withFailureHandler(function() {})
+            .getGlobalSheetUrl(token);
     }
 
     function formatRole(role) {
@@ -961,8 +925,10 @@
                 '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">' + user.username + '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + user.email + '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + formatRole(user.role) + '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500" title="' + (user.dataSheetId || 'Global Database') + '">' + 
-                    (user.dataSheetId ? '<span class="font-mono text-xs">' + user.dataSheetId.substring(0, 8) + '...</span>' : '<span class="text-gray-400 italic">Global</span>') + 
+                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + 
+                    (user.dataSheetId 
+                        ? '<a href="https://docs.google.com/spreadsheets/d/' + user.dataSheetId + '" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-mono text-xs" title="' + user.dataSheetId + '">Personal sheet ↗</a>' 
+                        : '<span class="text-gray-400 italic">Global</span>') + 
                 '</td>' +
                 '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + 
                     (user.isActive ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive</span>') + 

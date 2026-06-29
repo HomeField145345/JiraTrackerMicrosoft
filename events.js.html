@@ -249,41 +249,6 @@ function updateEpicFooters() {
 
 
 // --- EVENT HANDLER FUNCTIONS ---
-function hasActiveFilters() {
-    var searchTerm = $('#q') ? $('#q').value.trim() : '';
-    var statusFilters = APP_STATE.multiSelectFilters.status || [];
-    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
-    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
-    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
-    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
-    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
-    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
-    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
-    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
-    
-    var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
-    var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
-    var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
-    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
-    
-    return !!(
-        searchTerm ||
-        statusFilters.length ||
-        sprintFilters.length ||
-        planningStageFilters.length ||
-        validationFilters.length ||
-        projectStageFilters.length ||
-        uatStatusFilters.length ||
-        fixVersionFilters.length ||
-        assignedPMFilters.length ||
-        assignedDevFilters.length ||
-        (includeStories === false) ||
-        (includeBugs === false) ||
-        showOnlyInProgress ||
-        showOnlyPastSprint
-    );
-}
-
 function updateActiveFiltersIndicator() {
     var activeFilterCount = 0;
     var filterLabels = [];
@@ -363,17 +328,19 @@ function updateActiveFiltersIndicator() {
         activeFilterCount++;
         filterLabels.push('Exclude Bugs');
     }
-    if (showOnlyInProgress) {
+    if (!showOnlyInProgress) {
         activeFilterCount++;
-        filterLabels.push('In Progress Only');
+        filterLabels.push('In Progress Off');
     }
     if (showOnlyOutOfSync) {
-        activeFilterCount++;
-        filterLabels.push('Out of Sync');
-    }
-    if (showOnlyPastSprint) {
-        activeFilterCount++;
-        filterLabels.push('Past Sprint');
+        // Out of Sync overrides everything — show it as the sole active filter when on.
+        activeFilterCount = 1;
+        filterLabels = ['Out of Sync'];
+    } else {
+        if (showOnlyPastSprint) {
+            activeFilterCount++;
+            filterLabels.push('Past Sprint');
+        }
     }
     
     var activeFiltersIndicator = $('#activeFiltersIndicator');
@@ -385,7 +352,9 @@ function updateActiveFiltersIndicator() {
             clearFiltersBtn.style.display = 'inline-block';
             var filterBadge = activeFiltersIndicator.querySelector('.filter-badge');
             if (filterBadge) {
-                filterBadge.textContent = `${activeFilterCount} Filter${activeFilterCount > 1 ? 's' : ''} Active`;
+                filterBadge.textContent = showOnlyOutOfSync
+                    ? 'Out of Sync'
+                    : (activeFilterCount + ' Filter' + (activeFilterCount > 1 ? 's' : '') + ' Active');
             }
             // Active filters detected
         } else {
@@ -455,11 +424,12 @@ function handleClearFilters() {
       APP_STATE.multiSelectFilters.projectStage = [];
   }
   
-  // Reset toggle buttons to their default states
-  // Default state: closed filter OFF (hide closed items), stories ON, bugs ON
+    // Reset toggle buttons to their default states
+    // Default state: closed OFF, stories ON, bugs ON, in-progress ON
   if ($('#filter-toggle-closed')) $('#filter-toggle-closed').classList.remove('active');
   if ($('#filter-toggle-stories')) $('#filter-toggle-stories').classList.add('active');
   if ($('#filter-toggle-bugs')) $('#filter-toggle-bugs').classList.add('active');
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.add('active');
   
   // Clear the manually collapsed epics tracking
   APP_STATE.manuallyCollapsedEpics = {};
@@ -467,43 +437,6 @@ function handleClearFilters() {
   // Reset Out of Sync filter
   APP_STATE.showOnlyOutOfSync = false;
     APP_STATE.showOnlyPastSprint = false;
-  
-  applyFilters();
-}
-
-function handleQuickFilter(filterType) {
-  // Clear all filters first
-  $('#q').value = '';
-  $('#f-status').selectedIndex = 0;
-  var sprintFilter = $('#f-sprint');
-  if (sprintFilter) sprintFilter.selectedIndex = 0;
-  var planningFilter = $('#f-planning-stage');
-  if (planningFilter) planningFilter.selectedIndex = 0;
-  var validationFilter = $('#f-validation');
-  if (validationFilter) validationFilter.selectedIndex = 0;
-  
-  // Apply specific filter based on type
-  switch(filterType) {
-    case 'validation-issues':
-      if (validationFilter) {
-        for (let i = 0; i < validationFilter.options.length; i++) {
-          if (validationFilter.options[i].value === '❌ Invalid') {
-            validationFilter.selectedIndex = i;
-            break;
-          }
-        }
-      }
-      break;
-    case 'missing-acceptance':
-      $('#q').value = 'missing:acceptance';
-      break;
-    case 'missing-story-points':
-      $('#q').value = 'missing:story-points';
-      break;
-    case 'missing-project-stage':
-      $('#q').value = 'missing:project-stage';
-      break;
-  }
   
   applyFilters();
 }
@@ -665,65 +598,6 @@ function handleRetestFilter() {
     applyFilters();
 }
 
-function filterByValidationStatus(statusText) {
-    var rows = document.querySelectorAll('#list-body tr');
-    var visibleCount = 0;
-
-    rows.forEach(function(row) {
-        if (row.classList.contains('row-epic')) {
-            row.style.display = 'none';
-            return;
-        }
-
-        var rowJiraId = row.dataset.jiraId;
-        if (!rowJiraId) {
-             row.style.display = 'none';
-             return;
-        }
-
-        var projectData = APP_STATE.allData.projects.find(function(p) { 
-            return String(p['Jira #'] || p.ID).toLowerCase() === rowJiraId; 
-        });
-
-        if (!projectData) {
-            row.style.display = 'none';
-            return;
-        }
-        
-        var validationStatus = getValidationStatus(
-            projectData['Planning Stage'], 
-            projectData['Updated'], 
-            projectData['Last Checked'], 
-            projectData['Project Stage'],
-            projectData['Target Date']
-        );
-
-        if (validationStatus.text === statusText) {
-            row.style.display = '';
-            visibleCount++;
-            // Show parent epic
-            var epicId = row.dataset.parentEpic;
-            if (epicId) {
-                var epicRow = document.querySelector('.row-epic[data-id="' + epicId + '"]') || 
-                              document.querySelector('.row-epic[data-jira-id="' + epicId.toLowerCase() + '"]');
-                if (epicRow) epicRow.style.display = '';
-            }
-        } else {
-            row.style.display = 'none';
-        }
-    });
-    
-    // Update counts
-    var filteredCount = $('#filtered-count');
-    if (filteredCount) filteredCount.textContent = visibleCount;
-    
-    // Show/hide no matches
-    var noMatches = $('#no-matches-indicator');
-    if (noMatches) {
-        noMatches.classList.toggle('hidden', visibleCount > 0);
-    }
-}
-
 function handleCurrentSprintFilter() {
     var sprintStats = APP_STATE.allData.sprintStats || {};
     var currentSprintName = sprintStats.currentSprintName;
@@ -804,263 +678,6 @@ function handleCurrentSprintFilter() {
 
 
 
-
-function handleCurrentSprintClick() {
-    if (APP_STATE.currentView !== 'table') {
-        switchView('table');
-    }
-    handleClearFilters();
-    
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    
-    if (currentSprintName && currentSprintName !== '—' && currentSprintName !== 'None') {
-        // Set sprint filter
-        $('#f-sprint').value = currentSprintName;
-        
-        // Find all epics that have stories in current sprint and expand them
-        var allItems = APP_STATE.allData.projects;
-        var epicsWithCurrentSprintItems = new Set();
-        
-        // Find stories in current sprint and their parent epics
-        for (var i = 0; i < allItems.length; i++) {
-            var item = allItems[i];
-            var itemSprints = (item.sprint || '').split(',').map(function(s) { return s.trim(); });
-            var isInCurrentSprint = itemSprints.some(function(sprint) {
-                return sprint.includes(currentSprintName);
-            });
-            
-            if (isInCurrentSprint && item['Issue Type'] !== 'Epic') {
-                // This is a story/task in current sprint, find its epic
-                var epicLink = item['Epic Link'];
-                if (epicLink) {
-                    epicsWithCurrentSprintItems.add(epicLink);
-                }
-            }
-        }
-        
-        // Expand epics that have current sprint items
-        setTimeout(function() {
-            $$('.row-epic').forEach(function(epicRow) {
-                var cell = epicRow.querySelector('td:nth-child(4)');
-                var epicSummary = cell && cell.textContent ? cell.textContent.trim() : '';
-                if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
-                    epicRow.classList.add('expanded');
-                }
-            });
-            applyFilters();
-        }, 0);
-    }
-    
-    applyFilters();
-}
-
-function handleCurrentSprintStatusClick(statusValue) {
-    if (APP_STATE.currentView !== 'table') {
-        switchView('table');
-    }
-    handleClearFilters();
-    
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    
-    if (currentSprintName && currentSprintName !== '—' && currentSprintName !== 'None') {
-        // Set both sprint and status filters
-        $('#f-sprint').value = currentSprintName;
-        $('#f-status').value = statusValue;
-        
-        // Find all epics that have stories in current sprint with this status and expand them
-        var allItems = APP_STATE.allData.projects;
-        var epicsWithCurrentSprintItems = new Set();
-        
-        // Find stories in current sprint with the specific status and their parent epics
-        for (var i = 0; i < allItems.length; i++) {
-            var item = allItems[i];
-            var itemSprints = (item.sprint || '').split(',').map(function(s) { return s.trim(); });
-            var isInCurrentSprint = itemSprints.some(function(sprint) {
-                return sprint.includes(currentSprintName);
-            });
-            var itemStatus = (item.Status || '').toLowerCase().trim();
-            
-            if (isInCurrentSprint && itemStatus === statusValue.toLowerCase() && item['Issue Type'] !== 'Epic') {
-                // This is a story/task in current sprint with matching status, find its epic
-                var epicLink = item['Epic Link'];
-                if (epicLink) {
-                    epicsWithCurrentSprintItems.add(epicLink);
-                }
-            }
-        }
-        
-        // Expand epics that have current sprint items with this status
-        setTimeout(function() {
-            $$('.row-epic').forEach(function(epicRow) {
-                var cell = epicRow.querySelector('td:nth-child(4)');
-                var epicSummary = cell && cell.textContent ? cell.textContent.trim() : '';
-                if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
-                    epicRow.classList.add('expanded');
-                }
-            });
-            applyFilters();
-        }, 0);
-    }
-    
-    applyFilters();
-}
-
-function handlePastSprintClick() {
-    if (APP_STATE.currentView !== 'table') {
-        switchView('table');
-    }
-    handleClearFilters();
-
-    // Use date-based past sprint logic: count items that are in any sprint that ended before today/current sprint
-    var today = new Date();
-    var sprintStats = APP_STATE.allData.sprintStats || {};
-    var currentSprintName = sprintStats.currentSprintName;
-    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
-    var pastClosedList = Array.isArray(cfg.pastSprintClosedStages) ? cfg.pastSprintClosedStages : [];
-    var pastClosedSet = new Set(pastClosedList.map(function(s){ return String(s).trim().toLowerCase(); }));
-    var sprints = {}; // Cache for parsed sprint dates
-    
-    var parseSprintDates = function(sprintString) {
-        try {
-            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
-            var normalized = sprintString.replace(/[–—]/g, '-');
-            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
-            var m = normalized.match(re);
-            if (!m) return { start: null, end: null };
-            var currentYear = today.getFullYear();
-            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
-            var sy = m[3] ? parseInt(m[3],10) : currentYear;
-            if (sy < 100) sy += 2000;
-            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
-            var ey = m[6] ? parseInt(m[6],10) : sy;
-            if (ey < 100) ey += 2000;
-            var start = new Date(sy, sm - 1, sd);
-            var end = new Date(ey, em - 1, ed);
-            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
-            end.setHours(23,59,59,999);
-            return { start: start, end: end };
-        } catch(e) { return { start: null, end: null }; }
-    };
-
-    // First pass: Parse all unique sprints and cache their dates
-    var allProjects = APP_STATE.allData.projects || [];
-    allProjects.forEach(function(project) {
-        var sprintString = project.sprint || project.Sprint || '';
-        if (sprintString && typeof sprintString === 'string') {
-            sprintString.split(',').forEach(function(sprintStr) {
-                var trimmedSprint = sprintStr.trim();
-                if (trimmedSprint && !sprints[trimmedSprint]) {
-                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
-                }
-            });
-        }
-    });
-
-    // Determine current sprint end date for comparison
-    var currentSprintEndDate = null;
-    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
-        for (var sprintFullName in sprints) {
-            if (sprints.hasOwnProperty(sprintFullName)) {
-                var dates = sprints[sprintFullName];
-                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
-                    currentSprintEndDate = dates.end;
-                    break;
-                }
-            }
-        }
-    }
-
-    // Function to check if an item is in a past sprint
-    var isItemInPastSprint = function(sprintString) {
-        if (!sprintString || typeof sprintString !== 'string') return false;
-        var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
-        
-        var hasPastSprint = false;
-        var hasCurrentOrFutureSprint = false;
-        
-        for (var i = 0; i < itemSprints.length; i++) {
-            var sprintInfo = sprints[itemSprints[i]];
-            if (sprintInfo && sprintInfo.end) {
-                var compareDate = currentSprintEndDate || today;
-                if (sprintInfo.end < compareDate) {
-                    hasPastSprint = true;
-                } else {
-                    hasCurrentOrFutureSprint = true;
-                }
-            }
-        }
-        
-        // Only consider it a past sprint item if it has at least one past sprint AND no current/future sprints
-        return hasPastSprint && !hasCurrentOrFutureSprint;
-    };
-
-    var allRows = $$('#list-body tr');
-    var visibleEpicIds = new Set();
-    var count = 0;
-
-    allRows.forEach(function(row) { row.style.display = 'none'; });
-    
-    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
-        var projectStage = (itemRow.dataset.projectStage || '').trim().toLowerCase();
-        var itemSprints = itemRow.dataset.sprint || '';
-        var isPastSprint = isItemInPastSprint(itemSprints);
-        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
-        var jiraId = itemRow.dataset.jiraId || itemRow.dataset.id || 'Unknown';
-
-        if (isPastSprint && !isClosedForPast) {
-            itemRow.style.display = 'table-row';
-            if (itemRow.dataset.parentEpic) {
-                visibleEpicIds.add(itemRow.dataset.parentEpic);
-            }
-            count++;
-        }
-    });
-
-    $$('tr.row-epic').forEach(function(epicRow) {
-        if (visibleEpicIds.has(epicRow.dataset.id)) {
-            epicRow.style.display = 'table-row';
-            epicRow.classList.add('expanded');
-        }
-    });
-    
-    // Count all past sprint items (including hidden children)
-    var totalPastSprintCount = 0;
-    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
-        var projectStage = (itemRow.dataset.projectStage || '').trim().toLowerCase();
-        var itemSprints = itemRow.dataset.sprint || '';
-        var isPastSprint = isItemInPastSprint(itemSprints);
-        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
-        if (isPastSprint && !isClosedForPast) {
-            totalPastSprintCount++;
-        }
-    });
-    
-    // Count visible past sprint items
-    var visiblePastSprintCount = 0;
-    $$('tr.row-story, tr.row-task').forEach(function(itemRow) {
-        if (itemRow.style.display === 'table-row') {
-            visiblePastSprintCount++;
-        }
-    });
-    
-    // Add visible epics to the count
-    $$('tr.row-epic').forEach(function(epicRow) {
-        if (epicRow.style.display === 'table-row') {
-            visiblePastSprintCount++;
-        }
-    });
-    
-    if ($('#count')) {
-        if (visiblePastSprintCount === totalPastSprintCount) {
-            $('#count').textContent = totalPastSprintCount + ' items';
-        } else {
-            $('#count').textContent = visiblePastSprintCount + ' of ' + totalPastSprintCount + ' items shown';
-        }
-    }
-    updateEpicFooters();
-}
 
 function handleSaveTask() {
   var saveBtn = $('#modalSave');
@@ -1582,10 +1199,12 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
     var toggleInProgressBtn = $('#filter-toggle-in-progress');
     var showOnlyInProgress = (toggleInProgressBtn ? toggleInProgressBtn.classList.contains('active') : false);
     
-    // Get In Progress Statuses from config
-    var inProgressStatuses = [];
-    if (APP_STATE.allData.config && APP_STATE.allData.config.inProgressStatuses) {
-        inProgressStatuses = APP_STATE.allData.config.inProgressStatuses.map(function(s){ return (s||'').toLowerCase().trim(); });
+    // Get statuses considered NOT in progress from config.
+    // Backward compatibility: use either `notInProgressStatuses` or legacy `inProgressStatuses` key.
+    var notInProgressStatuses = [];
+    if (APP_STATE.allData.config) {
+        var configuredNotInProgress = APP_STATE.allData.config.notInProgressStatuses || APP_STATE.allData.config.inProgressStatuses || [];
+        notInProgressStatuses = configuredNotInProgress.map(function(s){ return (s||'').toLowerCase().trim(); });
     }
     
     // Save filter state whenever filters are applied
@@ -1605,7 +1224,7 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
         assignedDevFilters.length ||
         (includeStories === false) ||
         (includeBugs === false) ||
-        showOnlyInProgress ||
+        (showOnlyInProgress === false) ||
         (APP_STATE.showOnlyPastSprint === true)
     );
 
@@ -1661,9 +1280,22 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
         return filterArray.length === 0 || filterArray.includes(value);
     };
 
+    var isActionNeededRow = function(row) {
+        var validationText = (row.dataset.validation || '').toLowerCase().trim();
+        var needsReviewText = (APP_CONSTANTS && APP_CONSTANTS.VALIDATION && APP_CONSTANTS.VALIDATION.NEEDS_REVIEW
+            ? APP_CONSTANTS.VALIDATION.NEEDS_REVIEW
+            : 'Needs Review').toLowerCase().trim();
+        var pastDueText = (APP_CONSTANTS && APP_CONSTANTS.VALIDATION && APP_CONSTANTS.VALIDATION.PAST_DUE
+            ? APP_CONSTANTS.VALIDATION.PAST_DUE
+            : 'Past Due').toLowerCase().trim();
+        return validationText === needsReviewText || validationText === pastDueText;
+    };
+
+    // Always initialize allRows so downstream loops don't crash when current view is not table.
+    var allRows = $$('#list-body tr');
+
     if (APP_STATE.currentView === 'table') {
         var rowVisibility = new Map();
-        var allRows = $$('#list-body tr');
         var epicChildrenMap = new Map(); // Track which epics have open children
         var epicsWithMatchingChildren = new Set(); // Track epics that should be shown because they have matching children
 
@@ -1717,42 +1349,44 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
             // Out of Sync Filter
             var _matchOutOfSync = true;
             if (APP_STATE.showOnlyOutOfSync) {
-                var projectStage = (row.dataset.projectStage || '').trim().toLowerCase();
-                
-                // Skip if closed
-                if (mappedClosedStages.indexOf(projectStage) !== -1) {
+                // Archived items (📁) will never receive backend updates — exclude them.
+                var rowSyncStatus = (row.dataset.syncStatus || '').trim().toLowerCase();
+                if (rowSyncStatus === '📁') {
                     _matchOutOfSync = false;
                 } else {
-                    var stageIsEmpty = !projectStage;
-                    if (stageIsEmpty) {
-                        _matchOutOfSync = true;
-                    } else {
-                        var status = (row.dataset.status || '').trim().toLowerCase();
-                        var expectedStatuses = stageStatusMap[projectStage] || [];
-                        var statusAlignedWithStage = false;
-                        var statusIsEmpty = !status;
 
-                        if (expectedStatuses.length > 0) {
-                            if (statusIsEmpty) {
-                                statusAlignedWithStage = false;
-                            } else {
-                                for (var si = 0; si < expectedStatuses.length; si++) {
-                                    if (status === expectedStatuses[si]) { 
-                                        statusAlignedWithStage = true; 
-                                        break; 
-                                    } 
+                var projectStage = (row.dataset.projectStage || '').trim().toLowerCase();
+
+                var stageIsEmpty = !projectStage;
+                if (stageIsEmpty) {
+                    _matchOutOfSync = true;
+                } else {
+                    var status = (row.dataset.status || '').trim().toLowerCase();
+                    var expectedStatuses = stageStatusMap[projectStage] || [];
+                    var statusAlignedWithStage = false;
+                    var statusIsEmpty = !status;
+
+                    if (expectedStatuses.length > 0) {
+                        if (statusIsEmpty) {
+                            statusAlignedWithStage = false;
+                        } else {
+                            for (var si = 0; si < expectedStatuses.length; si++) {
+                                if (status === expectedStatuses[si]) {
+                                    statusAlignedWithStage = true;
+                                    break;
                                 }
                             }
-                        } else {
-                            // No stage-specific mapping: flag as mismatch
-                            statusAlignedWithStage = false;
                         }
-                        
-                        if (statusAlignedWithStage) {
-                            _matchOutOfSync = false;
-                        }
+                    } else {
+                        // No stage-specific mapping: flag as mismatch
+                        statusAlignedWithStage = false;
+                    }
+
+                    if (statusAlignedWithStage) {
+                        _matchOutOfSync = false;
                     }
                 }
+                } // end archived check
             }
 
             // Past Sprint Filter (KPI): item latest sprint must be older than current sprint.
@@ -1766,7 +1400,12 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                 );
             }
 
-            var isVisible = _matchesSearch &&
+            var isVisible;
+            if (APP_STATE.showOnlyOutOfSync) {
+                // Out-of-sync mode overrides all other filters.
+                isVisible = _matchOutOfSync;
+            } else {
+                isVisible = _matchesSearch &&
                             _matchStatus &&
                             _matchSprint &&
                             _matchPlanning &&
@@ -1779,23 +1418,26 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                             (shouldShowBasedOnType || !!searchTerm) &&
                             _matchOutOfSync &&
                             _matchPastSprint;
-            
-            // Apply "Show Only In Progress" filter
-            if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
-                var status = (row.dataset.status || '').toLowerCase().trim();
-                if (inProgressStatuses.indexOf(status) === -1) {
-                    isVisible = false;
-                }
-            }
 
-            // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
-            // EXCEPT if the item specifically matches the search term OR has open children
-            if (!includeClosed && isVisible) {
-                var matchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
-                if (isClosedByProjectStage(row) && !matchesSpecificSearch) {
-                    var openChildrenCount = parseInt(row.dataset.openChildren || '0');
-                    if (openChildrenCount === 0) {
+                // Apply "Show Only In Progress" filter
+                if (showOnlyInProgress && isVisible && notInProgressStatuses.length > 0) {
+                    var status = (row.dataset.status || '').toLowerCase().trim();
+                    var keepBecauseActionNeeded = isActionNeededRow(row);
+                    var isConfiguredNotInProgress = notInProgressStatuses.indexOf(status) !== -1;
+                    if (isConfiguredNotInProgress && !keepBecauseActionNeeded) {
                         isVisible = false;
+                    }
+                }
+
+                // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
+                // EXCEPT if the item specifically matches the search term OR has open children
+                if (!includeClosed && isVisible) {
+                    var matchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
+                    if (isClosedByProjectStage(row) && !matchesSpecificSearch) {
+                        var openChildrenCount = parseInt(row.dataset.openChildren || '0');
+                        if (openChildrenCount === 0) {
+                            isVisible = false;
+                        }
                     }
                 }
             }
@@ -1877,25 +1519,31 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
             
             var childMatches = epicsWithMatchingChildren.has(epicId);
             
-            // If status filters are active, only show epics with matching children
             var isVisible;
-            if (statusFilters.length > 0) {
-                isVisible = childMatches; // Status filters are active, so only show epics with matching children
+            if (APP_STATE.showOnlyOutOfSync) {
+                // In out-of-sync mode, only show epics that have matching children.
+                // This avoids showing empty epics.
+                isVisible = childMatches;
             } else {
-                isVisible = epicMatchesFilters || childMatches; // No status filters, show if epic matches other filters
-            }
-
-            // Apply "Show Only In Progress" filter to Epics
-            if (showOnlyInProgress && isVisible && inProgressStatuses.length > 0) {
-                // Show if it has matching children (already handled by childMatches logic above, but let's be explicit)
-                // OR if the epic itself is in progress
-                var status = (row.dataset.status || '').toLowerCase().trim();
-                var isSelfInProgress = inProgressStatuses.indexOf(status) !== -1;
-                
-                if (!childMatches && !isSelfInProgress) {
-                    isVisible = false;
+                // If status filters are active, only show epics with matching children
+                if (statusFilters.length > 0) {
+                    isVisible = childMatches; // Status filters are active, so only show epics with matching children
+                } else {
+                    isVisible = epicMatchesFilters || childMatches; // No status filters, show if epic matches other filters
                 }
-            }
+
+                // Apply "Show Only In Progress" filter to Epics
+                if (showOnlyInProgress && isVisible && notInProgressStatuses.length > 0) {
+                    // Show if it has matching children (already handled by childMatches logic above, but let's be explicit)
+                    // OR if the epic itself is not in the configured not-in-progress list
+                    var status = (row.dataset.status || '').toLowerCase().trim();
+                    var isSelfInProgress = notInProgressStatuses.indexOf(status) === -1;
+                    var keepBecauseActionNeeded = isActionNeededRow(row);
+                    
+                    if (!childMatches && !isSelfInProgress && !keepBecauseActionNeeded) {
+                        isVisible = false;
+                    }
+                }
 
                 // Auto-expand epics when any selection filter is active and the epic is relevant (matches or has matching children)
                 // But respect manually collapsed epics and NEVER collapse already expanded epics
@@ -1916,7 +1564,9 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                     if (epicIsClosed && (!epicChildren || epicChildren.total === epicChildren.closed) && !epicMatchesSpecificSearch) {
                         isVisible = false;
                     }
-                }            rowVisibility.set(row, isVisible);
+                }
+            }
+            rowVisibility.set(row, isVisible);
         });
 
         // Pre-build O(1) lookup maps so the display loop below never calls querySelector per row.
@@ -2582,25 +2232,6 @@ function updateOutOfSyncKPI() {
 
 
 
-function getCurrentSprintNumber() {
-    var allProjects = APP_STATE.allData.projects || [];
-    var maxSprintNumber = 0;
-    
-    allProjects.forEach(function(project) {
-    var sprints = project.sprint || project.Sprint || '';
-        var sprintNumbers = (sprints.match(/Sprint\s?(\d+)/ig) || [])
-            .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, '')); });
-        
-        sprintNumbers.forEach(function(num) {
-            if (num > maxSprintNumber) {
-                maxSprintNumber = num;
-            }
-        });
-    });
-    
-    return maxSprintNumber > 0 ? maxSprintNumber : null;
-}
-
 // Helper function to check if any filters are currently active
 function hasActiveFilters() {
     var searchTerm = $('#q').value.trim().toLowerCase();
@@ -2626,7 +2257,7 @@ function hasActiveFilters() {
               planningStageFilters.length || validationFilters.length || 
               projectStageFilters.length || assignedPMFilters.length || 
               assignedDevFilters.length || uatStatusFilters.length || fixVersionFilters.length ||
-              showClosed || hideStories || hideBugs || showOnlyInProgress || showOnlyOutOfSync || showOnlyPastSprint);
+              showClosed || hideStories || hideBugs || !showOnlyInProgress || showOnlyOutOfSync || showOnlyPastSprint);
 }
 
 
@@ -2721,8 +2352,6 @@ function setupMultiSelectDropdowns() {
       e.preventDefault();
       e.stopPropagation();
       
-      console.log("Dropdown clicked:", dropdown.dataset.filter);
-      
       // Close other dropdowns
       filterDropdowns.forEach(function(otherDropdown) {
         if (otherDropdown !== dropdown) {
@@ -2730,25 +2359,19 @@ function setupMultiSelectDropdowns() {
           var otherContent = otherDropdown.querySelector('.filter-dropdown-content');
           if (otherContent) {
             otherContent.classList.add('hidden');
-            console.log("Hiding other dropdown:", otherDropdown.dataset.filter);
           }
         }
       });
       
       // Toggle this dropdown
-      var isOpen = dropdown.classList.toggle('open');
+    dropdown.classList.toggle('open');
       content.classList.toggle('hidden');
-      
-      console.log("Dropdown state:", dropdown.dataset.filter, 
-                 "open:", isOpen, 
-                 "hidden:", content.classList.contains('hidden'));
     });
   });
   
   // Close dropdowns when clicking outside
   document.addEventListener('click', function(e) {
     if (!e.target.closest('.filter-dropdown')) {
-      console.log("Click outside dropdowns, closing all");
       filterDropdowns.forEach(function(dropdown) {
         dropdown.classList.remove('open');
         var content = dropdown.querySelector('.filter-dropdown-content');
@@ -2763,7 +2386,6 @@ function setupMultiSelectDropdowns() {
     if (content) {
       content.addEventListener('click', function(e) {
         e.stopPropagation();
-        console.log("Click inside dropdown content:", dropdown.dataset.filter);
       });
     }
   });

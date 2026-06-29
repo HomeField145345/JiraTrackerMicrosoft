@@ -38,11 +38,286 @@ function escapeHtml_(value) {
         .replace(/'/g, '&#39;');
 }
 
+function sanitizeCssColor_(value) {
+    var color = String(value || '').trim();
+    if (!color) return '';
+
+    if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(color)) return color;
+    if (/^(rgb|rgba)\((\s*\d+\s*,){2,3}\s*(\d+|0?\.\d+|1)\s*\)$/i.test(color)) return color;
+    if (/^[a-z]{3,20}$/i.test(color)) return color;
+
+    return '';
+}
+
+function formatJiraRichText_(rawValue) {
+    var normalized = String(rawValue || '')
+        .replace(/\u00a0/g, ' ')
+        .replace(/\r\n?/g, '\n')
+        .trim();
+
+    // Some imports flatten Jira wiki text into one long line. Restore likely block boundaries.
+    normalized = normalized
+        .replace(/\s+----\s+/g, '\n----\n')
+        .replace(/\s+(h[1-6]\.\s+)/gi, '\n$1')
+        .replace(/\s+([#]{1,6}\s+)/g, '\n$1');
+    if (!normalized) {
+        return '<p>No description provided</p>';
+    }
+
+    var html = escapeHtml_(normalized);
+
+    // Jira color markup: {color:#ff0000}Text{color}
+    html = html.replace(/\{color:([^\}]+)\}([\s\S]*?)\{color\}/gi, function(_, colorValue, content) {
+        var safeColor = sanitizeCssColor_(colorValue);
+        if (!safeColor) return content;
+        return '<span style="color:' + safeColor + ';">' + content + '</span>';
+    });
+
+    // Jira bold variant: {*}Text{*}
+    html = html.replace(/\{\*\}([\s\S]*?)\{\*\}/g, '<strong>$1</strong>');
+
+    // Jira quote block: {quote}...{quote}
+    html = html.replace(/\{quote\}([\s\S]*?)\{quote\}/gi, function(_, content) {
+        return '<blockquote>' + String(content || '').replace(/\n/g, '<br>') + '</blockquote>';
+    });
+
+    // Jira headings: h1. Heading / h1 Heading (allow leading spaces)
+    html = html.replace(/^\s*h([1-6])\.?\s+(.+)$/gmi, function(_, level, content) {
+        return '<div class="jira-wiki-h' + level + '">' + content + '</div>';
+    });
+
+    // Support escaped HTML headings from imports: &lt;h2&gt;Title&lt;/h2&gt;
+    html = html.replace(/&lt;h([1-6])(?:\s+[^&]*)&gt;([\s\S]*?)&lt;\/h\1&gt;/gi, function(_, level, content) {
+        return '<div class="jira-wiki-h' + level + '">' + content.trim() + '</div>';
+    });
+
+    // Inline code: {{code}}
+    html = html.replace(/\{\{([\s\S]+?)\}\}/g, '<code>$1</code>');
+
+    // Jira horizontal divider
+    html = html.replace(/^-{4,}$/gm, '<hr class="jira-wiki-hr" />');
+
+    // Links: [Text|https://example.com]
+    html = html.replace(/\[([^\|\]\n]+)\|((?:https?:\/\/)[^\]\s]+)\]/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+
+    // Bold / italic in Jira-style wiki text
+    html = html.replace(/\*(?!\s)([^*\n]+?)\*/g, '<strong>$1</strong>');
+    html = html.replace(/_(?!\s)([^_\n]+?)_/g, '<em>$1</em>');
+
+    // Bare URLs
+    html = html.replace(/(^|[\s(])((https?:\/\/)[^\s<]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>');
+
+    // Build simple block-level structure with list support
+    var lines = html.split('\n');
+    var out = [];
+    var inUl = false;
+    var inOl = false;
+    var inTable = false;
+    var tableRows = [];
+
+    function parseJiraTableRow_(line, delimiter) {
+        var parts = line.split(delimiter).map(function(part) {
+            return String(part || '').trim();
+        });
+
+        // Remove empty edges caused by leading/trailing delimiters
+        if (parts.length && parts[0] === '') parts.shift();
+        if (parts.length && parts[parts.length - 1] === '') parts.pop();
+
+        return parts;
+    }
+
+    function renderTableHtml_(rows) {
+        if (!rows || !rows.length) return '';
+
+        var hasHeader = rows[0].isHeader;
+        var headerHtml = '';
+        var bodyStart = 0;
+
+        if (hasHeader) {
+            headerHtml = '<thead><tr>' + rows[0].cells.map(function(cell) {
+                return '<th>' + cell + '</th>';
+            }).join('') + '</tr></thead>';
+            bodyStart = 1;
+        }
+
+        var bodyRows = rows.slice(bodyStart).map(function(row) {
+            return '<tr>' + row.cells.map(function(cell) {
+                return '<td>' + cell + '</td>';
+            }).join('') + '</tr>';
+        }).join('');
+
+        if (!bodyRows && hasHeader) {
+            bodyRows = '<tr>' + rows[0].cells.map(function() { return '<td>—</td>'; }).join('') + '</tr>';
+        }
+
+        return '<div class="jira-wiki-table-wrap"><table class="jira-wiki-table">' +
+            headerHtml +
+            '<tbody>' + bodyRows + '</tbody>' +
+            '</table></div>';
+    }
+
+    function closeLists() {
+        if (inUl) {
+            out.push('</ul>');
+            inUl = false;
+        }
+        if (inOl) {
+            out.push('</ol>');
+            inOl = false;
+        }
+    }
+
+    function closeTable() {
+        if (!inTable) return;
+        out.push(renderTableHtml_(tableRows));
+        tableRows = [];
+        inTable = false;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        var bulletMatch = line.match(/^\*+\s+(.+)$/);
+        var numberMatch = line.match(/^#+\s+(.+)$/);
+        var quoteMatch = line.match(/^bq\.\s+(.+)$/i);
+        var altQuoteMatch = line.match(/^>\s?(.+)$/);
+        var tableHeaderMatch = line.match(/^\|\|.+\|\|$/);
+        var tableRowMatch = !tableHeaderMatch && line.match(/^\|.+\|$/);
+
+        if (tableHeaderMatch || tableRowMatch) {
+            closeLists();
+            if (!inTable) {
+                inTable = true;
+            }
+
+            var isHeader = !!tableHeaderMatch;
+            var delimiter = isHeader ? '||' : '|';
+            var cells = parseJiraTableRow_(line, delimiter);
+            if (cells.length) {
+                tableRows.push({ isHeader: isHeader, cells: cells });
+            }
+            continue;
+        }
+
+        closeTable();
+
+        if (bulletMatch) {
+            if (inOl) {
+                out.push('</ol>');
+                inOl = false;
+            }
+            if (!inUl) {
+                out.push('<ul>');
+                inUl = true;
+            }
+            out.push('<li>' + bulletMatch[1] + '</li>');
+            continue;
+        }
+
+        if (numberMatch) {
+            if (inUl) {
+                out.push('</ul>');
+                inUl = false;
+            }
+            if (!inOl) {
+                out.push('<ol>');
+                inOl = true;
+            }
+            out.push('<li>' + numberMatch[1] + '</li>');
+            continue;
+        }
+
+        closeLists();
+
+        if (!line.trim()) continue;
+        if (/^<div class="jira-wiki-h[1-6]">/.test(line) || /^<blockquote>/.test(line) || /^<hr class="jira-wiki-hr"\s*\/>$/.test(line)) {
+            out.push(line);
+        } else if (quoteMatch) {
+            out.push('<blockquote>' + quoteMatch[1] + '</blockquote>');
+        } else if (altQuoteMatch) {
+            out.push('<blockquote>' + altQuoteMatch[1] + '</blockquote>');
+        } else {
+            out.push('<p>' + line + '</p>');
+        }
+    }
+
+    closeLists();
+    closeTable();
+    return out.join('');
+}
+
 function splitVersionValues_(rawValue) {
-    return String(rawValue || '')
+    var raw = String(rawValue || '').trim();
+    if (!raw) return [];
+
+    // Jira exports sometimes include structured values like
+    // "id=123, name=v1.2, ...". Prefer extracting the `name=` values when present.
+    var extractedNames = [];
+    var seenNames = {};
+    raw.replace(/name\s*=\s*("[^"]+"|'[^']+'|[^,;\]\}\n]+)/ig, function(_, namePart) {
+        var cleaned = String(namePart || '').trim().replace(/^['"]|['"]$/g, '');
+        var key = cleaned.toLowerCase();
+        if (!cleaned || seenNames[key]) return '';
+        seenNames[key] = true;
+        extractedNames.push(cleaned);
+        return '';
+    });
+
+    if (extractedNames.length) {
+        return extractedNames;
+    }
+
+    var seen = {};
+    var values = [];
+    raw
         .split(/[\n,;|]+/)
         .map(function(part) { return String(part || '').trim(); })
-        .filter(Boolean);
+        .filter(Boolean)
+        .forEach(function(v) {
+            var key = v.toLowerCase();
+            if (seen[key]) return;
+            seen[key] = true;
+            values.push(v);
+        });
+
+    return values;
+}
+
+function compareVersionLike_(a, b) {
+    var sa = String(a || '').trim();
+    var sb = String(b || '').trim();
+
+    var numsA = sa.match(/\d+/g);
+    var numsB = sb.match(/\d+/g);
+
+    if (numsA && numsB) {
+        var len = Math.max(numsA.length, numsB.length);
+        for (var i = 0; i < len; i++) {
+            var na = parseInt(numsA[i] || '0', 10);
+            var nb = parseInt(numsB[i] || '0', 10);
+            if (na > nb) return 1;
+            if (na < nb) return -1;
+        }
+    } else if (numsA && !numsB) {
+        return 1;
+    } else if (!numsA && numsB) {
+        return -1;
+    }
+
+    return sa.localeCompare(sb, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function getLatestFixVersionValue_(values) {
+    if (!values || !values.length) return '';
+
+    var latest = values[0];
+    for (var i = 1; i < values.length; i++) {
+        if (compareVersionLike_(values[i], latest) >= 0) {
+            latest = values[i];
+        }
+    }
+
+    return latest;
 }
 
 function extractSprintValues_(rawValue) {
@@ -315,13 +590,33 @@ function openStoryInfoModal(jiraId) {
   // Populate modal with story data
   $('#storyInfoJiraNumber').innerHTML = '<a href="https://onejira.verizon.com/browse/' + jiraId + '" target="_blank" class="text-blue-600 hover:underline">' + jiraId + '</a>';
   $('#storyInfoSummary').textContent = story.Summary || '—';
+    var description = story['Description'] ||
+                                     story['Issue Description'] ||
+                                     story['description'] ||
+                                     'No description provided';
+    $('#storyInfoDescription').innerHTML = formatJiraRichText_(description);
   $('#storyInfoStatus').textContent = story.Status || '—';
   $('#storyInfoType').textContent = story['Issue Type'] || '—';
   $('#storyInfoPriority').textContent = story.Priority || '—';
   $('#storyInfoAssignee').textContent = story.Assignee || '—';
   $('#storyInfoSprint').textContent = story.sprint || '—';
   $('#storyInfoStoryPoints').textContent = story['Story Points'] || '—';
-  
+
+  // Populate Labels
+  var labelsSection = $('#storyInfoLabelsSection');
+  var labelsEl = $('#storyInfoLabels');
+  var rawLabels = story['Labels'] || story['labels'] || '';
+  if (rawLabels && String(rawLabels).trim() !== '') {
+    var labelList = String(rawLabels).split(/[,;]+/).map(function(l) { return l.trim(); }).filter(function(l) { return l !== ''; });
+    labelsEl.innerHTML = labelList.map(function(l) {
+      return '<span style="display:inline-block;background:#e0e7ff;color:#3730a3;border-radius:4px;padding:1px 8px;margin:2px 3px 2px 0;font-size:0.8em;font-weight:500;">' + l.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span>';
+    }).join('');
+    if (labelsSection) labelsSection.style.display = '';
+  } else {
+    labelsEl.textContent = '—';
+    if (labelsSection) labelsSection.style.display = '';
+  }
+
   // Format acceptance criteria
   // Try multiple possible field names for Acceptance Criteria (including common typo)
   var acceptanceCriteria = story['Acceptance Criteria'] || 
@@ -340,6 +635,18 @@ function openStoryInfoModal(jiraId) {
   
   // Store the current jiraId for saving later
   $('#storyInfoModal').dataset.currentJiraId = jiraId;
+
+  // Populate Project Artifacts (epics only)
+  var issueType = String(story['Issue Type'] || '').toLowerCase();
+  var artifactsSection = $('#storyInfoArtifactsSection');
+  if (artifactsSection) {
+    if (issueType === 'epic') {
+      artifactsSection.style.display = '';
+      populateArtifactsChecklist_(jiraId, story);
+    } else {
+      artifactsSection.style.display = 'none';
+    }
+  }
   
   // Reset the edit view (make sure view mode is shown)
   $('#storyInfoDriveLinkView').style.display = 'flex';
@@ -361,16 +668,314 @@ function openStoryInfoModal(jiraId) {
   
   // Show modal
   var modal = $('#storyInfoModal');
+    var isAlreadyOpen = modal.style.display === 'flex' && modal.classList.contains('is-open');
+    TimerManager.clearTimeout('story_info_close_anim');
   modal.style.display = 'flex';
+    if (!isAlreadyOpen) {
+        modal.classList.remove('is-open');
+        TimerManager.setTimeout(function() {
+            modal.classList.add('is-open');
+        }, 0, 'story_info_open_anim');
+    }
   modal.setAttribute('aria-hidden', 'false');
 }
 
 function closeStoryInfoModal() {
   var modal = $('#storyInfoModal');
-  modal.style.display = 'none';
+    TimerManager.clearTimeout('story_info_open_anim');
+    modal.classList.remove('is-open');
+    TimerManager.setTimeout(function() {
+        modal.style.display = 'none';
+    }, 230, 'story_info_close_anim');
   modal.setAttribute('aria-hidden', 'true');
 }
 
+// ═══════════════════════════════════════════════
+// PROJECT ARTIFACTS CHECKLIST (Epic-level)
+// ═══════════════════════════════════════════════
+
+var DEFAULT_ARTIFACTS = [
+    { key: 'project_folder',     label: 'Project Folder',         icon: '\uD83D\uDCC1' },
+    { key: 'e2e_deck',           label: 'E2E Project Deck',       icon: '\uD83D\uDCCA' },
+    { key: 'acceptance_criteria',label: 'Acceptance Criteria',     icon: '\u2705' },
+    { key: 'business_signoff',   label: 'Business Signoff',       icon: '\u270D\uFE0F' },
+    { key: 'test_plan',          label: 'Test Plan',               icon: '\uD83E\uDDEA' },
+    { key: 'release_notes',      label: 'Release Notes',          icon: '\uD83D\uDCDD' },
+    { key: 'meeting_notes',      label: 'Meeting / Call Notes',   icon: '\uD83D\uDCDE' },
+    { key: 'design_docs',        label: 'Design Documents',       icon: '\uD83C\uDFA8' }
+];
+
+var ARTIFACT_STATUSES = ['Not Started', 'In Progress', 'Complete', 'Signed Off', 'N/A'];
+
+function populateArtifactsChecklist_(jiraId, story) {
+    var tbody = document.getElementById('artifactsTableBody');
+    if (!tbody) return;
+
+    // Load saved artifacts from ManualData (stored as JSON string)
+    var savedRaw = story['Artifacts'] || '';
+    var saved = {};
+    if (savedRaw) {
+        try { saved = JSON.parse(savedRaw); } catch(e) { saved = {}; }
+    }
+
+    var html = '';
+    var complete = 0;
+    var total = 0;
+
+    DEFAULT_ARTIFACTS.forEach(function(art) {
+        var data = saved[art.key] || {};
+        var status = data.status || 'Not Started';
+        var link = data.link || '';
+        var notes = data.notes || '';
+        var isComplete = (status === 'Complete' || status === 'Signed Off');
+        var isNA = status === 'N/A';
+
+        if (!isNA) total++;
+        if (isComplete) complete++;
+
+        // Status select color
+        var statusCls = 'color:#6b7280;background:#f3f4f6;';
+        if (status === 'In Progress') statusCls = 'color:#b45309;background:#fef3c7;';
+        else if (status === 'Complete') statusCls = 'color:#047857;background:#d1fae5;';
+        else if (status === 'Signed Off') statusCls = 'color:#1d4ed8;background:#dbeafe;';
+        else if (status === 'N/A') statusCls = 'color:#9ca3af;background:#f9fafb;';
+
+        var rowOpacity = isNA ? 'opacity:0.5;' : '';
+
+        // Link display
+        var linkHtml = '';
+        if (link) {
+            linkHtml = '<a href="' + link + '" target="_blank" class="text-blue-600 hover:underline text-xs" style="margin-right:4px;">Open \u2197</a>';
+        }
+
+        html += '<tr style="border-bottom:1px solid #f3f4f6;' + rowOpacity + '" data-artifact-key="' + art.key + '">' +
+            '<td style="padding:5px 8px;text-align:center;">' + art.icon + '</td>' +
+            '<td style="padding:5px 8px;font-weight:500;">' + art.label + '</td>' +
+            '<td style="padding:5px 8px;">' +
+                '<select class="artifact-status-select" data-key="' + art.key + '" style="font-size:0.78em;padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;cursor:pointer;' + statusCls + '">' +
+                    ARTIFACT_STATUSES.map(function(s) {
+                        return '<option value="' + s + '"' + (s === status ? ' selected' : '') + '>' + s + '</option>';
+                    }).join('') +
+                '</select>' +
+            '</td>' +
+            '<td style="padding:5px 8px;">' +
+                '<div style="display:flex;align-items:center;gap:4px;">' +
+                    linkHtml +
+                    '<input class="artifact-link-input" data-key="' + art.key + '" type="text" placeholder="Paste link..." value="' + (link || '').replace(/"/g, '&quot;') + '" style="flex:1;font-size:0.78em;padding:2px 6px;border:1px solid #e5e7eb;border-radius:4px;min-width:0;" />' +
+                    '<input class="artifact-notes-input" data-key="' + art.key + '" type="text" placeholder="Notes..." value="' + (notes || '').replace(/"/g, '&quot;') + '" style="flex:1;font-size:0.78em;padding:2px 6px;border:1px solid #e5e7eb;border-radius:4px;min-width:0;" />' +
+                '</div>' +
+            '</td>' +
+        '</tr>';
+    });
+
+    tbody.innerHTML = html;
+
+    // Update readiness badge
+    var readinessEl = document.getElementById('artifactsReadiness');
+    if (readinessEl) {
+        var pct = total > 0 ? Math.round((complete / total) * 100) : 0;
+        readinessEl.textContent = complete + '/' + total + ' complete (' + pct + '%)';
+        if (pct === 100) { readinessEl.style.background = '#d1fae5'; readinessEl.style.color = '#047857'; }
+        else if (pct >= 50) { readinessEl.style.background = '#fef3c7'; readinessEl.style.color = '#b45309'; }
+        else { readinessEl.style.background = '#fee2e2'; readinessEl.style.color = '#b91c1c'; }
+    }
+
+    // Wire change handlers (debounced auto-save)
+    var saveTimer = null;
+    function scheduleArtifactSave() {
+        if (saveTimer) clearTimeout(saveTimer);
+        saveTimer = setTimeout(function() { saveArtifacts_(jiraId); }, 800);
+    }
+
+    tbody.querySelectorAll('.artifact-status-select').forEach(function(sel) {
+        sel.addEventListener('change', function() {
+            // Update row styling immediately
+            var row = sel.closest('tr');
+            var isNA = sel.value === 'N/A';
+            row.style.opacity = isNA ? '0.5' : '1';
+            // Update select color
+            var cls = 'color:#6b7280;background:#f3f4f6;';
+            if (sel.value === 'In Progress') cls = 'color:#b45309;background:#fef3c7;';
+            else if (sel.value === 'Complete') cls = 'color:#047857;background:#d1fae5;';
+            else if (sel.value === 'Signed Off') cls = 'color:#1d4ed8;background:#dbeafe;';
+            else if (sel.value === 'N/A') cls = 'color:#9ca3af;background:#f9fafb;';
+            sel.style.cssText = 'font-size:0.78em;padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;cursor:pointer;' + cls;
+            scheduleArtifactSave();
+        });
+    });
+
+    tbody.querySelectorAll('.artifact-link-input, .artifact-notes-input').forEach(function(inp) {
+        inp.addEventListener('input', scheduleArtifactSave);
+    });
+}
+
+function saveArtifacts_(jiraId) {
+    var tbody = document.getElementById('artifactsTableBody');
+    if (!tbody) return;
+
+    var artifacts = {};
+    DEFAULT_ARTIFACTS.forEach(function(art) {
+        var statusSel = tbody.querySelector('.artifact-status-select[data-key="' + art.key + '"]');
+        var linkInp = tbody.querySelector('.artifact-link-input[data-key="' + art.key + '"]');
+        var notesInp = tbody.querySelector('.artifact-notes-input[data-key="' + art.key + '"]');
+
+        var status = statusSel ? statusSel.value : 'Not Started';
+        var link = linkInp ? linkInp.value.trim() : '';
+        var notes = notesInp ? notesInp.value.trim() : '';
+
+        // Only save non-default entries to keep JSON small
+        if (status !== 'Not Started' || link || notes) {
+            artifacts[art.key] = { status: status };
+            if (link) artifacts[art.key].link = link;
+            if (notes) artifacts[art.key].notes = notes;
+        }
+    });
+
+    var jsonStr = JSON.stringify(artifacts);
+
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
+
+    // Update readiness badge immediately
+    var complete = 0, total = 0;
+    DEFAULT_ARTIFACTS.forEach(function(art) {
+        var d = artifacts[art.key] || {};
+        var s = d.status || 'Not Started';
+        if (s !== 'N/A') total++;
+        if (s === 'Complete' || s === 'Signed Off') complete++;
+    });
+    var readinessEl = document.getElementById('artifactsReadiness');
+    if (readinessEl) {
+        var pct = total > 0 ? Math.round((complete / total) * 100) : 0;
+        readinessEl.textContent = complete + '/' + total + ' complete (' + pct + '%)';
+        if (pct === 100) { readinessEl.style.background = '#d1fae5'; readinessEl.style.color = '#047857'; }
+        else if (pct >= 50) { readinessEl.style.background = '#fef3c7'; readinessEl.style.color = '#b45309'; }
+        else { readinessEl.style.background = '#fee2e2'; readinessEl.style.color = '#b91c1c'; }
+    }
+
+    // Save via existing ManualData mechanism
+    google.script.run
+        .withSuccessHandler(function() {
+            // Update local data so reopening the modal shows latest
+            if (APP_STATE.allData && APP_STATE.allData.projects) {
+                var story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
+                if (story) story['Artifacts'] = jsonStr;
+            }
+        })
+        .withFailureHandler(function(err) {
+            console.error('[Artifacts] save failed:', err);
+        })
+        .saveManualData(token, jiraId, 'Artifacts', jsonStr, targetUsername);
+}
+
+// ═══════════════════════════════════════════════
+// PROJECT FOLDER CREATION (Google Drive)
+// ═══════════════════════════════════════════════
+
+function createProjectFolderUI_() {
+    var btn = document.getElementById('createProjectFolderBtn');
+    var statusEl = document.getElementById('projectFolderStatus');
+    var jiraId = document.getElementById('storyInfoId') ? document.getElementById('storyInfoId').textContent.trim() : null;
+    var epicTitle = document.getElementById('storyInfoSummary') ? document.getElementById('storyInfoSummary').textContent.trim() : '';
+
+    if (!jiraId) { alert('No epic ID found.'); return; }
+
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+
+    // Check if we already have a stored folder ID from artifacts data
+    var existingFolderId = null;
+    var story = null;
+    if (APP_STATE.allData && APP_STATE.allData.projects) {
+        story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
+        if (story && story['Artifacts']) {
+            try {
+                var parsed = JSON.parse(story['Artifacts']);
+                if (parsed.project_folder && parsed.project_folder.folderId) {
+                    existingFolderId = parsed.project_folder.folderId;
+                }
+            } catch(e) {}
+        }
+    }
+
+    // Show loading state
+    btn.disabled = true;
+    btn.textContent = '⏳ Creating...';
+    statusEl.style.display = 'block';
+    statusEl.style.background = '#f3f4f6';
+    statusEl.style.color = '#6b7280';
+    statusEl.textContent = 'Creating project folder structure in Google Drive...';
+
+    google.script.run
+        .withSuccessHandler(function(result) {
+            btn.disabled = false;
+            btn.textContent = '📁 Create folder';
+
+            // Show success status with link
+            statusEl.style.display = 'block';
+            statusEl.style.background = '#d1fae5';
+            statusEl.style.color = '#047857';
+            statusEl.innerHTML = '✅ Folder ready: <a href="' + result.rootFolderUrl + '" target="_blank" style="color:#047857;text-decoration:underline;font-weight:500;">Open in Drive ↗</a>';
+
+            // Auto-populate the project_folder artifact link + status
+            var linkInput = document.querySelector('.artifact-link-input[data-key="project_folder"]');
+            if (linkInput) {
+                linkInput.value = result.rootFolderUrl;
+            }
+            var statusSel = document.querySelector('.artifact-status-select[data-key="project_folder"]');
+            if (statusSel && statusSel.value === 'Not Started') {
+                statusSel.value = 'Complete';
+                statusSel.style.cssText = 'font-size:0.78em;padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;cursor:pointer;color:#047857;background:#d1fae5;';
+                var row = statusSel.closest('tr');
+                if (row) row.style.opacity = '1';
+            }
+
+            // Store folderId + subfolder IDs in artifacts JSON for re-run safety
+            _updateArtifactsFolderData_(jiraId, result);
+
+            // Trigger artifact save to persist link + status + folderId
+            saveArtifacts_(jiraId);
+        })
+        .withFailureHandler(function(err) {
+            btn.disabled = false;
+            btn.textContent = '📁 Create folder';
+            statusEl.style.display = 'block';
+            statusEl.style.background = '#fee2e2';
+            statusEl.style.color = '#b91c1c';
+            statusEl.textContent = '❌ Error: ' + (err.message || err);
+        })
+        .createProjectFolder(token, jiraId, epicTitle, existingFolderId);
+}
+
+/**
+ * Stores the root folder ID and subfolder IDs into the artifacts data
+ * so re-runs can find the existing folder by ID instead of searching.
+ * @private
+ */
+function _updateArtifactsFolderData_(jiraId, driveResult) {
+    var story = null;
+    if (APP_STATE.allData && APP_STATE.allData.projects) {
+        story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
+    }
+    if (!story) return;
+
+    var saved = {};
+    if (story['Artifacts']) {
+        try { saved = JSON.parse(story['Artifacts']); } catch(e) { saved = {}; }
+    }
+
+    // Merge folder data into the project_folder artifact entry
+    if (!saved.project_folder) saved.project_folder = {};
+    saved.project_folder.folderId = driveResult.rootFolderId;
+    saved.project_folder.link = driveResult.rootFolderUrl;
+    saved.project_folder.subfolders = driveResult.subfolders;
+    if (saved.project_folder.status === 'Not Started' || !saved.project_folder.status) {
+        saved.project_folder.status = 'Complete';
+    }
+
+    story['Artifacts'] = JSON.stringify(saved);
+}
 // --- DATA VALIDATION & FORMATTING ---
 function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDateStr) {
     const projectStageStatus = (projectStage || '').toLowerCase().trim();
@@ -508,6 +1113,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     row.dataset.uatStatus = (item['UAT Status'] || '').toString().trim();
     row.dataset.issueType = item['Issue Type'] || '';
     row.dataset.jiraId = (item['Jira #'] || '').toLowerCase(); // Add Jira ID for search
+    row.dataset.syncStatus = (item['Sync Status'] || '').toString().trim().toLowerCase();
     // Store canonical ISO values; Last Updated is UTC, Last Checked is CST
     row.dataset.updatedIso = normalizeUtcString(item['Updated']) || '';
     row.dataset.checkedIso = normalizeUtcString(item['Last Checked']) || '';
@@ -515,8 +1121,25 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     row.dataset.checkedCst = item['Last Checked'] || '';
 
     var validation = getValidationStatus(item['Planning Stage'], item['Updated'], item['Last Checked'], item['Project Stage'], item['Target Date']);
-    row.dataset.validation = validation.text;
     var isFauxEpic = item['Jira #'] === 'UNASSIGNED';
+    if (isFauxEpic && type === 'epic') {
+        if (validationBadgeCount > 0) {
+            validation = {
+                text: APP_CONSTANTS.VALIDATION.NEEDS_REVIEW,
+                className: 'status-review',
+                updatedClassName: '',
+                checkedClassName: ''
+            };
+        } else {
+            validation = {
+                text: APP_CONSTANTS.VALIDATION.UP_TO_DATE,
+                className: 'status-ok',
+                updatedClassName: '',
+                checkedClassName: ''
+            };
+        }
+    }
+    row.dataset.validation = validation.text;
     var isJiraItem = (type === 'epic' || type === 'story' || type === 'bug-child') && !isFauxEpic;
     var jiraCellHtml = '';
 
@@ -609,6 +1232,7 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     });
 
     var fixVersionCellHtml = buildLatestWithHistoryHtml_(item['Fix Version'], {
+        latestResolver: getLatestFixVersionValue_,
         historyLabel: 'Other fix versions'
     });
 
@@ -1481,22 +2105,22 @@ function renderTable() {
     
     if (orphanStories.length > 0 || orphanBugs.length > 0) {
         var unassignedEpic = { 'Jira #': 'UNASSIGNED', Summary: 'Unassigned Stories', 'Issue Type': 'Epic' };
-        var unassignedAttentionCount = 0;
+        var unassignedNeedsReviewCount = 0;
         orphanStories.forEach(function(story) {
             var status = getValidationStatus(story['Planning Stage'], story['Updated'], story['Last Checked'], story['Project Stage'], story['Target Date']).text;
-            if (status === 'Needs Review' || status === 'Past Due') {
-                unassignedAttentionCount++;
+            if (status === 'Needs Review') {
+                unassignedNeedsReviewCount++;
             }
         });
-        
+
         orphanBugs.forEach(function(bug) {
             var status = getValidationStatus(bug['Planning Stage'], bug['Updated'], bug['Last Checked'], bug['Project Stage'], bug['Target Date']).text;
-            if (status === 'Needs Review' || status === 'Past Due') {
-                unassignedAttentionCount++;
+            if (status === 'Needs Review') {
+                unassignedNeedsReviewCount++;
             }
         });
         
-        var unassignedEpicRow = createRow(unassignedEpic, 'epic', null, unassignedAttentionCount);
+        var unassignedEpicRow = createRow(unassignedEpic, 'epic', null, unassignedNeedsReviewCount);
         body.prepend(unassignedEpicRow);
         
         var orphanStoryRows = [];
@@ -1554,8 +2178,6 @@ function renderTable() {
         }
     }
 
-    APP_STATE.allData.independentTasks.forEach(function(task) { body.appendChild(createRow(task, 'task')); });
-    
     if (Object.keys(APP_STATE.expandedEpicIds).length > 0) {
         for (var epicId in APP_STATE.expandedEpicIds) {
             if (APP_STATE.expandedEpicIds.hasOwnProperty(epicId)) {
@@ -1569,30 +2191,563 @@ function renderTable() {
 }
 
 function renderTasksView() {
-    var wrapper = $('#content-wrapper');
-    wrapper.innerHTML = '<div class="table-container"><table class="table"><thead>' +
-        '<tr><th>Title</th><th>Assignee</th><th>Status</th><th>Priority</th><th>Due Date</th><th>Project</th><th>Associated Jira</th></tr>' +
-        '</thead><tbody id="tasks-body"></tbody></table></div>';
-    
-    var tasks = APP_STATE.allData.independentTasks;
-    var body = $('#tasks-body');
-    body.innerHTML = ''; 
-    
-    tasks.forEach(function(task) {
-        var row = document.createElement('tr');
-        var dueDate = task.Due ? formatDateLocalDateOnly(task.Due) : '—';
-        var jiraLink = task['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + task['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline">' + task['Jira #'] + '</a>' : '—';
-        row.innerHTML = '<td>' + (task.Title || '') + '</td>' +
-                      '<td>' + (task.Assignee || '') + '</td>' +
-                      '<td>' + (task.Status || '') + '</td>' +
-                      '<td>' + (task.Priority || '') + '</td>' +
-                      '<td>' + dueDate + '</td>' +
-                      '<td>' + (task.Project || '') + '</td>' +
-                      '<td>' + jiraLink + '</td>';
-        body.appendChild(row);
+    var tbody = document.getElementById('tasks-table-body');
+    if (!tbody) { console.warn('[TaskHub] tasks-table-body not found'); return; }
+
+    var allTasks = (APP_STATE.allData && APP_STATE.allData.independentTasks) || [];
+    var statusFilter = document.getElementById('tasks-filter-status');
+    var filterVal = statusFilter ? statusFilter.value : 'open';
+
+    var filtered = allTasks.filter(function(t) {
+        if (filterVal === 'open') return t.Status !== 'Done';
+        if (filterVal === 'done') return t.Status === 'Done';
+        return true;
     });
+
+    var totalEl = document.getElementById('tasks-total-count');
+    if (totalEl) totalEl.textContent = filtered.length + ' task' + (filtered.length !== 1 ? 's' : '');
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-sm">No tasks to show. Click + New Task or sync from Google.</td></tr>';
+        wireTaskHubButtons_();
+        return;
+    }
+
+    // Bucket tasks by due date
+    var now = new Date();
+    var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var tomorrowStart = new Date(todayStart); tomorrowStart.setDate(tomorrowStart.getDate() + 1);
+    var dayAfterTomorrow = new Date(todayStart); dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 2);
+    var weekEnd = new Date(todayStart); weekEnd.setDate(weekEnd.getDate() + (7 - weekEnd.getDay()));
+    var nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+
+    var buckets = [
+        { key: 'overdue', label: '\u26A0 Overdue', cls: 'text-red-700 bg-red-50', tasks: [] },
+        { key: 'today', label: 'Due Today', cls: 'text-orange-700 bg-orange-50', tasks: [] },
+        { key: 'tomorrow', label: 'Due Tomorrow', cls: 'text-yellow-700 bg-yellow-50', tasks: [] },
+        { key: 'thisweek', label: 'This Week', cls: 'text-blue-700 bg-blue-50', tasks: [] },
+        { key: 'nextweek', label: 'Next Week', cls: 'text-indigo-700 bg-indigo-50', tasks: [] },
+        { key: 'later', label: 'Later', cls: 'text-gray-600 bg-gray-50', tasks: [] },
+        { key: 'nodate', label: 'No Due Date', cls: 'text-gray-500 bg-gray-50', tasks: [] }
+    ];
+
+    filtered.forEach(function(t) {
+        if (!t.Due) { buckets[6].tasks.push(t); return; }
+        var d = new Date(t.Due);
+        if (isNaN(d.getTime())) { buckets[6].tasks.push(t); return; }
+        var dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+        if (dDate < todayStart) buckets[0].tasks.push(t);
+        else if (dDate < tomorrowStart) buckets[1].tasks.push(t);
+        else if (dDate < dayAfterTomorrow) buckets[2].tasks.push(t);
+        else if (dDate < weekEnd) buckets[3].tasks.push(t);
+        else if (dDate < nextWeekEnd) buckets[4].tasks.push(t);
+        else buckets[5].tasks.push(t);
+    });
+
+    // Sort within each bucket by due date then priority
+    var prioOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
+    buckets.forEach(function(b) {
+        b.tasks.sort(function(a, bb) {
+            var da = a.Due ? new Date(a.Due).getTime() : 8640000000000000;
+            var db = bb.Due ? new Date(bb.Due).getTime() : 8640000000000000;
+            if (da !== db) return da - db;
+            return (prioOrder[a.Priority] || 2) - (prioOrder[bb.Priority] || 2);
+        });
+    });
+
+    var html = '';
+    buckets.forEach(function(bucket) {
+        if (bucket.tasks.length === 0) return;
+        html += '<tr class="' + bucket.cls + '"><td colspan="6" class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">' + bucket.label + ' <span class="font-normal opacity-70">(' + bucket.tasks.length + ')</span></td></tr>';
+        bucket.tasks.forEach(function(task) {
+            html += buildTaskRow_(task);
+        });
+    });
+
+    tbody.innerHTML = html;
+
+    // Wire click handlers
+    tbody.querySelectorAll('.task-toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            taskHub_toggleComplete_(btn.getAttribute('data-task-id'));
+        });
+    });
+    tbody.querySelectorAll('.task-row-click').forEach(function(row) {
+        row.addEventListener('click', function() {
+            taskHub_openDrawer_(row.getAttribute('data-task-id'));
+        });
+    });
+
+    wireTaskHubButtons_();
 }
 
+function buildTaskRow_(task) {
+    var id = task.ID || '';
+    var title = task.Title || '';
+    var status = task.Status || 'Open';
+    var priority = task.Priority || 'Medium';
+    var recurrence = task.Recurrence || '';
+    var isGoogle = String(id).indexOf('GTASK-') === 0;
+    var isDone = status === 'Done';
+
+    var dueLabel = '';
+    if (task.Due) {
+        var d = new Date(task.Due);
+        if (!isNaN(d.getTime())) dueLabel = (d.getMonth()+1) + '/' + d.getDate();
+    }
+
+    var checkIcon = isDone
+        ? '<svg class="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>'
+        : '<svg class="w-4 h-4 text-gray-300 hover:text-green-400 cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke-width="2"></circle></svg>';
+
+    var prioBg = 'bg-gray-100 text-gray-600';
+    if (priority === 'Critical') prioBg = 'bg-red-100 text-red-700';
+    else if (priority === 'High') prioBg = 'bg-red-50 text-red-600';
+    else if (priority === 'Medium') prioBg = 'bg-yellow-50 text-yellow-700';
+    else if (priority === 'Low') prioBg = 'bg-blue-50 text-blue-600';
+
+    var titleCls = isDone ? 'line-through text-gray-400' : 'text-gray-900';
+    var rowCls = isDone ? 'opacity-60' : '';
+    var sourceBadge = isGoogle ? '<span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Google</span>' : '<span class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">Local</span>';
+    var recurBadge = recurrence ? ' <span class="text-xs text-purple-500" title="Recurs ' + recurrence + '">\uD83D\uDD01</span>' : '';
+
+    return '<tr class="border-b border-gray-100 hover:bg-gray-50 ' + rowCls + '">' +
+        '<td class="px-3 py-2 text-center"><button class="task-toggle-btn" data-task-id="' + id + '">' + checkIcon + '</button></td>' +
+        '<td class="px-3 py-2 task-row-click cursor-pointer" data-task-id="' + id + '"><span class="font-medium text-sm ' + titleCls + '">' + title + '</span>' + recurBadge + (task.Project ? ' <span class="text-xs text-gray-400">' + task.Project + '</span>' : '') + '</td>' +
+        '<td class="px-3 py-2"><span class="text-xs px-1.5 py-0.5 rounded ' + prioBg + '">' + priority + '</span></td>' +
+        '<td class="px-3 py-2 text-xs text-gray-600">' + dueLabel + '</td>' +
+        '<td class="px-3 py-2">' + sourceBadge + '</td>' +
+        '<td class="px-3 py-2"><span class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">' + status + '</span></td>' +
+    '</tr>';
+}
+
+/* ─── TASK HUB BUTTON WIRING ─── */
+
+function wireTaskHubButtons_() {
+    var statusFilter = document.getElementById('tasks-filter-status');
+    if (statusFilter && !statusFilter._wired) {
+        statusFilter._wired = true;
+        statusFilter.addEventListener('change', function() { renderTasksView(); });
+    }
+
+    var refreshBtn = document.getElementById('refresh-tasks-btn');
+    if (refreshBtn && !refreshBtn._wired) {
+        refreshBtn._wired = true;
+        refreshBtn.addEventListener('click', function() { taskHub_refreshFromGoogle_(); });
+    }
+
+    var addBtn = document.getElementById('add-task-btn');
+    if (addBtn && !addBtn._wired) {
+        addBtn._wired = true;
+        addBtn.addEventListener('click', function() {
+            var bar = document.getElementById('quick-add-bar');
+            if (bar) {
+                bar.classList.remove('hidden');
+                var titleInput = document.getElementById('quick-add-title');
+                if (titleInput) titleInput.focus();
+                taskHub_populateQuickAddListDropdown_();
+            }
+        });
+    }
+
+    var quickSave = document.getElementById('quick-add-save');
+    if (quickSave && !quickSave._wired) {
+        quickSave._wired = true;
+        quickSave.addEventListener('click', function() { taskHub_quickAdd_(); });
+    }
+
+    var quickCancel = document.getElementById('quick-add-cancel');
+    if (quickCancel && !quickCancel._wired) {
+        quickCancel._wired = true;
+        quickCancel.addEventListener('click', function() {
+            document.getElementById('quick-add-bar').classList.add('hidden');
+        });
+    }
+
+    var quickTitle = document.getElementById('quick-add-title');
+    if (quickTitle && !quickTitle._wired) {
+        quickTitle._wired = true;
+        quickTitle.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') taskHub_quickAdd_();
+        });
+    }
+
+    var descToggle = document.getElementById('drawer-task-desc-toggle');
+    if (descToggle && !descToggle._wired) {
+        descToggle._wired = true;
+        descToggle.addEventListener('click', function() { taskHub_toggleDescriptionEditor_(); });
+    }
+
+    var descField = document.getElementById('drawer-task-desc');
+    if (descField && !descField._wired) {
+        descField._wired = true;
+        descField.addEventListener('input', function() {
+            if (descField.classList.contains('hidden')) return;
+            taskHub_renderDescriptionPreview_();
+        });
+    }
+
+    var toggleSync = document.getElementById('toggle-sync-bar');
+    if (toggleSync && !toggleSync._wired) {
+        toggleSync._wired = true;
+        toggleSync.addEventListener('click', function() {
+            var content = document.getElementById('sync-bar-content');
+            var chevron = document.getElementById('sync-bar-chevron');
+            if (content) content.classList.toggle('hidden');
+            if (chevron) chevron.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
+        });
+    }
+
+    var drawerClose = document.getElementById('drawer-close-btn');
+    if (drawerClose && !drawerClose._wired) {
+        drawerClose._wired = true;
+        drawerClose.addEventListener('click', function() { taskHub_closeDrawer_(); });
+    }
+    var drawerOverlay = document.getElementById('task-drawer-overlay');
+    if (drawerOverlay && !drawerOverlay._wired) {
+        drawerOverlay._wired = true;
+        drawerOverlay.addEventListener('click', function() { taskHub_closeDrawer_(); });
+    }
+
+    var drawerSave = document.getElementById('drawer-save-btn');
+    if (drawerSave && !drawerSave._wired) {
+        drawerSave._wired = true;
+        drawerSave.addEventListener('click', function() { taskHub_saveFromDrawer_(); });
+    }
+
+    var drawerDelete = document.getElementById('drawer-delete-btn');
+    if (drawerDelete && !drawerDelete._wired) {
+        drawerDelete._wired = true;
+        drawerDelete.addEventListener('click', function() { taskHub_deleteFromDrawer_(); });
+    }
+
+    var select = document.getElementById('google-task-list-select');
+    if (select && !select._loaded) {
+        select._loaded = true;
+        taskHub_loadGoogleLists_();
+    }
+}
+
+/* ─── TASK HUB ACTIONS ─── */
+
+function taskHub_refreshData_(options) {
+    options = options || {};
+    var preserveRows = options.preserveRows === true;
+    var onComplete = typeof options.onComplete === 'function' ? options.onComplete : null;
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) {
+        if (onComplete) onComplete();
+        return;
+    }
+    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
+    var tbody = document.getElementById('tasks-table-body');
+    if (tbody && !preserveRows) {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6 animate-pulse">Reloading Task Hub...</td></tr>';
+    }
+    google.script.run
+        .withSuccessHandler(function(data) {
+            if (data) {
+                if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { console.error('[TaskHub] parse error', e); if (onComplete) onComplete(); return; } }
+                APP_STATE.allData = data;
+                renderTasksView();
+            }
+            if (onComplete) onComplete();
+        })
+        .withFailureHandler(function(err) {
+            console.error('[TaskHub] refresh failed', err);
+            if (preserveRows) {
+                if (typeof showToast === 'function') {
+                    showToast('Task refresh failed: ' + (err && err.message ? err.message : err));
+                }
+                if (onComplete) onComplete();
+                return;
+            }
+            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-400 py-6">Refresh failed: ' + (err && err.message ? err.message : err) + '</td></tr>';
+            if (onComplete) onComplete();
+        })
+        .getProjectData(token, targetUsername);
+}
+
+function taskHub_refreshFromGoogle_() {
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+
+    var status = document.getElementById('google-tasks-sync-status');
+    var refreshBtn = document.getElementById('refresh-tasks-btn');
+    var originalLabel = refreshBtn ? refreshBtn.textContent : '';
+
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = 'Refreshing...';
+    }
+    if (status) status.textContent = 'Syncing latest Google tasks...';
+
+    google.script.run
+        .withSuccessHandler(function(response) {
+            if (status) {
+                if (response && response.status === 'success') {
+                    status.textContent = response.message || 'Google tasks synced.';
+                } else {
+                    status.textContent = (response && response.message) || 'Google sync completed.';
+                }
+            }
+            taskHub_refreshData_({ preserveRows: true, onComplete: function() {
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = originalLabel || 'Refresh';
+                }
+            } });
+        })
+        .withFailureHandler(function(error) {
+            if (status) status.textContent = 'Refresh failed: ' + (error && error.message ? error.message : error);
+            taskHub_refreshData_({ preserveRows: true, onComplete: function() {
+                if (refreshBtn) {
+                    refreshBtn.disabled = false;
+                    refreshBtn.textContent = originalLabel || 'Refresh';
+                }
+            } });
+        })
+        .syncAllGoogleTaskLists(token, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+}
+
+function taskHub_toggleComplete_(taskId) {
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token || !taskId) return;
+
+    var allTasks = (APP_STATE.allData && APP_STATE.allData.independentTasks) || [];
+    var task = allTasks.find(function(t) { return t.ID === taskId; });
+    if (task) {
+        task.Status = (task.Status === 'Done') ? 'Open' : 'Done';
+        renderTasksView();
+    }
+
+    google.script.run
+        .withSuccessHandler(function() { taskHub_refreshData_({ preserveRows: true }); })
+        .withFailureHandler(function(err) {
+            if (typeof showToast === 'function') showToast('Toggle failed: ' + (err && err.message ? err.message : err));
+            taskHub_refreshData_({ preserveRows: true });
+        })
+        .toggleTaskComplete(token, taskId, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+}
+
+function taskHub_quickAdd_() {
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+    var titleEl = document.getElementById('quick-add-title');
+    var title = titleEl ? titleEl.value.trim() : '';
+    if (!title) { if (titleEl) titleEl.focus(); return; }
+
+    var taskData = {
+        Title: title,
+        Due: document.getElementById('quick-add-due').value || '',
+        Priority: document.getElementById('quick-add-priority').value || 'Medium',
+        Recurrence: document.getElementById('quick-add-recurrence').value || '',
+        TaskListId: document.getElementById('quick-add-list').value || '',
+        Status: 'Open'
+    };
+
+    var saveBtn = document.getElementById('quick-add-save');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Adding...'; }
+
+    google.script.run
+        .withSuccessHandler(function(res) {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Add'; }
+            if (titleEl) titleEl.value = '';
+            document.getElementById('quick-add-due').value = '';
+            document.getElementById('quick-add-priority').value = 'Medium';
+            document.getElementById('quick-add-recurrence').value = '';
+            if (typeof showToast === 'function') showToast(res.message || 'Task created');
+            taskHub_refreshData_({ preserveRows: true });
+        })
+        .withFailureHandler(function(err) {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Add'; }
+            if (typeof showToast === 'function') showToast('Failed: ' + (err && err.message ? err.message : err));
+        })
+        .createTaskAndSync(token, taskData, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+}
+
+function taskHub_populateQuickAddListDropdown_() {
+    var listSelect = document.getElementById('quick-add-list');
+    var sourceSelect = document.getElementById('google-task-list-select');
+    if (!listSelect || !sourceSelect) return;
+    listSelect.innerHTML = '<option value="">Local only</option>';
+    for (var i = 0; i < sourceSelect.options.length; i++) {
+        var opt = sourceSelect.options[i];
+        if (opt.value) {
+            var clone = document.createElement('option');
+            clone.value = opt.value;
+            clone.textContent = '\u2197 ' + opt.textContent;
+            listSelect.appendChild(clone);
+        }
+    }
+}
+
+/* ─── TASK DETAIL DRAWER ─── */
+
+function taskHub_openDrawer_(taskId) {
+    var allTasks = (APP_STATE.allData && APP_STATE.allData.independentTasks) || [];
+    var task = allTasks.find(function(t) { return t.ID === taskId; });
+    if (!task) return;
+
+    APP_STATE._editingTaskId = taskId;
+
+    document.getElementById('drawer-title').textContent = String(task.ID || '').indexOf('GTASK-') === 0 ? 'Google Task' : 'Personal Task';
+    document.getElementById('drawer-task-title').value = task.Title || '';
+    document.getElementById('drawer-task-status').value = task.Status || 'Open';
+    document.getElementById('drawer-task-priority').value = task.Priority || 'Medium';
+
+    var dueInput = document.getElementById('drawer-task-due');
+    if (task.Due) {
+        try {
+            var d = new Date(task.Due);
+            if (!isNaN(d.getTime())) {
+                dueInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            } else { dueInput.value = ''; }
+        } catch(e) { dueInput.value = ''; }
+    } else { dueInput.value = ''; }
+
+    document.getElementById('drawer-task-recurrence').value = task.Recurrence || '';
+    document.getElementById('drawer-task-project').value = task.Project || '';
+    document.getElementById('drawer-task-tags').value = task.Tags || '';
+    document.getElementById('drawer-task-desc').value = task.Description || '';
+    taskHub_renderDescriptionPreview_();
+    taskHub_setDescriptionEditMode_(false);
+
+    var meta = [];
+    if (task.Created) meta.push('Created: ' + new Date(task.Created).toLocaleString());
+    if (task.Updated) meta.push('Updated: ' + new Date(task.Updated).toLocaleString());
+    meta.push('ID: ' + taskId);
+    document.getElementById('drawer-task-meta').textContent = meta.join(' \u00B7 ');
+
+    document.getElementById('task-detail-drawer').classList.remove('hidden');
+}
+
+function taskHub_closeDrawer_() {
+    document.getElementById('task-detail-drawer').classList.add('hidden');
+    APP_STATE._editingTaskId = null;
+}
+
+function taskHub_renderDescriptionPreview_() {
+    var preview = document.getElementById('drawer-task-desc-preview');
+    var textarea = document.getElementById('drawer-task-desc');
+    if (!preview || !textarea) return;
+    preview.innerHTML = formatJiraRichText_(textarea.value || '');
+}
+
+function taskHub_setDescriptionEditMode_(isEditing) {
+    var preview = document.getElementById('drawer-task-desc-preview');
+    var textarea = document.getElementById('drawer-task-desc');
+    var toggle = document.getElementById('drawer-task-desc-toggle');
+    if (!preview || !textarea || !toggle) return;
+
+    if (isEditing) {
+        preview.classList.add('hidden');
+        textarea.classList.remove('hidden');
+        toggle.textContent = 'Done';
+        textarea.focus();
+    } else {
+        taskHub_renderDescriptionPreview_();
+        textarea.classList.add('hidden');
+        preview.classList.remove('hidden');
+        toggle.textContent = 'Edit';
+    }
+}
+
+function taskHub_toggleDescriptionEditor_() {
+    var textarea = document.getElementById('drawer-task-desc');
+    if (!textarea) return;
+    var isEditing = !textarea.classList.contains('hidden');
+    taskHub_setDescriptionEditMode_(!isEditing);
+}
+
+function taskHub_saveFromDrawer_() {
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token || !APP_STATE._editingTaskId) return;
+
+    var taskData = {
+        ID: APP_STATE._editingTaskId,
+        Title: document.getElementById('drawer-task-title').value,
+        Status: document.getElementById('drawer-task-status').value,
+        Priority: document.getElementById('drawer-task-priority').value,
+        Due: document.getElementById('drawer-task-due').value,
+        Recurrence: document.getElementById('drawer-task-recurrence').value,
+        Project: document.getElementById('drawer-task-project').value,
+        Tags: document.getElementById('drawer-task-tags').value,
+        Description: document.getElementById('drawer-task-desc').value
+    };
+
+    var saveBtn = document.getElementById('drawer-save-btn');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
+
+    google.script.run
+        .withSuccessHandler(function() {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
+            if (typeof showToast === 'function') showToast('Task updated');
+            taskHub_closeDrawer_();
+            taskHub_refreshData_({ preserveRows: true });
+        })
+        .withFailureHandler(function(err) {
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
+            if (typeof showToast === 'function') showToast('Save failed: ' + (err && err.message ? err.message : err));
+        })
+        .updateTaskAndSync(token, taskData, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+}
+
+function taskHub_deleteFromDrawer_() {
+    if (!APP_STATE._editingTaskId) return;
+    if (!confirm('Delete this task? This will also remove it from Google Tasks if synced.')) return;
+
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+
+    google.script.run
+        .withSuccessHandler(function() {
+            if (typeof showToast === 'function') showToast('Task deleted');
+            taskHub_closeDrawer_();
+            taskHub_refreshData_({ preserveRows: true });
+        })
+        .withFailureHandler(function(err) {
+            if (typeof showToast === 'function') showToast('Delete failed: ' + (err && err.message ? err.message : err));
+        })
+        .deleteTaskAndSync(token, APP_STATE._editingTaskId, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+}
+
+/* ─── GOOGLE TASKS SYNC ─── */
+
+function taskHub_loadGoogleLists_() {
+    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
+    if (!token) return;
+    var select = document.getElementById('google-task-list-select');
+    var status = document.getElementById('google-tasks-sync-status');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">Loading...</option>';
+    if (status) status.textContent = 'Loading Google Task lists...';
+
+    google.script.run
+        .withSuccessHandler(function(lists) {
+            select.innerHTML = '';
+            if (!lists || !lists.length) {
+                select.innerHTML = '<option value="">No task lists found</option>';
+                if (status) status.textContent = 'No lists found. You may need to authorize the Tasks scope in Apps Script.';
+                return;
+            }
+            lists.forEach(function(list) {
+                var opt = document.createElement('option');
+                opt.value = list.id;
+                opt.textContent = list.title;
+                select.appendChild(opt);
+            });
+            if (status) status.textContent = 'Loaded ' + lists.length + ' list(s). Select one and click Sync selected list.';
+        })
+        .withFailureHandler(function(error) {
+            select.innerHTML = '<option value="">Unable to load</option>';
+            if (status) status.textContent = 'Failed: ' + (error && error.message ? error.message : error);
+        })
+        .getGoogleTaskLists(token);
+}
 
 function renderBoard() {
     var wrapper = $('#content-wrapper');
@@ -1891,22 +3046,6 @@ function formatDateLocalDateOnly(val) {
     var d = val instanceof Date ? val : parseServerDate(val);
     if (!d) return '';
     return d.toLocaleDateString();
-}
-
-// Direct sheet timestamp to local time conversion
-function formatSheetDateToLocal(val) {
-    if (!val) return '—';
-    
-    // Use the robust normalizer to get a valid UTC ISO string
-    var iso = normalizeUtcString(val);
-    
-    // If we got a valid ISO string, format it to local time
-    if (iso) {
-        return formatDateTimeLocal(iso);
-    }
-    
-    // Fallback to general formatter
-    return formatDateTimeLocal(val);
 }
 
 // Helper to update parent story/epic badge count when a child changes
@@ -2301,6 +3440,22 @@ function updateEpicValidationBadges() {
                 badge.textContent = String(count);
             } else {
                 if (badge) badge.remove();
+            }
+
+            // Keep faux "UNASSIGNED" epic header status pill in sync with its computed count.
+            if (epicId === 'UNASSIGNED') {
+                var statusPill = container.querySelector('.status-pill');
+                if (statusPill) {
+                    if (count > 0) {
+                        statusPill.className = 'status-pill status-review';
+                        statusPill.textContent = APP_CONSTANTS.VALIDATION.NEEDS_REVIEW;
+                        epicRow.dataset.validation = APP_CONSTANTS.VALIDATION.NEEDS_REVIEW;
+                    } else {
+                        statusPill.className = 'status-pill status-ok';
+                        statusPill.textContent = APP_CONSTANTS.VALIDATION.UP_TO_DATE;
+                        epicRow.dataset.validation = APP_CONSTANTS.VALIDATION.UP_TO_DATE;
+                    }
+                }
             }
         }
     } catch (e) { console.error('Error updating epic badges:', e); }

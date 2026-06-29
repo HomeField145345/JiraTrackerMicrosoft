@@ -5,23 +5,132 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Login - Project Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: 'Inter', sans-serif; }
+    :root {
+      --surface: #ffffff;
+      --surface-subtle: #f6f6f6;
+      --ink: #000000;
+      --primary: #000000;
+      --muted: #6f7171;
+      --line: #d8dada;
+      --brand-highlight: #ee0000;
+      --radius-tile: 12px;
+      --radius-circle: 9999px;
+      --font-family-base: 'Verizon NHG', 'Neue Haas Grotesk Text Pro', 'Neue Haas Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    }
+
+    body {
+      font-family: var(--font-family-base);
+      background: var(--surface-subtle);
+      color: var(--ink);
+    }
+
+    #login-container {
+      border: 1px solid var(--line);
+      border-radius: var(--radius-tile);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-circle);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 8px;
+      background: var(--brand-highlight);
+      color: #ffffff;
+      font-size: 1.25rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .brand-btn {
+      background: var(--ink);
+      color: #ffffff;
+      border-radius: var(--radius-tile);
+      border: 1px solid var(--ink);
+      transition: opacity 0.2s ease;
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .brand-btn:hover { opacity: 0.92; }
+    .brand-btn:disabled { opacity: 0.7; cursor: not-allowed; }
+
+    .brand-input {
+      border: 1px solid var(--line) !important;
+      border-radius: var(--radius-tile) !important;
+      box-shadow: none !important;
+    }
+
+    .brand-input:focus {
+      border-color: var(--ink) !important;
+      box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08) !important;
+      outline: none !important;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      transition: opacity 0.3s ease-out;
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--line);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-text {
+      margin-top: 16px;
+      font-size: 14px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .btn-spinner {
+      width: 14px;
+      height: 14px;
+      border-radius: var(--radius-circle);
+      border: 2px solid rgba(255, 255, 255, 0.35);
+      border-top-color: #ffffff;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
   </style>
 </head>
-<body class="bg-gray-100 h-screen flex items-center justify-center">
+<body class="h-screen flex items-center justify-center">
 
-  <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
-    <div class="text-center">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-      <p class="text-gray-600 font-medium">Checking authentication...</p>
-    </div>
+  <div id="loading-overlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div id="loading-message" class="loading-text">Checking authentication...</div>
   </div>
 
   <div id="login-container" class="bg-white p-8 rounded-lg shadow-md w-full max-w-md hidden">
     <div class="text-center mb-8">
-      <div class="text-4xl font-bold text-blue-600 mb-2">P</div>
+      <div class="brand-mark">P</div>
       <h1 class="text-2xl font-bold text-gray-800">ProjectHub Login</h1>
       <p class="text-gray-500">Please sign in to continue</p>
     </div>
@@ -30,7 +139,7 @@
       <div class="text-green-500 text-5xl mb-4">✓</div>
       <h2 class="text-2xl font-bold text-gray-800 mb-4">Login Successful</h2>
       <p class="text-gray-600 mb-6">You are now logged in.</p>
-      <button id="continueBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded w-full transition duration-150">
+      <button id="continueBtn" class="brand-btn font-bold py-2 px-4 w-full">
         Continue to Dashboard
       </button>
     </div>
@@ -40,7 +149,7 @@
         <label class="block text-gray-700 text-sm font-bold mb-2" for="username">
           Username
         </label>
-        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline" 
+        <input class="brand-input shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none" 
                id="username" type="text" placeholder="Username" required>
       </div>
       
@@ -48,14 +157,14 @@
         <label class="block text-gray-700 text-sm font-bold mb-2" for="password">
           Password
         </label>
-        <input class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none focus:shadow-outline" 
+        <input class="brand-input shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 mb-3 leading-tight focus:outline-none" 
                id="password" type="password" placeholder="******************" required>
       </div>
       
       <div id="errorMessage" class="hidden mb-4 text-red-500 text-sm text-center"></div>
 
       <div class="flex items-center justify-between">
-        <button id="submitBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline w-full transition duration-150" 
+        <button id="submitBtn" class="brand-btn font-bold py-2 px-4 focus:outline-none w-full" 
                 type="submit">
           Sign In
         </button>
@@ -64,6 +173,28 @@
   </div>
 
   <script>
+    function setLoadingOverlay(show, message) {
+      var overlay = document.getElementById('loading-overlay');
+      var messageEl = document.getElementById('loading-message');
+      if (messageEl && message) messageEl.textContent = message;
+      if (!overlay) return;
+      if (show) {
+        overlay.classList.remove('hidden');
+      } else {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    function setButtonLoading(button, isLoading, defaultText, loadingText) {
+      if (!button) return;
+      button.disabled = !!isLoading;
+      if (isLoading) {
+        button.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span><span>' + loadingText + '</span>';
+      } else {
+        button.textContent = defaultText;
+      }
+    }
+
     // Auto-login on load
     document.addEventListener('DOMContentLoaded', function() {
       tryGoogleLogin();
@@ -76,13 +207,13 @@
             handleLoginSuccess(result);
           } else {
             // Show login form
-            document.getElementById('loading-overlay').classList.add('hidden');
+            setLoadingOverlay(false);
             document.getElementById('login-container').classList.remove('hidden');
           }
         })
         .withFailureHandler(function(error) {
           // Show login form on error
-          document.getElementById('loading-overlay').classList.add('hidden');
+          setLoadingOverlay(false);
           document.getElementById('login-container').classList.remove('hidden');
         })
         .loginWithGoogle();
@@ -97,8 +228,7 @@
       const errorDiv = document.getElementById('errorMessage');
       
       // Reset UI
-      btn.disabled = true;
-      btn.textContent = "Signing in...";
+      setButtonLoading(btn, true, 'Sign In', 'Signing in...');
       errorDiv.classList.add('hidden');
       
       google.script.run
@@ -107,14 +237,12 @@
             handleLoginSuccess(result);
           } else {
             showError(result.message);
-            btn.disabled = false;
-            btn.textContent = "Sign In";
+            setButtonLoading(btn, false, 'Sign In', 'Signing in...');
           }
         })
         .withFailureHandler(function(error) {
           showError("Connection failed. Please try again.");
-          btn.disabled = false;
-          btn.textContent = "Sign In";
+          setButtonLoading(btn, false, 'Sign In', 'Signing in...');
         })
         .authenticateUser(username, password);
     }
@@ -129,8 +257,7 @@
         }));
         
         // Update UI to show loading state
-        document.getElementById('loading-overlay').classList.remove('hidden');
-        document.querySelector('#loading-overlay p').textContent = "Loading Dashboard...";
+        setLoadingOverlay(true, 'Loading dashboard...');
         document.getElementById('login-container').classList.add('hidden');
         
         // Automatically load dashboard
@@ -146,7 +273,7 @@
             })
             .withFailureHandler(function(e) {
                 // If dashboard load fails, show manual continue UI
-                document.getElementById('loading-overlay').classList.add('hidden');
+              setLoadingOverlay(false);
                 document.getElementById('login-container').classList.remove('hidden');
                 document.getElementById('loginForm').classList.add('hidden');
                 document.getElementById('successMessage').classList.remove('hidden');
@@ -154,11 +281,10 @@
                 showError("Failed to load dashboard automatically: " + e);
                 
                 var btn = document.getElementById('continueBtn');
-                btn.disabled = false;
-                btn.textContent = "Continue to Dashboard";
+              setButtonLoading(btn, false, 'Continue to Dashboard', 'Loading dashboard...');
                 btn.onclick = function() {
-                    btn.disabled = true;
-                    btn.textContent = "Loading Dashboard...";
+                setLoadingOverlay(true, 'Loading dashboard...');
+                setButtonLoading(btn, true, 'Continue to Dashboard', 'Loading dashboard...');
                     loadDashboard(result);
                 };
             })

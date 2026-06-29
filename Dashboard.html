@@ -112,7 +112,7 @@
         <img class="logo" src="https://cdn-icons-png.flaticon.com/512/9757/9757813.png" alt="ProjectHub Logo" />
         <div class="flex items-center gap-2">
             ProjectHub
-            <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">3.0</span>
+            <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">4.0</span>
         </div>
       </div>
       
@@ -472,7 +472,7 @@
               </svg>
               Closed
            </button>
-           <button class="filter-toggle" id="filter-toggle-in-progress" title="Show Only In Progress Items">
+           <button class="filter-toggle active" id="filter-toggle-in-progress" title="Show Only In Progress Items">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
               </svg>
@@ -608,42 +608,123 @@
       
       <!-- My Tasks View -->
       <div id="view-tasks" class="view-container" style="display: none;">
-        <div class="tasks-header flex justify-between items-center mb-4 px-4 pt-4">
-            <h2 class="text-xl font-bold text-gray-800">My Tasks</h2>
-            <div class="flex gap-2">
-                <button id="refresh-tasks-btn" class="btn btn-sm">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-center mb-4 px-4 pt-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-xl font-bold text-gray-800">Task Hub</h2>
+                <span id="tasks-total-count" class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">0 tasks</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="tasks-filter-status" class="select text-sm" style="min-width:90px">
+                    <option value="open">Open</option>
+                    <option value="done">Done</option>
+                    <option value="all">All</option>
+                </select>
+                <button id="refresh-tasks-btn" class="btn btn-sm" title="Sync latest Google tasks and reload Task Hub">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path></svg>
-                    Refresh
+                  Refresh
                 </button>
-                <button id="add-personal-task-btn" class="btn btn-sm primary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                    Add Personal Task
-                </button>
+                <button id="add-task-btn" class="btn btn-sm primary">+ New Task</button>
             </div>
         </div>
-        
-        <div class="tasks-grid grid grid-cols-1 md:grid-cols-2 gap-6 px-4 pb-4">
-            <!-- Assigned to Me -->
-            <div class="task-column">
-                <div class="column-header bg-blue-50 p-3 rounded-t-lg border-b border-blue-100 flex justify-between items-center">
-                    <h3 class="font-semibold text-blue-800">Assigned to Me</h3>
-                    <span id="assigned-count" class="badge bg-blue-200 text-blue-800 text-xs px-2 py-0.5 rounded-full">0</span>
-                </div>
-                <div id="assigned-tasks-list" class="task-list bg-gray-50 p-3 rounded-b-lg min-h-[200px] max-h-[600px] overflow-y-auto space-y-2">
-                    <!-- Tasks will be injected here -->
-                    <div class="text-center text-gray-400 py-8">Loading tasks...</div>
-                </div>
-            </div>
 
-            <!-- Personal Tasks -->
-            <div class="task-column">
-                <div class="column-header bg-green-50 p-3 rounded-t-lg border-b border-green-100 flex justify-between items-center">
-                    <h3 class="font-semibold text-green-800">Personal Tasks</h3>
-                    <span id="personal-count" class="badge bg-green-200 text-green-800 text-xs px-2 py-0.5 rounded-full">0</span>
+        <!-- Quick-Add Bar (hidden by default) -->
+        <div id="quick-add-bar" class="hidden mx-4 mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Title</label>
+                    <input id="quick-add-title" type="text" class="input w-full" placeholder="Task title..." />
                 </div>
-                <div id="personal-tasks-list" class="task-list bg-gray-50 p-3 rounded-b-lg min-h-[200px] max-h-[600px] overflow-y-auto space-y-2">
-                    <!-- Tasks will be injected here -->
-                    <div class="text-center text-gray-400 py-8">Loading tasks...</div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Due</label>
+                    <input id="quick-add-due" type="date" class="input" />
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Priority</label>
+                    <select id="quick-add-priority" class="select"><option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option><option value="Critical">Critical</option></select>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Recurrence</label>
+                    <select id="quick-add-recurrence" class="select"><option value="">None</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Task list</label>
+                    <select id="quick-add-list" class="select"><option value="">Local only</option></select>
+                </div>
+                <button id="quick-add-save" class="btn btn-sm primary">Add</button>
+                <button id="quick-add-cancel" class="btn btn-sm">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Collapsible Google Tasks Sync Bar -->
+        <div class="mx-4 mb-4 bg-white border border-gray-200 rounded-lg">
+            <button id="toggle-sync-bar" class="w-full flex items-center justify-between p-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg">
+            <span>Google Task Lists</span>
+                <svg id="sync-bar-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sync-bar-content" class="hidden px-3 pb-3">
+          <p class="text-xs text-gray-500 mb-2">Task list options used by Quick Add load here.</p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="google-task-list-select" class="select min-w-[260px]"><option value="">Loading lists...</option></select>
+                </div>
+                <p id="google-tasks-sync-status" class="text-xs text-gray-500 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- Task Table -->
+        <div class="px-4 pb-4">
+            <div id="tasks-table-container" class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th class="w-8 px-3 py-2"></th>
+                            <th class="px-3 py-2">Task</th>
+                            <th class="px-3 py-2 w-20">Priority</th>
+                            <th class="px-3 py-2 w-24">Due</th>
+                            <th class="px-3 py-2 w-20">Source</th>
+                            <th class="px-3 py-2 w-20">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasks-table-body">
+                        <tr><td colspan="6" class="text-center text-gray-400 py-8">Loading tasks...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Task Detail Drawer -->
+        <div id="task-detail-drawer" class="hidden fixed inset-0 z-50">
+            <div id="task-drawer-overlay" class="absolute inset-0 bg-black bg-opacity-30"></div>
+            <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-gray-200">
+                    <h3 id="drawer-title" class="text-lg font-semibold text-gray-800">Task Details</h3>
+                    <button id="drawer-close-btn" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Title</label><input id="drawer-task-title" class="input w-full" /></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Status</label><select id="drawer-task-status" class="select w-full"><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Done">Done</option></select></div>
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Priority</label><select id="drawer-task-priority" class="select w-full"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option></select></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Due date</label><input id="drawer-task-due" type="date" class="input w-full" /></div>
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Recurrence</label><select id="drawer-task-recurrence" class="select w-full"><option value="">None</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
+                    </div>
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Project</label><input id="drawer-task-project" class="input w-full" /></div>
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Tags</label><input id="drawer-task-tags" class="input w-full" placeholder="comma-separated" /></div>
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-medium text-gray-600 block">Description</label>
+                        <button type="button" id="drawer-task-desc-toggle" class="text-xs font-medium text-blue-600 hover:text-blue-700">Edit</button>
+                      </div>
+                      <div id="drawer-task-desc-preview" class="drawer-task-desc-preview rich-text"></div>
+                      <textarea id="drawer-task-desc" class="input w-full hidden" rows="4"></textarea>
+                    </div>
+                    <p id="drawer-task-meta" class="text-xs text-gray-400 pt-2 border-t border-gray-100"></p>
+                </div>
+                <div class="flex items-center justify-between p-4 border-t border-gray-200">
+                    <button id="drawer-delete-btn" class="btn btn-sm text-red-600 hover:bg-red-50">Delete</button>
+                    <button id="drawer-save-btn" class="btn btn-sm primary">Save changes</button>
                 </div>
             </div>
         </div>
@@ -780,6 +861,10 @@
           <div class="story-info-label">Summary</div>
           <div id="storyInfoSummary" class="story-info-value"></div>
         </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Description</div>
+          <div id="storyInfoDescription" class="story-info-value rich-text"></div>
+        </div>
         <div class="story-info-section">
           <div class="story-info-label">Status</div>
           <div id="storyInfoStatus" class="story-info-value"></div>
@@ -803,6 +888,10 @@
         <div class="story-info-section">
           <div class="story-info-label">Story Points</div>
           <div id="storyInfoStoryPoints" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section full-width" id="storyInfoLabelsSection">
+          <div class="story-info-label">Labels</div>
+          <div id="storyInfoLabels" class="story-info-value"></div>
         </div>
         <div class="story-info-section full-width">
           <div class="story-info-label">Acceptance Criteria</div>
@@ -844,6 +933,33 @@
         <div class="story-info-section">
           <div class="story-info-label">Updated</div>
           <div id="storyInfoUpdated" class="story-info-value"></div>
+        </div>
+
+        <!-- Project Artifacts Checklist (Epics only) -->
+        <div id="storyInfoArtifactsSection" class="story-info-section full-width" style="display:none;">
+          <div class="story-info-label" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Project Artifacts</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="artifactsReadiness" class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
+              <button id="createProjectFolderBtn" onclick="createProjectFolderUI_()" class="text-xs px-3 py-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium" style="white-space:nowrap;" title="Create or repair project folder in Google Drive">
+                📁 Create folder
+              </button>
+            </div>
+          </div>
+          <div id="projectFolderStatus" style="display:none;padding:4px 8px;margin-bottom:4px;border-radius:6px;font-size:0.78em;"></div>
+          <div class="story-info-value" style="padding:0;">
+            <table id="artifactsTable" style="width:100%;border-collapse:collapse;font-size:0.85em;">
+              <thead>
+                <tr style="border-bottom:2px solid #e5e7eb;text-align:left;">
+                  <th style="padding:6px 8px;width:28px;"></th>
+                  <th style="padding:6px 8px;">Artifact</th>
+                  <th style="padding:6px 8px;width:110px;">Status</th>
+                  <th style="padding:6px 8px;">Link / Notes</th>
+                </tr>
+              </thead>
+              <tbody id="artifactsTableBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -997,15 +1113,15 @@
                     <div>
                         <div class="flex items-center justify-between">
                             <label for="inProgressStatuses" class="block text-sm font-medium text-gray-700">
-                                In Progress Statuses
-                                <span class="inline-flex align-middle ml-1 text-blue-600" title="Statuses considered 'In Progress' for the dashboard filter.">
+                              Not In Progress Statuses
+                              <span class="inline-flex align-middle ml-1 text-blue-600" title="Statuses considered NOT in progress for the dashboard filter. Any status not listed here is treated as in progress.">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
                                 </span>
                             </label>
                             <button class="text-xs text-blue-600 hover:underline" data-clean-for="inProgressStatuses">Clean</button>
                         </div>
-                        <textarea id="inProgressStatuses" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="In Progress\nTesting\nReady for Testing"></textarea>
-                        <p class="mt-1 text-xs text-gray-500">One value per line. Used for the 'Show Only In Progress' filter.</p>
+                        <textarea id="inProgressStatuses" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Closed\nDone\nCanceled\nOn Hold"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">One value per line. Used for the 'Show Only In Progress' filter as an exclusion list.</p>
                     </div>
                 </div>
 
@@ -1151,6 +1267,11 @@
                     <div class="flex justify-between items-center">
                         <h3 class="text-lg font-medium text-gray-900">User Management</h3>
                         <button id="addUserBtn" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Add User</button>
+                    </div>
+                    <div id="global-sheet-link-bar" class="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
+                        <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/></svg>
+                        <span class="font-medium text-gray-700">Global sheet:</span>
+                        <a id="global-sheet-link" href="#" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline truncate">Loading...</a>
                     </div>
                     <div class="overflow-x-auto border rounded-md">
                         <table class="min-w-full divide-y divide-gray-200">

@@ -53,7 +53,7 @@ function saveConfiguration_(optionsData) {
     sheet.getRange("O1").setValue("Past Due Exempt Stages");
     sheet.getRange("P1").setValue("KPI Project Stages");
     sheet.getRange("Q1").setValue("Independent Task Status Options");
-    sheet.getRange("R1").setValue("In Progress Statuses");
+    sheet.getRange("R1").setValue("Not In Progress Statuses");
     
     // Clear existing data (A-M, O, P, Q, R, skipping N which is Connectors)
     sheet.getRange("A2:M" + sheet.getMaxRows()).clearContent();
@@ -70,7 +70,7 @@ function saveConfiguration_(optionsData) {
     var priorityData = (optionsData.priorityOptions || []).map(function(o) { return [o]; });
     var pastDueExemptData = (optionsData.pastDueExemptStages || []).map(function(o) { return [o]; });
     var independentTaskStatusData = (optionsData.independentTaskStatusOptions || []).map(function(o) { return [o]; });
-    var inProgressData = (optionsData.inProgressStatuses || []).map(function(o) { return [o]; });
+    var inProgressData = (optionsData.notInProgressStatuses || optionsData.inProgressStatuses || []).map(function(o) { return [o]; });
     
     // Set option data
     if (actData.length > 0) sheet.getRange(2, 1, actData.length, 1).setValues(actData);
@@ -83,7 +83,7 @@ function saveConfiguration_(optionsData) {
     // Set Independent Task Status Options in Q (column 17)
     if (independentTaskStatusData.length > 0) sheet.getRange(2, 17, independentTaskStatusData.length, 1).setValues(independentTaskStatusData);
 
-    // Set In Progress Statuses in R (column 18)
+    // Set Not In Progress Statuses in R (column 18)
     if (inProgressData.length > 0) sheet.getRange(2, 18, inProgressData.length, 1).setValues(inProgressData);
     
     // Set per-type options in E, F, G (restored original positions)
@@ -173,13 +173,22 @@ function saveManualData_(jiraId, field, value, user) {
     else if (field === 'End Date') colToUpdate = 7;
     else if (field === 'Drive Link') colToUpdate = 8;
     else if (field === 'Priority') colToUpdate = 9;
+    else if (field === 'Artifacts') colToUpdate = 10;
+
+    // Auto-add Artifacts header if missing
+    if (field === 'Artifacts') {
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      if (headers.indexOf('Artifacts') === -1) {
+        sheet.getRange(1, 10).setValue('Artifacts');
+      }
+    }
     
     if (rowToUpdate > 0 && colToUpdate) {
       // Update existing row
       sheet.getRange(rowToUpdate, colToUpdate).setValue(value || null);
     } else if (colToUpdate) { 
       // Create new row
-      var newRow = [jiraId, '', '', '', null, null, null, '', ''];
+      var newRow = [jiraId, '', '', '', null, null, null, '', '', ''];
       newRow[0] = jiraId;
       newRow[colToUpdate - 1] = value || null;
       sheet.appendRow(newRow);

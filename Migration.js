@@ -175,26 +175,3 @@ function copyFilteredIndependentTasks_(sourceSS, targetSS, username) {
   }
 }
 
-/**
- * Helper to copy data from one sheet to another.
- * Appends data to preserve headers created by setupSheets.
- */
-function copySheetData_(sourceSS, targetSS, sheetName) {
-  const sourceSheet = sourceSS.getSheetByName(sheetName);
-  const targetSheet = targetSS.getSheetByName(sheetName);
-
-  if (!sourceSheet || !targetSheet) return;
-
-  const lastRow = sourceSheet.getLastRow();
-  const lastCol = sourceSheet.getLastColumn();
-
-  // If there's data beyond headers (assuming row 1 is header)
-  if (lastRow > 1) {
-    const data = sourceSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
-    
-    // Write to target starting at row 2
-    if (data.length > 0) {
-      targetSheet.getRange(2, 1, data.length, lastCol).setValues(data);
-    }
-  }
-}

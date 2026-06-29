@@ -45,27 +45,6 @@ function $$(selector) {
 }
 
 /**
- * Clears the DOM element cache
- */
-function clearDomCache() {
-  _domCache = {};
-}
-
-/**
- * Updates text content of an element safely
- * @param {string} selector - The CSS selector for the element
- * @param {string|number} value - The value to set
- * @param {boolean} [useCache=false] - Whether to use cached element
- * @returns {boolean} - Whether the operation was successful
- */
-function setText(selector, value, useCache) {
-  const el = $(selector, useCache);
-  if (!el) return false;
-  el.textContent = value;
-  return true;
-}
-
-/**
  * Gets or sets the value of an input element safely
  * @param {string} selector - The CSS selector for the element
  * @param {string|number} [value] - Optional value to set

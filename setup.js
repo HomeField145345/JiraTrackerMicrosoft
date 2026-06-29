@@ -85,7 +85,7 @@ function setupSheets(targetSpreadsheet) {
   const logs = [];
   
   const sheets = {
-    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links'],
+    [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links', 'Labels', 'Description'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],
@@ -135,6 +135,22 @@ function setupSheets(targetSpreadsheet) {
           sheet.insertColumnAfter(updatedHeaders3.length);
           sheet.getRange(1, updatedHeaders3.length + 1).setValue('Owner').setFontWeight('bold');
           logs.push('Added "Owner" to JiraData.');
+        }
+
+        // Add Labels column if missing
+        const updatedHeaders4 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (updatedHeaders4.indexOf('Labels') === -1) {
+          sheet.insertColumnAfter(updatedHeaders4.length);
+          sheet.getRange(1, updatedHeaders4.length + 1).setValue('Labels').setFontWeight('bold');
+          logs.push('Added "Labels" to JiraData.');
+        }
+
+        // Add Description column if missing
+        const updatedHeaders5 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (updatedHeaders5.indexOf('Description') === -1) {
+          sheet.insertColumnAfter(updatedHeaders5.length);
+          sheet.getRange(1, updatedHeaders5.length + 1).setValue('Description').setFontWeight('bold');
+          logs.push('Added "Description" to JiraData.');
         }
       }
       
@@ -265,11 +281,27 @@ function addNewJiraFields() {
         jiraSheet.getRange(1, updatedHeaders3.length + 1).setValue('Links');
         columnsAdded.push('Links (Column R)');
       }
+
+      // Add Labels column if missing
+      const updatedHeaders4 = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      if (updatedHeaders4.indexOf('Labels') === -1) {
+        jiraSheet.insertColumnAfter(updatedHeaders4.length);
+        jiraSheet.getRange(1, updatedHeaders4.length + 1).setValue('Labels');
+        columnsAdded.push('Labels');
+      }
+
+      // Add Description column if missing
+      const updatedHeaders5 = jiraSheet.getRange(1, 1, 1, jiraSheet.getLastColumn()).getValues()[0];
+      if (updatedHeaders5.indexOf('Description') === -1) {
+        jiraSheet.insertColumnAfter(updatedHeaders5.length);
+        jiraSheet.getRange(1, updatedHeaders5.length + 1).setValue('Description');
+        columnsAdded.push('Description');
+      }
       
       if (columnsAdded.length > 0) {
         SpreadsheetApp.getUi().alert('Successfully added new fields to JiraData sheet: ' + columnsAdded.join(', ') + '\n\nThese fields will now be imported from your Jira CSV exports.');
       } else {
-        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria\n- Target Date\n- Fix Version\n- Links');
+        SpreadsheetApp.getUi().alert('All new fields already exist in the JiraData sheet:\n- Acceptance Criteria\n- Target Date\n- Fix Version\n- Links\n- Labels\n- Description');
       }
     } else {
       SpreadsheetApp.getUi().alert('JiraData sheet not found. Please run "1. Create Backend Sheets" first.');

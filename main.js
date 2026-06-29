@@ -7,9 +7,7 @@ function doGet(e) {
   var template;
   
   // Simple routing
-  if (e.parameter.page === 'tasks') {
-    template = HtmlService.createTemplateFromFile('Tasks.html');
-  } else if (e.parameter.page === 'dashboard') {
+  if (e.parameter.page === 'dashboard') {
     template = HtmlService.createTemplateFromFile('Dashboard.html');
   } else {
     // Default to Login page if no page param or unknown
@@ -35,8 +33,6 @@ function getPageHtml(page) {
   var template;
   if (page === 'dashboard') {
     template = HtmlService.createTemplateFromFile('Dashboard.html');
-  } else if (page === 'tasks') {
-    template = HtmlService.createTemplateFromFile('Tasks.html');
   } else {
     template = HtmlService.createTemplateFromFile('Login.html');
   }
@@ -167,10 +163,56 @@ function saveManualData(token, jiraId, field, value, targetUsername) {
   return saveManualData_(jiraId, field, value, contextUser);
 }
 
+function createProjectFolder(token, jiraId, epicTitle, existingFolderId) {
+  requireAuth(token);
+  return createProjectFolder_(jiraId, epicTitle, existingFolderId || null);
+}
+
 function saveIndependentTask(token, taskData, targetUsername) {
   const auth = requireAuth(token);
   const contextUser = resolveDataContextUser(auth.user, targetUsername);
   return saveIndependentTask_(taskData, contextUser);
+}
+
+function getGoogleTaskLists(token) {
+  requireAuth(token);
+  return listGoogleTaskLists_();
+}
+
+function syncGoogleTasksToIndependent(token, taskListId, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return syncGoogleTasksToIndependent_(taskListId, contextUser);
+}
+
+function syncAllGoogleTaskLists(token, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return syncAllGoogleTaskLists_(contextUser);
+}
+
+function createTaskAndSync(token, taskData, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return createTaskAndSync_(taskData, contextUser);
+}
+
+function updateTaskAndSync(token, taskData, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return updateTaskAndSync_(taskData, contextUser);
+}
+
+function deleteTaskAndSync(token, taskId, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return deleteTaskAndSync_(taskId, contextUser);
+}
+
+function toggleTaskComplete(token, taskId, targetUsername) {
+  const auth = requireAuth(token);
+  const contextUser = resolveDataContextUser(auth.user, targetUsername);
+  return toggleTaskComplete_(taskId, contextUser);
 }
 
 function updateLastChecked(token, jiraId, targetUsername) {
@@ -204,6 +246,14 @@ function getUsersList(token) {
     throw new Error("Access denied: Admin rights required.");
   }
   return getUsers();
+}
+
+function getGlobalSheetUrl(token) {
+  const auth = requireAuth(token);
+  if (auth.role !== 'admin') {
+    throw new Error("Access denied: Admin rights required.");
+  }
+  return SpreadsheetApp.getActiveSpreadsheet().getUrl();
 }
 
 function getWorkspaceOwners(token) {

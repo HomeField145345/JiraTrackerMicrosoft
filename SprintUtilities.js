@@ -89,18 +89,6 @@ function parseSprintEntries_(sprintString) {
   return entries;
 }
 
-/**
- * Legacy date parser — kept for any external callers.
- * Prefer parseSprintEntries_ for new code.
- */
-function parseSprintDates(sprintString) {
-  var entries = parseSprintEntries_(sprintString);
-  if (entries.length && (entries[0].startDate || entries[0].endDate)) {
-    return { start: entries[0].startDate, end: entries[0].endDate };
-  }
-  return { start: null, end: null };
-}
-
 function formatSprint(sprintString) {
   if (!sprintString || typeof sprintString !== 'string') return '—';
   var match = sprintString.match(/(Sprint\s?\d+)/i);

@@ -8,21 +8,21 @@ var USERS_CACHE_TTL_SECONDS = 300;
 var CONFIG_CACHE_KEY = 'config_data_v1';
 var CONFIG_CACHE_TTL_SECONDS = 600;
 
-// --- LOGGING UTILITY (console) ---
-// Lightweight logging to the execution logs for timestamp debugging.
+// Timestamp diagnostics helper used by data read/merge flows.
 function logTimestampOperation(operation, details) {
   try {
-    var payload;
+    var payload = '';
     try {
-      payload = JSON.stringify(details);
-    } catch (serr) {
+      payload = JSON.stringify(details || {});
+    } catch (serializeError) {
       payload = String(details);
     }
     if (payload && payload.length > 4000) {
       payload = payload.substring(0, 4000) + '...';
     }
+    Logger.log('[Timestamp] %s | %s', operation || 'unknown', payload || '');
   } catch (e) {
-    // swallow logging errors
+    // Never fail runtime code because diagnostics logging fails.
   }
 }
 

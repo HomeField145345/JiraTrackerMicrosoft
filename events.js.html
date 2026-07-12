@@ -257,7 +257,6 @@ function updateActiveFiltersIndicator() {
     var searchTerm = $('#q') ? $('#q').value.trim() : '';
     var statusFilters = APP_STATE.multiSelectFilters.status || [];
     var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
-    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
@@ -284,10 +283,6 @@ function updateActiveFiltersIndicator() {
     if (sprintFilters.length > 0) {
         activeFilterCount++;
         filterLabels.push('Sprint');
-    }
-    if (planningStageFilters.length > 0) {
-        activeFilterCount++;
-        filterLabels.push('Planning Stage');
     }
     if (validationFilters.length > 0) {
         activeFilterCount++;
@@ -394,7 +389,6 @@ function handleClearFilters() {
       switch(filterType) {
         case 'status': label.textContent = 'All Statuses'; break;
         case 'sprint': label.textContent = 'All Sprints'; break;
-        case 'planningStage': label.textContent = 'All Planning Stages'; break;
         case 'validation': label.textContent = 'All Validations'; break;
         case 'projectStage': label.textContent = 'All Project Stages'; break;
                 case 'uatStatus': label.textContent = 'All UAT Statuses'; break;
@@ -1221,7 +1215,6 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
     // Get multi-select filter values
     var statusFilters = APP_STATE.multiSelectFilters.status || [];
     var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
-    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
@@ -1272,7 +1265,6 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
         searchTerm ||
         statusFilters.length ||
         sprintFilters.length ||
-        planningStageFilters.length ||
         validationFilters.length ||
         projectStageFilters.length ||
         uatStatusFilters.length ||
@@ -1394,7 +1386,6 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
             var _matchesSearch = matchesSearch(row, searchTerm);
             var _matchStatus = matchesMultiSelectFilter(row.dataset.status, statusFilters);
             var _matchSprint = (sprintFilters.length === 0) || rowSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); });
-            var _matchPlanning = matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters);
             var _matchValidation = matchesMultiSelectFilter(row.dataset.validation, validationFilters);
             var _matchProjectStage = matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters);
             var _matchUatStatus = matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters);
@@ -1475,7 +1466,6 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                 isVisible = _matchesSearch &&
                             _matchStatus &&
                             _matchSprint &&
-                            _matchPlanning &&
                             _matchValidation &&
                             _matchProjectStage &&
                             _matchUatStatus &&
@@ -1574,7 +1564,6 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
             var epicMatchesFilters = matchesSearch(row, searchTerm) &&
                                    // Sprint filter passes if epic itself has a selected sprint OR any child matched earlier
                                    (sprintFilters.length === 0 || epicSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); })) &&
-                                   matchesMultiSelectFilter(row.dataset.planningStage, planningStageFilters) &&
                                    matchesMultiSelectFilter(row.dataset.validation, validationFilters) &&
                                    matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters) &&
                                    matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters) &&
@@ -2320,7 +2309,6 @@ function hasActiveFilters() {
     var searchTerm = $('#q').value.trim().toLowerCase();
     var statusFilters = APP_STATE.multiSelectFilters.status || [];
     var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
-    var planningStageFilters = APP_STATE.multiSelectFilters.planningStage || [];
     var validationFilters = APP_STATE.multiSelectFilters.validation || [];
     var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
     var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
@@ -2337,9 +2325,9 @@ function hasActiveFilters() {
     var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
     
     return !!(searchTerm || statusFilters.length || sprintFilters.length || 
-              planningStageFilters.length || validationFilters.length || 
-              projectStageFilters.length || assignedPMFilters.length || 
-              assignedDevFilters.length || uatStatusFilters.length || fixVersionFilters.length ||
+              validationFilters.length || projectStageFilters.length || 
+              assignedPMFilters.length || assignedDevFilters.length || 
+              uatStatusFilters.length || fixVersionFilters.length ||
               showClosed || hideStories || hideBugs || !showOnlyInProgress || showOnlyOutOfSync || showOnlyPastSprint);
 }
 

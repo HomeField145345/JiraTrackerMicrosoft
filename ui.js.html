@@ -1507,6 +1507,12 @@ function renderApp() {
     
     // Logic to show/hide filter popup is now handled by dropdown events
     
+    // Show/hide KPI container based on view
+    var kpiContainer = $('.kpi-container');
+    if (kpiContainer) {
+        kpiContainer.style.display = APP_STATE.currentView === 'tasks' ? 'none' : 'flex';
+    }
+    
     if (APP_STATE.currentView !== 'gantt') {
         applyFilters();
     }
@@ -2233,7 +2239,7 @@ function renderTasksView() {
 
     filtered.forEach(function(t) {
         if (!t.Due) { buckets[6].tasks.push(t); return; }
-        var d = new Date(t.Due);
+        var d = taskHub_parseDueDate_(t.Due);
         if (isNaN(d.getTime())) { buckets[6].tasks.push(t); return; }
         var dDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
@@ -2249,8 +2255,8 @@ function renderTasksView() {
     var prioOrder = { Critical: 0, High: 1, Medium: 2, Low: 3 };
     buckets.forEach(function(b) {
         b.tasks.sort(function(a, bb) {
-            var da = a.Due ? new Date(a.Due).getTime() : 8640000000000000;
-            var db = bb.Due ? new Date(bb.Due).getTime() : 8640000000000000;
+            var da = a.Due ? taskHub_parseDueDate_(a.Due).getTime() : 8640000000000000;
+            var db = bb.Due ? taskHub_parseDueDate_(bb.Due).getTime() : 8640000000000000;
             if (da !== db) return da - db;
             return (prioOrder[a.Priority] || 2) - (prioOrder[bb.Priority] || 2);
         });
@@ -2294,7 +2300,7 @@ function buildTaskRow_(task) {
 
     var dueLabel = '';
     if (task.Due) {
-        var d = new Date(task.Due);
+        var d = taskHub_parseDueDate_(task.Due);
         if (!isNaN(d.getTime())) dueLabel = (d.getMonth()+1) + '/' + d.getDate();
     }
 
@@ -2601,7 +2607,7 @@ function taskHub_openDrawer_(taskId) {
     var dueInput = document.getElementById('drawer-task-due');
     if (task.Due) {
         try {
-            var d = new Date(task.Due);
+            var d = taskHub_parseDueDate_(task.Due);
             if (!isNaN(d.getTime())) {
                 dueInput.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
             } else { dueInput.value = ''; }
@@ -3012,6 +3018,21 @@ function parseCSTDate(val) {
     }
 }
 
+function taskHub_parseDueDate_(val) {
+    if (!val) return new Date('invalid');
+    if (val instanceof Date) return val;
+
+    var s = String(val).trim();
+    var ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (ymd) {
+        // Parse date-only values as local calendar dates to avoid UTC day shift.
+        return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+    }
+
+    var d = new Date(s);
+    return isNaN(d.getTime()) ? new Date('invalid') : d;
+}
+
 function formatDateTimeLocal(val) {
     // If no value provided, return placeholder
     if (!val) return '—';
@@ -3182,13 +3203,17 @@ function updateRowTimestamp(jiraId, newTimestampISO) {
     });
 
     // Update local state for KPI calculations
+    // Keep Last Checked in its original server/display format so KPI validation
+    // uses the same CST-aware parsing path as row-level validation.
     if (APP_STATE.allData && APP_STATE.allData.projects) {
         var project = APP_STATE.allData.projects.find(function(p) {
             return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
         });
         
         if (project) {
-            project['Last Checked'] = checkedIso;
+            project['Last Checked'] = (newTimestampISO !== undefined && newTimestampISO !== null && String(newTimestampISO).trim() !== '')
+                ? newTimestampISO
+                : checkedIso;
         }
     }
 
@@ -3292,6 +3317,11 @@ function updateRowValidation(jiraId) {
 
     // Update epic badges since a child may have changed validation
     updateEpicValidationBadges();
+
+    // Keep KPI header in sync with row-level validation changes.
+    if (typeof updateKPICards === 'function') {
+        updateKPICards();
+    }
 }
 
 // Add message listener for real-time sync indicator updates

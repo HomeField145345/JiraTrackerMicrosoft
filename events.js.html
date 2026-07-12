@@ -550,8 +550,38 @@ function handleKPICardClick(card) {
 }
 
 function handlePastSprintFilter() {
-    // Dedicated KPI filter: only rows whose latest sprint is older
-    // than the current sprint should remain visible.
+    // Reset all active filters so only past-sprint membership drives visibility.
+    // Other active filters (status, in-progress toggle, etc.) would silently
+    // narrow results and hide open past-sprint items the user wants to see.
+    APP_STATE.multiSelectFilters = {
+        sprint: [],
+        status: [],
+        planning: [],
+        validation: [],
+        projectStage: [],
+        uatStatus: [],
+        fixVersion: [],
+        pm: [],
+        dev: []
+    };
+    APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.manuallyCollapsedEpics = {};
+
+    // Reset toggle buttons: In Progress OFF, Stories ON, Bugs ON, Closed OFF
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.remove('active');
+    if ($('#filter-toggle-closed'))      $('#filter-toggle-closed').classList.remove('active');
+    if ($('#filter-toggle-stories'))     $('#filter-toggle-stories').classList.add('active');
+    if ($('#filter-toggle-bugs'))        $('#filter-toggle-bugs').classList.add('active');
+
+    // Sync filter UI checkboxes to cleared state
+    ['sprint','status','planning','validation','projectStage','uatStatus','fixVersion','pm','dev'].forEach(function(filterType) {
+        var dropdown = $('[data-filter="' + filterType + '"]');
+        if (!dropdown) return;
+        dropdown.querySelectorAll('.filter-checkbox').forEach(function(cb) { cb.checked = false; });
+        if (typeof updateSelectAllCheckbox === 'function') updateSelectAllCheckbox(filterType);
+        if (typeof updateFilterSelection === 'function') updateFilterSelection(filterType);
+    });
+
     APP_STATE.showOnlyPastSprint = true;
     applyFilters();
 }
@@ -605,11 +635,38 @@ function handleCurrentSprintFilter() {
     // Reset manual collapse tracking so KPI can expand epics as needed
     APP_STATE.manuallyCollapsedEpics = {};
 
-        // Ensure closed items are included when viewing the current sprint
-        var closedToggle = $('#filter-toggle-closed');
-        if (closedToggle && !closedToggle.classList.contains('active')) {
-            closedToggle.classList.add('active');
-        }
+    // Clear all active filters so only the sprint filter drives visibility.
+    // Without this, a previously active status or validation filter would
+    // silently narrow the results (e.g. only "In Progress" items shown).
+    APP_STATE.multiSelectFilters = {
+        sprint: [],
+        status: [],
+        planning: [],
+        validation: [],
+        projectStage: [],
+        uatStatus: [],
+        fixVersion: [],
+        pm: [],
+        dev: []
+    };
+    APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.showOnlyPastSprint = false;
+
+    // Reset toggle buttons: In Progress OFF, Stories ON, Bugs ON, Closed OFF
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.remove('active');
+    if ($('#filter-toggle-closed'))      $('#filter-toggle-closed').classList.remove('active');
+    if ($('#filter-toggle-stories'))     $('#filter-toggle-stories').classList.add('active');
+    if ($('#filter-toggle-bugs'))        $('#filter-toggle-bugs').classList.add('active');
+
+    // Sync filter UI checkboxes to cleared state
+    ['sprint','status','planning','validation','projectStage','uatStatus','fixVersion','pm','dev'].forEach(function(filterType) {
+        var dropdown = $('[data-filter="' + filterType + '"]');
+        if (!dropdown) return;
+        dropdown.querySelectorAll('.filter-checkbox').forEach(function(cb) { cb.checked = false; });
+        if (typeof updateSelectAllCheckbox === 'function') updateSelectAllCheckbox(filterType);
+        if (typeof updateFilterSelection === 'function') updateFilterSelection(filterType);
+    });
+
         // Normalize current sprint label to match dropdown values (e.g., "Sprint 123")
         var normalizedCurrent = (typeof formatSprint === 'function') ? formatSprint(currentSprintName) : currentSprintName;
         var sprintNumberMatch = (currentSprintName || '').match(/(\d+)/);
@@ -1398,6 +1455,16 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                     rowLatestSprintNumber !== null &&
                     rowLatestSprintNumber < currentSprintNumber
                 );
+                // Also exclude items whose project stage is in pastSprintClosedStages —
+                // the counter skips these so the filter must match.
+                if (_matchPastSprint) {
+                    var pastClosedCfg = (APP_STATE.allData.config && APP_STATE.allData.config.pastSprintClosedStages) || [];
+                    var pastClosedSet = new Set(pastClosedCfg.map(function(s){ return (s||'').toLowerCase().trim(); }));
+                    var rowStage = (row.dataset.projectStage || '').toLowerCase().trim();
+                    if (rowStage && pastClosedSet.has(rowStage)) {
+                        _matchPastSprint = false;
+                    }
+                }
             }
 
             var isVisible;
@@ -1520,9 +1587,9 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
             var childMatches = epicsWithMatchingChildren.has(epicId);
             
             var isVisible;
-            if (APP_STATE.showOnlyOutOfSync) {
-                // In out-of-sync mode, only show epics that have matching children.
-                // This avoids showing empty epics.
+            if (APP_STATE.showOnlyOutOfSync || APP_STATE.showOnlyPastSprint) {
+                // In KPI-override modes, only show epics that have matching children.
+                // This avoids showing empty epics that have no items matching the KPI filter.
                 isVisible = childMatches;
             } else {
                 // If status filters are active, only show epics with matching children
@@ -1561,7 +1628,10 @@ function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
                     var epicIsClosed = isClosedByProjectStage(row);
                     var epicMatchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
                     
-                    if (epicIsClosed && (!epicChildren || epicChildren.total === epicChildren.closed) && !epicMatchesSpecificSearch) {
+                    // Keep closed epics visible when they have matching descendants (e.g.,
+                    // nested stale items). Otherwise descendant matches can be hidden until
+                    // users disable nesting.
+                    if (epicIsClosed && !childMatches && (!epicChildren || epicChildren.total === epicChildren.closed) && !epicMatchesSpecificSearch) {
                         isVisible = false;
                     }
                 }
@@ -1979,9 +2049,12 @@ function updatePastSprintKPI() {
         }
     });
 
-    // Determine current sprint end date for comparison
+    // Determine current sprint end date and sprint number for comparison
     var currentSprintEndDate = null;
+    var currentSprintNum = null;
     if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        var csm = String(currentSprintName).match(/Sprint\s?(\d+)/i);
+        if (csm) currentSprintNum = parseInt(csm[1], 10);
         for (var sprintFullName in sprints) {
             if (sprints.hasOwnProperty(sprintFullName)) {
                 var dates = sprints[sprintFullName];
@@ -1994,35 +2067,45 @@ function updatePastSprintKPI() {
     }
 
     // Count items in past sprints
+    // An item is only "past sprint" if its LATEST sprint is older than the current sprint.
+    // Items that were moved from an old sprint into the current sprint must not be counted.
     allProjects.forEach(function(project) {
         var sprintString = project.sprint || project.Sprint || '';
         var rawProjectStage = project['Project Stage'] || '';
         var projectStage = rawProjectStage.trim().toLowerCase();
         var issueType = (project['Issue Type'] || '').toLowerCase();
 
-        if (issueType === 'epic') return; 
+        if (issueType === 'epic') return;
 
         var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
 
         if (sprintString && typeof sprintString === 'string') {
-            var itemSprints = sprintString.split(',').map(function(s) { return s.trim(); });
             var isInPastSprint = false;
 
-            for (var i = 0; i < itemSprints.length; i++) {
-                var sprintInfo = sprints[itemSprints[i]];
-                if (sprintInfo && sprintInfo.end) {
-                    var compareDate = currentSprintEndDate || today;
-                    if (sprintInfo.end < compareDate) {
-                        isInPastSprint = true;
-                        break;
+            if (currentSprintNum !== null) {
+                // Primary: compare latest sprint number to current sprint number (matches filter logic)
+                var sprintNums = (sprintString.match(/Sprint\s?(\d+)/ig) || [])
+                    .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, ''), 10); });
+                if (sprintNums.length > 0) {
+                    var latestNum = Math.max.apply(null, sprintNums);
+                    isInPastSprint = latestNum < currentSprintNum;
+                }
+            } else if (currentSprintEndDate) {
+                // Fallback: use the latest sprint end date for items using date-based sprint names
+                var latestEnd = null;
+                sprintString.split(',').forEach(function(sp) {
+                    var info = sprints[sp.trim()];
+                    if (info && info.end) {
+                        if (!latestEnd || info.end > latestEnd) latestEnd = info.end;
                     }
+                });
+                if (latestEnd) {
+                    isInPastSprint = latestEnd < currentSprintEndDate;
                 }
             }
 
-            if (isInPastSprint) {
-                if (!isClosedForPast) {
-                    pastSprintItems++;
-                }
+            if (isInPastSprint && !isClosedForPast) {
+                pastSprintItems++;
             }
         }
     });
@@ -2283,6 +2366,12 @@ function switchView(viewName) {
   var tableControls = $('#table-controls');
   if (tableControls) {
     tableControls.style.display = viewName === 'table' ? 'flex' : 'none';
+  }
+  
+  // Hide KPI Tracker when in MyTask view, show for all other views
+  var kpiContainer = $('.kpi-container');
+  if (kpiContainer) {
+    kpiContainer.style.display = viewName === 'tasks' ? 'none' : 'flex';
   }
   
   // For Gantt view, we can release some data we don't need

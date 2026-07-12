@@ -59,7 +59,12 @@ function googleTasksApi_(method, path, payload, queryParams) {
 function toGoogleTasksDate_(dateStr) {
   if (!dateStr) return undefined;
   try {
-    var d = new Date(dateStr);
+    var s = String(dateStr).trim();
+    // Preserve plain date-only values without timezone reinterpretation.
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return s + "T00:00:00.000Z";
+    }
+    var d = new Date(s);
     if (isNaN(d.getTime())) return undefined;
     return Utilities.formatDate(d, 'UTC', "yyyy-MM-dd'T'00:00:00.000'Z'");
   } catch (e) { return undefined; }
@@ -68,9 +73,14 @@ function toGoogleTasksDate_(dateStr) {
 function fromGoogleTasksDate_(dueIso) {
   if (!dueIso) return '';
   try {
-    var d = new Date(dueIso);
+    var s = String(dueIso).trim();
+    // Google Tasks due values are date-centric; keep the literal date part.
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+      return s.substring(0, 10);
+    }
+    var d = new Date(s);
     if (isNaN(d.getTime())) return '';
-    return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    return Utilities.formatDate(d, 'UTC', 'yyyy-MM-dd');
   } catch (e) { return ''; }
 }
 

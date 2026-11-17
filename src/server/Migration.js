@@ -32,7 +32,7 @@ function migrateUserToPersonalDatabase(token, targetUserId) {
 
   try {
     // 4. Create New Spreadsheet
-    const newSS = SpreadsheetApp.create("Jira Tracker Data - " + targetUser.username);
+    const newSS = WorkbookService.create("Jira Tracker Data - " + targetUser.username);
     const newSSId = newSS.getId();
     const newSSUrl = newSS.getUrl();
 
@@ -72,7 +72,7 @@ function migrateUserToPersonalDatabase(token, targetUserId) {
     };
 
   } catch (e) {
-    Logger.log("Migration Error: " + e.toString());
+    console.debug("Migration Error: " + e.toString());
     return { success: false, message: 'Migration failed: ' + e.message };
   }
 }

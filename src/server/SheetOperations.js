@@ -11,11 +11,11 @@
  * @returns {string} The ID of the created spreadsheet
  */
 function createUserDataSpreadsheet(user) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const newSSName = `Jira Tracker Data - ${user.username}`;
   
   // Create new Spreadsheet
-  const newSS = SpreadsheetApp.create(newSSName);
+  const newSS = WorkbookService.create(newSSName);
   const newSSId = newSS.getId();
   
   // NOTE: We do NOT share the sheet with the user.

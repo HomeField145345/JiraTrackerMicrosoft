@@ -20,7 +20,7 @@
  * @returns {Object} Result object with status and message
  */
 function saveConfiguration_(optionsData) {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
   } catch (e) {
@@ -142,7 +142,7 @@ function saveConfiguration_(optionsData) {
  * @returns {Object} Result object with status and message
  */
 function saveManualData_(jiraId, field, value, user) {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
   } catch (e) {
@@ -229,7 +229,7 @@ function updateDriveLink_(jiraId, driveLink, user) {
  * @returns {Object} Result object with status and message
  */
 function saveIndependentTask_(taskData, user) {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
   } catch (e) {
@@ -312,7 +312,7 @@ function saveIndependentTask_(taskData, user) {
  * @returns {Object} Result object with status, message, and new timestamp
  */
 function updateLastChecked_(jiraId, user) {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
   } catch (e) {
@@ -336,8 +336,8 @@ function updateLastChecked_(jiraId, user) {
     
     // Format current time in script timezone for display consistency
     var now = new Date();
-    var tz = Session.getScriptTimeZone();
-    var formattedTimestamp = Utilities.formatDate(now, tz, 'MM/dd/yyyy HH:mm:ss');
+    var tz = Platform.timeZone();
+    var formattedTimestamp = Platform.formatDate(now, tz, 'MM/dd/yyyy HH:mm:ss');
     
     if (rowToUpdate > 0) {
       // Update existing row

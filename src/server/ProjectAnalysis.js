@@ -116,7 +116,7 @@ function getProjectData_(user, targetUsername) {
 function _getRawProjectData(contextUser) {
   try {
     // Check cache first (Cache is scoped to the context user)
-    var cache = CacheService.getScriptCache();
+    var cache = Platform.cache();
     var cacheKey = 'project_data_' + (contextUser ? contextUser.username : 'global');
     var cachedData = getCacheInChunks(cache, cacheKey);
     if (cachedData) {
@@ -132,12 +132,12 @@ function _getRawProjectData(contextUser) {
     var dataSS;
     if (contextUser && contextUser.dataSheetId && String(contextUser.dataSheetId).trim() !== '') {
        try {
-         dataSS = SpreadsheetApp.openById(contextUser.dataSheetId);
+         dataSS = WorkbookService.openById(contextUser.dataSheetId);
        } catch (e) {
-         dataSS = SpreadsheetApp.getActiveSpreadsheet();
+         dataSS = WorkbookService.getActiveWorkbook();
        }
     } else {
-       dataSS = SpreadsheetApp.getActiveSpreadsheet();
+       dataSS = WorkbookService.getActiveWorkbook();
     }
 
     var jiraSheet = getSheetOrThrow(dataSS, JIRA_DATA_SHEET);
@@ -146,7 +146,7 @@ function _getRawProjectData(contextUser) {
     var independentTasksSheet = getSheetOrThrow(dataSS, INDEPENDENT_TASKS_SHEET);
     
     // Config always comes from the Global Master Spreadsheet
-    var globalSS = SpreadsheetApp.getActiveSpreadsheet();
+    var globalSS = WorkbookService.getActiveWorkbook();
     var configSheet = getSheetOrThrow(globalSS, CONFIG_SHEET);
     
     // Load configuration options from sheets
@@ -208,7 +208,7 @@ function forceGetProjectData_(user, targetUsername) {
 /**
  * Load configuration from the config sheet
  * @private
- * @param {SpreadsheetApp.Sheet} configSheet - The configuration sheet
+ * @param {Worksheet} configSheet - The configuration sheet
  * @returns {Object} Configuration object with all options and settings
  */
 function _loadConfiguration(configSheet) {
@@ -327,7 +327,7 @@ function _loadConfiguration(configSheet) {
 }
 
 function _loadConfigurationCached(configSheet) {
-  var cache = CacheService.getScriptCache();
+  var cache = Platform.cache();
   var cachedConfig = cache.get(CONFIG_CACHE_KEY);
   if (cachedConfig) {
     try {
@@ -403,7 +403,7 @@ function _logTimestampSamples(combinedProjects) {
     logTimestampOperation("Project Data Sample (Before Client Return)", {
       sampleCount: timestampSamples.length,
       samples: timestampSamples,
-      scriptTimeZone: Session.getScriptTimeZone(),
+      scriptTimeZone: Platform.timeZone(),
       currentServerTime: new Date().toISOString()
     });
   } catch (logError) {
@@ -418,7 +418,7 @@ function _logTimestampSamples(combinedProjects) {
  */
 function getConfigData_(user) {
   try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var ss = WorkbookService.getActiveWorkbook();
     var configSheet = getSheetOrThrow(ss, CONFIG_SHEET);
     var config = _loadConfiguration(configSheet);
     return { config: config };

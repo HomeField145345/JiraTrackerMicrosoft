@@ -64,8 +64,8 @@ function normalizeValue_(value) {
     // Preserve the face-value time as seen in the sheet's timezone (script timezone).
     // Example: cell shows 06/12/2025 18:16 (entered as UTC); we emit "06/12/2025 18:16:00".
     // The client treats this string as UTC and renders CST/CDT correctly.
-    var tz = Session.getScriptTimeZone();
-    var formatted = Utilities.formatDate(value, tz, "MM/dd/yyyy HH:mm:ss");
+    var tz = Platform.timeZone();
+    var formatted = Platform.formatDate(value, tz, "MM/dd/yyyy HH:mm:ss");
     return formatted;
   }
   

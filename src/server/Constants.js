@@ -1,9 +1,9 @@
 /**
- * @file Constants.gs
+ * @file Constants.js
  * @description Stores global constants and configuration for the application.
  */
 
-// --- SPREADSHEET CONFIGURATION ---
+// --- WORKBOOK CONFIGURATION (worksheet names) ---
 const JIRA_DATA_SHEET = "JiraData";
 const MANUAL_DATA_SHEET = "ManualData";
 const CONFIG_SHEET = "OptionsList";
@@ -12,6 +12,7 @@ const USERS_SHEET = "Users";
 const SESSIONS_SHEET = "Sessions";
 const ADMIN_CONFIGS_SHEET = "AdminConfigs";
 
-// --- GOOGLE DRIVE CONFIGURATION ---
-const CXO_PROJECTS_FOLDER_ID = '1gfGWe9PLwTqPg_B9IhkOvurIi-eWa8ew';
-const PROJECT_SUBFOLDERS = ['Notes', 'Misc Documents', 'Archive'];
+// --- INTEGRATIONS ---
+// Google Tasks and Google Drive are disabled in the browser-only build.
+// Planned Microsoft replacements: Microsoft To Do (tasks) and OneDrive/SharePoint (project folders).
+const INTEGRATIONS_DISABLED_MESSAGE = 'This integration is not available in the browser-only version yet.';

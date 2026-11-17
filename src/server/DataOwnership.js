@@ -4,7 +4,7 @@
  * @param {string} newUsername
  */
 function updateDataOwnership(oldUsername, newUsername) {
-  const globalSS = SpreadsheetApp.getActiveSpreadsheet();
+  const globalSS = WorkbookService.getActiveWorkbook();
   
   // 1. Update Global Sheet
   updateSheetOwnership_(globalSS, oldUsername, newUsername);
@@ -23,7 +23,7 @@ function updateDataOwnership(oldUsername, newUsername) {
          const dataSheetId = userRow[9];
          if (dataSheetId && String(dataSheetId).trim() !== '') {
            try {
-             const personalSS = SpreadsheetApp.openById(dataSheetId);
+             const personalSS = WorkbookService.openById(dataSheetId);
              updateSheetOwnership_(personalSS, oldUsername, newUsername);
            } catch (e) {
              console.error("Failed to update personal sheet for user " + newUsername, e);

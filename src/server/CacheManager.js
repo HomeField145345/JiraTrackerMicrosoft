@@ -20,7 +20,7 @@ function logTimestampOperation(operation, details) {
     if (payload && payload.length > 4000) {
       payload = payload.substring(0, 4000) + '...';
     }
-    Logger.log('[Timestamp] %s | %s', operation || 'unknown', payload || '');
+    console.debug('[Timestamp] %s | %s', operation || 'unknown', payload || '');
   } catch (e) {
     // Never fail runtime code because diagnostics logging fails.
   }
@@ -78,7 +78,7 @@ function clearProjectCacheByKeyBase_(cache, keyBase) {
 // NEW: clear cached project data chunks
 function clearProjectCache(username) {
   try {
-    var cache = CacheService.getScriptCache();
+    var cache = Platform.cache();
     if (username) {
       clearProjectCacheByKeyBase_(cache, 'project_data_' + username);
       return;
@@ -109,7 +109,7 @@ function clearProjectCache(username) {
 
 function clearUsersCache() {
   try {
-    CacheService.getScriptCache().remove(USERS_CACHE_KEY);
+    Platform.cache().remove(USERS_CACHE_KEY);
   } catch (e) {
     // ignore cache clear failures
   }
@@ -117,7 +117,7 @@ function clearUsersCache() {
 
 function clearConfigCache() {
   try {
-    CacheService.getScriptCache().remove(CONFIG_CACHE_KEY);
+    Platform.cache().remove(CONFIG_CACHE_KEY);
   } catch (e) {
     // ignore cache clear failures
   }

@@ -74,10 +74,8 @@ function importJiraCsv_(fileData, user) {
       }
     });
 
-    var blob = Utilities.newBlob(Utilities.base64Decode(fileData.base64Data), fileData.mimeType, fileData.fileName);
-    
     // All files are now CSV format (converted on client side if needed)
-    var uploadedValues = Utilities.parseCsv(blob.getDataAsString('UTF-8'));
+    var uploadedValues = Platform.parseCsv(Platform.decodeBase64Text(fileData.base64Data));
     
     let headerRowIndex = -1;
     let uploadedHeaders = [];

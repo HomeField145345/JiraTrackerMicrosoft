@@ -253,7 +253,7 @@ function getGlobalSheetUrl(token) {
   if (auth.role !== 'admin') {
     throw new Error("Access denied: Admin rights required.");
   }
-  return SpreadsheetApp.getActiveSpreadsheet().getUrl();
+  return WorkbookService.getActiveWorkbook().getUrl();
 }
 
 function getWorkspaceOwners(token) {
@@ -305,7 +305,7 @@ function runDatabaseMaintenance(token, targetSheetId) {
   let targetSS = null;
   if (targetSheetId) {
     try {
-      targetSS = SpreadsheetApp.openById(targetSheetId);
+      targetSS = WorkbookService.openById(targetSheetId);
     } catch (e) {
       return { success: false, message: 'Could not open spreadsheet with ID: ' + targetSheetId };
     }
@@ -321,7 +321,7 @@ function runDatabaseMaintenance(token, targetSheetId) {
  * and independent step failures so one issue doesn't fail the whole trigger.
  */
 function runScheduledSync() {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   var summary = {
     ok: true,
     startedAt: new Date().toISOString(),

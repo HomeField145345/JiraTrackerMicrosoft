@@ -1,12 +1,11 @@
 /**
- * @file Auth.gs
- * @description Authentication logic for the application.
- * Replicated from UAT-App with Session Management extensions.
+ * @file Auth.js
+ * @description Local profiles, user management, and session tokens.
  */
 
 // --- HELPER FUNCTIONS ---
 function generateId() {
-  return Utilities.getUuid().replace(/-/g, '');
+  return Platform.uuid().replace(/-/g, '');
 }
 
 function safeIsoDate(value) {
@@ -50,7 +49,7 @@ function getUserById(userId) {
 function getUsers() {
   const usersCacheKey = (typeof USERS_CACHE_KEY !== 'undefined') ? USERS_CACHE_KEY : 'users_list_v1';
   const usersCacheTtlSeconds = (typeof USERS_CACHE_TTL_SECONDS !== 'undefined') ? USERS_CACHE_TTL_SECONDS : 300;
-  const cache = CacheService.getScriptCache();
+  const cache = Platform.cache();
   const cachedUsers = cache.get(usersCacheKey);
   if (cachedUsers) {
     try {
@@ -63,7 +62,7 @@ function getUsers() {
     }
   }
 
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const sheet = ss.getSheetByName(USERS_SHEET);
   if (!sheet || sheet.getLastRow() <= 1) return [];
   
@@ -93,137 +92,64 @@ function getUsers() {
 }
 
 /**
- * Authenticates a user against the Users sheet.
- * @param {string} username
- * @param {string} password
+ * Starts a session for the local browser profile.
+ *
+ * The browser-only build has no identity provider, so it signs in as the first active admin
+ * (or the first active user when no admin exists). Microsoft Entra ID sign-in replaces this once
+ * a backend is connected; workbook data stays on this device until then.
  * @returns {Object} Result object
  */
-function authenticateUser(username, password) {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000); // Wait up to 30 seconds
-  } catch (e) {
-    return { success: false, message: 'Server is busy. Please try again.' };
+function startLocalSession() {
+  const ss = WorkbookService.getActiveWorkbook();
+  const userSheet = ss.getSheetByName(USERS_SHEET);
+  if (!userSheet) {
+    return { success: false, message: "System error: Users sheet not found." };
   }
 
-  try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const userSheet = ss.getSheetByName(USERS_SHEET);
-    
-    if (!userSheet) {
-      return { success: false, message: "System error: Users sheet not found." };
+  // Columns: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
+  const data = userSheet.getDataRange().getValues();
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++) {
+    if (data[i][5] !== true) continue;
+    if (String(data[i][4]).toLowerCase() === 'admin') {
+      rowIndex = i;
+      break;
     }
-    
-    const data = userSheet.getDataRange().getValues();
-    // Skip header row
-    for (let i = 1; i < data.length; i++) {
-      const row = data[i];
-      // Columns: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
-      // Indices: 0,  1,        2,     3,            4,    5,         6,        7,          8
-      
-      const uName = row[1];
-      const uPass = row[6];
-      const isActive = row[5];
-      
-      if (String(uName).toLowerCase() === String(username).toLowerCase() && isActive === true) {
-        if (String(uPass) === String(password)) {
-          // Update Last Login
-          userSheet.getRange(i + 1, 9).setValue(new Date());
-          
-          const userObj = {
-            id: row[0],
-            username: row[1],
-            email: row[2],
-            displayName: row[3],
-            role: row[4]
-          };
-          
-          // Create session
-          const token = createSession(userObj.id, userObj.username, userObj.role);
-          
-          return { 
-            success: true, 
-            username: userObj.username,
-            role: userObj.role,
-            token: token,
-            user: userObj
-          };
-        }
-        return { success: false, message: "Incorrect password." };
-      }
-    }
-    
-    return { success: false, message: "User not found or inactive." };
-    
-  } catch (e) {
-    Logger.log("Auth Error: " + e.toString());
-    return { success: false, message: "An error occurred during login." };
-  } finally {
-    lock.releaseLock();
-  }
-}
-
-/**
- * Authenticates using the active Google User (for SSO).
- */
-function loginWithGoogle() {
-  var lock = LockService.getScriptLock();
-  try {
-    lock.waitLock(30000); // Wait up to 30 seconds
-  } catch (e) {
-    return { success: false, message: 'Server is busy. Please try again.' };
+    if (rowIndex === -1) rowIndex = i;
   }
 
-  try {
-    const email = Session.getActiveUser().getEmail();
-    if (!email) return { success: false, message: 'No Google User found' };
-    
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
-    const userSheet = ss.getSheetByName(USERS_SHEET);
-    if (!userSheet) return { success: false, message: "Users sheet not found." };
-    
-    const data = userSheet.getDataRange().getValues();
-    
-    // Find user by Email (Column 3 / Index 2)
-    for(let i=1; i<data.length; i++) {
-      const row = data[i];
-      // Columns: ID, Username, Email, Display Name, Role, Is Active, Password, Created At, Last Login At
-      
-      if(String(row[2]).trim().toLowerCase() === String(email).trim().toLowerCase() && row[5] === true) {
-          // Update Last Login
-          userSheet.getRange(i+1, 9).setValue(new Date());
-          
-          const userObj = { 
-              id: row[0], 
-              username: row[1], 
-              email: row[2],
-              displayName: row[3], 
-              role: row[4]
-          };
-          
-          const token = createSession(userObj.id, userObj.username, userObj.role);
-          
-          return { 
-              success: true, 
-              username: userObj.username,
-              role: userObj.role,
-              token: token,
-              user: userObj
-          };
-      }
-    }
-    
-    return { success: false, message: 'Access Denied: Email not registered (' + email + ')' };
-  } finally {
-    lock.releaseLock();
+  if (rowIndex === -1) {
+    return { success: false, message: "No active users found. Reset this site's data to restore the default admin profile." };
   }
+
+  const row = data[rowIndex];
+  userSheet.getRange(rowIndex + 1, 9).setValue(new Date());
+
+  const userObj = {
+    id: row[0],
+    username: row[1],
+    email: row[2],
+    displayName: row[3],
+    role: row[4]
+  };
+
+  cleanupSessions();
+  const token = createSession(userObj.id, userObj.username, userObj.role);
+
+  return {
+    success: true,
+    username: userObj.username,
+    role: userObj.role,
+    token: token,
+    user: userObj
+  };
 }
 
 /**
  * Creates a new user.
  */
 function createUser(user) {
-  var lock = LockService.getScriptLock();
+  var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
   } catch (e) {
@@ -231,7 +157,7 @@ function createUser(user) {
   }
 
   try {
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = WorkbookService.getActiveWorkbook();
     let userSheet = ss.getSheetByName(USERS_SHEET);
     
     if (!userSheet) {
@@ -266,7 +192,7 @@ function createUser(user) {
       user.displayName || user.username, 
       user.role, 
       user.isActive !== undefined ? user.isActive : true, 
-      user.password || '123456', 
+      '', // Password (not used by the browser build)
       new Date(), 
       '',
       dataSheetId || '' // Store the Spreadsheet ID
@@ -284,7 +210,7 @@ function createUser(user) {
  * Updates an existing user.
  */
 function updateUser(userId, updates) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const sheet = ss.getSheetByName(USERS_SHEET);
   const rowIndex = findRowById(sheet, userId, 0);
   
@@ -311,11 +237,6 @@ function updateUser(userId, updates) {
   if (updates.role) sheet.getRange(rowIndex, 5).setValue(updates.role);
   if (updates.isActive !== undefined) sheet.getRange(rowIndex, 6).setValue(updates.isActive);
   
-  // Password Update
-  if (updates.password && updates.password.trim() !== '') {
-      sheet.getRange(rowIndex, 7).setValue(updates.password);
-  }
-
   // Data Sheet ID Update
   if (updates.dataSheetId !== undefined) {
       sheet.getRange(rowIndex, 10).setValue(updates.dataSheetId);
@@ -336,7 +257,7 @@ function updateUser(userId, updates) {
  * @returns {string} The session token
  */
 function createSession(userId, username, role) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   let sessionSheet = ss.getSheetByName(SESSIONS_SHEET);
   
   if (!sessionSheet) {
@@ -349,7 +270,7 @@ function createSession(userId, username, role) {
     }
   }
   
-  const token = Utilities.getUuid();
+  const token = Platform.uuid();
   const expiration = new Date();
   expiration.setHours(expiration.getHours() + 24); // 24 hour session
   
@@ -369,7 +290,7 @@ function createSession(userId, username, role) {
 function validateSession(token) {
   if (!token) return { valid: false };
   
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const sessionSheet = ss.getSheetByName(SESSIONS_SHEET);
   if (!sessionSheet) return { valid: false };
   
@@ -422,7 +343,7 @@ function validateSession(token) {
  * @param {string} token
  */
 function logout(token) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const sessionSheet = ss.getSheetByName(SESSIONS_SHEET);
   if (!sessionSheet) return;
   
@@ -449,7 +370,7 @@ function impersonateUser_(adminToken, targetUserId) {
   }
 
   // 2. Find Target User
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const userSheet = ss.getSheetByName(USERS_SHEET);
   if (!userSheet) return { success: false, message: 'System error' };
 
@@ -483,7 +404,7 @@ function impersonateUser_(adminToken, targetUserId) {
  * Removes expired sessions.
  */
 function cleanupSessions() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = WorkbookService.getActiveWorkbook();
   const sessionSheet = ss.getSheetByName(SESSIONS_SHEET);
   if (!sessionSheet) return;
   

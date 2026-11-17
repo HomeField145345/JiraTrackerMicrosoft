@@ -10,13 +10,13 @@
  * 
  * @param {Object} user - The user object (must include dataSheetId if configured).
  * @param {boolean} [strictMode=false] - When true, throws if user has dataSheetId but it cannot be opened.
- * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet} The spreadsheet object.
+ * @returns {Workbook} The spreadsheet object.
  */
 function getDataSpreadsheet(user, strictMode) {
   strictMode = strictMode === true;
   if (user && user.dataSheetId) {
     try {
-      return SpreadsheetApp.openById(user.dataSheetId);
+      return WorkbookService.openById(user.dataSheetId);
     } catch (e) {
       if (strictMode) {
         throw new Error('Unable to open workspace data sheet for user ' + (user.username || 'unknown') + '. ' +
@@ -26,14 +26,14 @@ function getDataSpreadsheet(user, strictMode) {
       // Fallback to global if the ID is invalid or permission denied
     }
   }
-  return SpreadsheetApp.getActiveSpreadsheet();
+  return WorkbookService.getActiveWorkbook();
 }
 
 /**
  * Gets the Global Spreadsheet (Master Directory).
  * This is where Users and Configs are stored.
- * @returns {GoogleAppsScript.Spreadsheet.Spreadsheet}
+ * @returns {Workbook}
  */
 function getGlobalSpreadsheet() {
-  return SpreadsheetApp.getActiveSpreadsheet();
+  return WorkbookService.getActiveWorkbook();
 }

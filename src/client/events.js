@@ -1,0 +1,2861 @@
+/**
+ * @file events.js
+ * @description Sets up event listeners and defines handler functions for user interactions.
+ */
+
+// --- HELPER FUNCTIONS ---
+function setupDropdown(toggleBtnId, popupId, containerId) {
+    var toggleBtn = $('#' + toggleBtnId, true); // Use caching
+    var popup = $('#' + popupId, true); // Use caching
+    var container = $('#' + containerId, true); // Use caching
+
+    if (!toggleBtn || !popup || !container) return;
+
+    // Use EventManager instead of direct addEventListener
+    EventManager.addEventListener(toggleBtn, 'click', function(e) {
+        e.stopPropagation();
+        
+        // Handle different dropdown types
+        if (popupId === 'filter-popup') {
+            // Filter popup uses 'hidden' class
+            popup.classList.toggle('hidden');
+        } else {
+            // Other dropdowns use 'show' class
+            popup.classList.toggle('show');
+        }
+        
+        // Close other dropdowns
+        document.querySelectorAll('.dropdown-menu.show').forEach(function(menu) {
+            if (menu.id !== popupId) {
+                menu.classList.remove('show');
+            }
+        });
+        
+        // Also close filter popup if it's open and we're opening something else
+        if (popupId !== 'filter-popup') {
+            var filterPopup = $('#filter-popup', true);
+            if (filterPopup && !filterPopup.classList.contains('hidden')) {
+                filterPopup.classList.add('hidden');
+            }
+        }
+    }, false, toggleBtnId + '_click');
+
+    // Document click handler to close dropdown when clicking outside
+    EventManager.addEventListener(document, 'click', function(e) {
+        if (!container.contains(e.target)) {
+            if (popupId === 'filter-popup') {
+                popup.classList.add('hidden');
+            } else {
+                popup.classList.remove('show');
+            }
+        }
+    }, false, 'document_click_' + toggleBtnId);
+}
+
+// Filter state management functions
+function saveFilterState() {
+    try {
+        const filterState = {
+            multiSelectFilters: APP_STATE.multiSelectFilters || {},
+            closedToggle: hasClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE),
+            inProgressToggle: hasClass('#filter-toggle-in-progress', APP_CONSTANTS.CSS.ACTIVE),
+            storiesToggle: hasClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
+            bugsToggle: hasClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE) !== false, // Default to true
+            searchQuery: inputValue('#q') || '',
+            manuallyCollapsedEpics: APP_STATE.manuallyCollapsedEpics || {}
+        };
+        
+        localStorage.setItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE, JSON.stringify(filterState));
+        
+        return true;
+    } catch (e) {
+        console.error("Error saving filter state:", e);
+        return false;
+    }
+}
+
+function loadFilterState() {
+    try {
+        const savedState = localStorage.getItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE);
+        if (!savedState) return false;
+        
+        const state = JSON.parse(savedState);
+        
+        
+        // Initialize multiSelectFilters if needed
+        if (!APP_STATE.multiSelectFilters) {
+            APP_STATE.multiSelectFilters = {};
+        }
+        
+        // Restore multi-select filters
+        if (state.multiSelectFilters) {
+            // Merge saved filters with current state to ensure new filter types (like uatStatus) exist
+            APP_STATE.multiSelectFilters = Object.assign({}, APP_STATE.multiSelectFilters, state.multiSelectFilters);
+            
+            // Ensure uatStatus is initialized if missing from saved state
+            if (!APP_STATE.multiSelectFilters.uatStatus) {
+                APP_STATE.multiSelectFilters.uatStatus = [];
+            }
+            // Ensure fixVersion is initialized if missing from saved state
+            if (!APP_STATE.multiSelectFilters.fixVersion) {
+                APP_STATE.multiSelectFilters.fixVersion = [];
+            }
+
+            // Update checkboxes in the UI
+            Object.keys(APP_STATE.multiSelectFilters).forEach(function(filterType) {
+                const selectedValues = APP_STATE.multiSelectFilters[filterType] || [];
+                const dropdown = $('[data-filter="' + filterType + '"]');
+                if (!dropdown) return;
+                
+                // Update checkboxes
+                const checkboxes = dropdown.querySelectorAll('.filter-checkbox');
+                checkboxes.forEach(function(checkbox) {
+                    checkbox.checked = selectedValues.includes(checkbox.value);
+                });
+                
+                // Update "Select All" checkbox
+                updateSelectAllCheckbox(filterType);
+                
+                // Update the dropdown label
+                updateFilterLabel(filterType);
+            });
+        }
+
+        // Restore manually collapsed epics
+        if (state.manuallyCollapsedEpics) {
+            APP_STATE.manuallyCollapsedEpics = state.manuallyCollapsedEpics;
+        }
+        
+        // Restore toggle states
+        if (state.closedToggle !== undefined) {
+            toggleClass('#filter-toggle-closed', APP_CONSTANTS.CSS.ACTIVE, state.closedToggle);
+        }
+        
+        if (state.inProgressToggle !== undefined) {
+            toggleClass('#filter-toggle-in-progress', APP_CONSTANTS.CSS.ACTIVE, state.inProgressToggle);
+        }
+
+        if (state.storiesToggle !== undefined) {
+            toggleClass('#filter-toggle-stories', APP_CONSTANTS.CSS.ACTIVE, state.storiesToggle);
+        }
+        
+        if (state.bugsToggle !== undefined) {
+            toggleClass('#filter-toggle-bugs', APP_CONSTANTS.CSS.ACTIVE, state.bugsToggle);
+        }
+        
+        // Restore search query
+        if (state.searchQuery !== undefined) {
+            inputValue('#q', state.searchQuery);
+        }
+        
+        return true;
+    } catch (e) {
+        console.error("Error loading filter state:", e);
+        try { localStorage.removeItem(APP_CONSTANTS.STORAGE_KEYS.FILTER_STATE); } catch (inner) {}
+        return false;
+    }
+}
+
+function matchesSearch(row, searchTerm) {
+    if (!searchTerm) return true;
+    
+    // Convert search term to lowercase for case-insensitive search
+    var lowerSearchTerm = searchTerm.toLowerCase();
+    
+    // Search in title (case-insensitive)
+    if (row.dataset.title && row.dataset.title.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    // Search in Jira ID (case-insensitive)
+    if (row.dataset.jiraId && row.dataset.jiraId.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    // Also check the ID field for epics (legacy support, case-insensitive)
+    if (row.dataset.id && row.dataset.id.toLowerCase().indexOf(lowerSearchTerm) !== -1) {
+        return true;
+    }
+    
+    return false;
+}function isItemClosed(row) {
+    // Only check Project Stage now, using configurable mappings
+    var projectStage = (row.dataset.projectStage || '').toLowerCase();
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var closedStages = Array.isArray(cfg.closedProjectStages) && cfg.closedProjectStages.length
+        ? cfg.closedProjectStages.map(function(s){ return (s||'').toLowerCase().trim(); })
+        : ['in production','production','prod','fixed','done','canceled'];
+    return closedStages.indexOf(projectStage) !== -1;
+}
+
+function updateEpicFooters() {
+    $$('tr.row-epic').forEach(function(epicRow) {
+        var epicId = epicRow.dataset.id;
+        var footerRow = $('tr.row-epic-footer[data-parent-epic="' + epicId + '"]');
+        if (!footerRow) return;
+
+        // If epic is hidden or not expanded, hide the footer
+        if (epicRow.style.display === 'none' || !epicRow.classList.contains('expanded')) {
+            footerRow.style.display = 'none';
+            return;
+        }
+
+        var allChildRows = $$('tr.row-story[data-parent-epic="' + epicId + '"]');
+        var isShowingAll = epicRow.dataset.showingAll === 'true';
+        
+        var visibleChildRows, totalCount, visibleCount, hiddenCount;
+        
+        if (isShowingAll) {
+            // When showing all, all children should be visible
+            visibleChildRows = allChildRows;
+            totalCount = allChildRows.length;
+            visibleCount = totalCount;
+            hiddenCount = 0;
+        } else {
+            // Normal filtering mode
+            visibleChildRows = Array.from(allChildRows).filter(function(row) {
+                return row.style.display !== 'none';
+            });
+            totalCount = allChildRows.length;
+            visibleCount = visibleChildRows.length;
+            hiddenCount = totalCount - visibleCount;
+        }
+
+        var footerCell = footerRow.querySelector('td');
+        if (totalCount === 0) {
+            footerCell.innerHTML = 'This epic has no stories.';
+            // Still show the footer to convey the message only if epic itself is visible and expanded
+            footerRow.style.display = 'table-row';
+            return;
+        }
+
+        var message = 'Showing ' + visibleCount + ' of ' + totalCount + ' stories.';
+        var buttonHtml = '';
+
+        if (isShowingAll) {
+            message += ' (Showing all stories)';
+            buttonHtml = '<button class="btn re-hide-stories-btn" data-epic-id="' + epicId + '">Re-hide</button>';
+        } else if (hiddenCount > 0) {
+            message += ' (' + hiddenCount + ' hidden by filters)';
+            buttonHtml = '<button class="btn show-all-stories-btn" data-epic-id="' + epicId + '">Show All</button>';
+        }
+        // Always show footer for expanded epics, even if no children are visible
+        // This gives users access to the "Show All" functionality
+        footerCell.innerHTML = message + buttonHtml;
+        footerRow.style.display = 'table-row';
+    });
+}
+
+
+// --- EVENT HANDLER FUNCTIONS ---
+function updateActiveFiltersIndicator() {
+    var activeFilterCount = 0;
+    var filterLabels = [];
+    
+    // Check each filter type
+    var searchTerm = $('#q') ? $('#q').value.trim() : '';
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Get the closed button state - showing closed when active is now considered a filter
+    var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
+    var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
+    var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
+    var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
+    var showOnlyOutOfSync = APP_STATE.showOnlyOutOfSync || false;
+    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
+    
+    if (searchTerm) {
+        activeFilterCount++;
+        filterLabels.push('Search');
+    }
+    if (statusFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Status');
+    }
+    if (sprintFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Sprint');
+    }
+    if (validationFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Validation');
+    }
+    if (projectStageFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Project Stage');
+    }
+    if (uatStatusFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('UAT Status');
+    }
+    if (fixVersionFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Fix Version');
+    }
+    if (assignedPMFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Assigned PM');
+    }
+    if (assignedDevFilters.length > 0) {
+        activeFilterCount++;
+        filterLabels.push('Assigned Dev');
+    }
+    
+    // REVERSED: When the button is ON (showing closed), it's considered a filter
+    if (showClosed) {
+        activeFilterCount++;
+        filterLabels.push('Show Closed');
+    }
+    
+    if (!includeStories) {
+        activeFilterCount++;
+        filterLabels.push('Exclude Stories');
+    }
+    if (!includeBugs) {
+        activeFilterCount++;
+        filterLabels.push('Exclude Bugs');
+    }
+    if (!showOnlyInProgress) {
+        activeFilterCount++;
+        filterLabels.push('In Progress Off');
+    }
+    if (showOnlyOutOfSync) {
+        // Out of Sync overrides everything — show it as the sole active filter when on.
+        activeFilterCount = 1;
+        filterLabels = ['Out of Sync'];
+    } else {
+        if (showOnlyPastSprint) {
+            activeFilterCount++;
+            filterLabels.push('Past Sprint');
+        }
+    }
+    
+    var activeFiltersIndicator = $('#activeFiltersIndicator');
+    var clearFiltersBtn = $('#clearFiltersBtn');
+    
+    if (activeFiltersIndicator && clearFiltersBtn) {
+        if (activeFilterCount > 0) {
+            activeFiltersIndicator.style.display = 'flex';
+            clearFiltersBtn.style.display = 'inline-block';
+            var filterBadge = activeFiltersIndicator.querySelector('.filter-badge');
+            if (filterBadge) {
+                filterBadge.textContent = showOnlyOutOfSync
+                    ? 'Out of Sync'
+                    : (activeFilterCount + ' Filter' + (activeFilterCount > 1 ? 's' : '') + ' Active');
+            }
+            // Active filters detected
+        } else {
+            activeFiltersIndicator.style.display = 'none';
+            clearFiltersBtn.style.display = 'none';
+            // No active filters
+        }
+    }
+}
+
+function handleClearFilters() {
+  $('#q').value = '';
+  
+  // Clear active state from KPI cards
+  var allCards = document.querySelectorAll('.stat-card');
+  allCards.forEach(function(c) { c.classList.remove('active-filter'); });
+  
+    // Reset any per-epic "show all" overrides so filters apply strictly
+    $$('.row-epic').forEach(function(epicRow){
+        epicRow.dataset.showingAll = 'false';
+    });
+  
+  // Reset all multiselect dropdowns
+  var filterDropdowns = $$('.filter-dropdown');
+  filterDropdowns.forEach(function(dropdown) {
+    var checkboxes = dropdown.querySelectorAll('.filter-checkbox');
+    checkboxes.forEach(function(checkbox) {
+      checkbox.checked = false;
+    });
+    
+    var label = dropdown.querySelector('.filter-label');
+    var filterType = dropdown.getAttribute('data-filter');
+    var toggleButton = dropdown.querySelector('.filter-dropdown-toggle');
+    
+    if (label) {
+      // Reset to default label text
+      switch(filterType) {
+        case 'status': label.textContent = 'All Statuses'; break;
+        case 'sprint': label.textContent = 'All Sprints'; break;
+        case 'validation': label.textContent = 'All Validations'; break;
+        case 'projectStage': label.textContent = 'All Project Stages'; break;
+                case 'uatStatus': label.textContent = 'All UAT Statuses'; break;
+                case 'fixVersion': label.textContent = 'All Fix Versions'; break;
+        case 'assignedPM': label.textContent = 'All PMs'; break;
+        case 'assignedDev': label.textContent = 'All Devs'; break;
+      }
+      
+      // Remove any filter badges
+      var badge = label.querySelector('.filter-badge');
+      if (badge) badge.remove();
+    }
+    
+    // Remove active filters styling
+    if (toggleButton) {
+      toggleButton.classList.remove('has-active-filters');
+    }
+    
+    // Clear the filter state in APP_STATE
+    if (filterType) {
+      APP_STATE.multiSelectFilters[filterType] = [];
+    }
+  });
+
+  // Explicitly clear projectStage filter in case the dropdown loop missed it (e.g. if hidden/removed)
+  if (APP_STATE.multiSelectFilters.projectStage) {
+      APP_STATE.multiSelectFilters.projectStage = [];
+  }
+  
+    // Reset toggle buttons to their default states
+    // Default state: closed OFF, stories ON, bugs ON, in-progress ON
+  if ($('#filter-toggle-closed')) $('#filter-toggle-closed').classList.remove('active');
+  if ($('#filter-toggle-stories')) $('#filter-toggle-stories').classList.add('active');
+  if ($('#filter-toggle-bugs')) $('#filter-toggle-bugs').classList.add('active');
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.add('active');
+  
+  // Clear the manually collapsed epics tracking
+  APP_STATE.manuallyCollapsedEpics = {};
+  
+  // Reset Out of Sync filter
+  APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.showOnlyPastSprint = false;
+  
+  applyFilters();
+}
+
+function handleExpandCollapseAll(shouldExpand) {
+  // Identify visible parents (Epics/Stories) to allow animation only for them
+  var visibleParentIds = new Set();
+  var viewportHeight = window.innerHeight;
+  
+  // Only check visibility if we are expanding (to animate open) or collapsing (to animate close)
+  // Optimization: Only check rows that are currently displayed
+  $$('.row-epic, .row-story').forEach(function(row) {
+      if (row.style.display !== 'none') {
+          var rect = row.getBoundingClientRect();
+          // Check if any part of the row is in the viewport (with some buffer)
+          if (rect.bottom > -100 && rect.top < viewportHeight + 100) {
+              visibleParentIds.add(row.dataset.id);
+          }
+      }
+  });
+
+  // Handle epics
+  $$('.row-epic').forEach(function(epicRow) {
+    epicRow.classList.toggle('expanded', shouldExpand);
+    var epicId = epicRow.dataset.id;
+    if (epicId) {
+        if (shouldExpand) {
+            // If expanding, clear the manual collapse state so it stays expanded
+            delete APP_STATE.manuallyCollapsedEpics[epicId];
+            APP_STATE.expandedEpicIds[epicId] = true;
+        } else {
+            // If collapsing, mark as manually collapsed so auto-expand doesn't reopen it
+            APP_STATE.manuallyCollapsedEpics[epicId] = true;
+            delete APP_STATE.expandedEpicIds[epicId];
+        }
+    }
+  });
+  
+  // Handle stories (which may have bug children)
+  $$('.row-story').forEach(function(storyRow) {
+    // Only expand if it has children (indicated by a non-placeholder expander)
+    var expander = storyRow.querySelector('.expander');
+    if (expander && !expander.classList.contains('placeholder')) {
+        storyRow.classList.toggle('expanded', shouldExpand);
+    }
+  });
+  
+    // Apply filters with targeted animation and skip KPI recompute (data did not change)
+    applyFilters(false, visibleParentIds, true);
+}
+
+function handleKPICardClick(card) {
+    var filterType = card.getAttribute('data-filter');
+    
+    // Check if this card is currently active
+    var isAlreadyActive = card.classList.contains('active-filter');
+    
+    // Switch to table view if not already there
+    if (APP_STATE.currentView !== 'table') {
+        switchView('table');
+    }
+    
+    // Clear existing filters
+    handleClearFilters();
+    
+    // If it was already active, we are done (toggled off)
+    if (isAlreadyActive) {
+        return;
+    }
+    
+    // Re-apply active class because handleClearFilters might have cleared it (if it resets UI)
+    // Actually handleClearFilters usually resets dropdowns. We want to keep the card active visually.
+    var allCards = document.querySelectorAll('.stat-card');
+    allCards.forEach(function(c) { c.classList.remove('active-filter'); });
+    card.classList.add('active-filter');
+
+    // Apply specific filter based on type
+    if (filterType && filterType.startsWith('project-stage:')) {
+        var stage = filterType.substring('project-stage:'.length);
+        APP_STATE.multiSelectFilters.projectStage = [stage];
+        applyFilters();
+        return;
+    }
+
+    switch(filterType) {
+        case 'current-sprint':
+            handleCurrentSprintFilter();
+            break;
+        case 'past-sprint':
+            handlePastSprintFilter();
+            break;
+        case 'past-due':
+            handlePastDueFilter();
+            break;
+        case 'stale':
+            handleStaleFilter();
+            break;
+        case 'needs-review':
+            handleNeedsReviewFilter();
+            break;
+        case 'out-of-sync':
+            handleOutOfSyncFilter();
+            break;
+        case 'uat':
+            handleUatFilter();
+            break;
+        case 'retest':
+            handleRetestFilter();
+            break;
+    }
+}
+
+function handlePastSprintFilter() {
+    // Reset all active filters so only past-sprint membership drives visibility.
+    // Other active filters (status, in-progress toggle, etc.) would silently
+    // narrow results and hide open past-sprint items the user wants to see.
+    APP_STATE.multiSelectFilters = {
+        sprint: [],
+        status: [],
+        planning: [],
+        validation: [],
+        projectStage: [],
+        uatStatus: [],
+        fixVersion: [],
+        pm: [],
+        dev: []
+    };
+    APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.manuallyCollapsedEpics = {};
+
+    // Reset toggle buttons: In Progress OFF, Stories ON, Bugs ON, Closed OFF
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.remove('active');
+    if ($('#filter-toggle-closed'))      $('#filter-toggle-closed').classList.remove('active');
+    if ($('#filter-toggle-stories'))     $('#filter-toggle-stories').classList.add('active');
+    if ($('#filter-toggle-bugs'))        $('#filter-toggle-bugs').classList.add('active');
+
+    // Sync filter UI checkboxes to cleared state
+    ['sprint','status','planning','validation','projectStage','uatStatus','fixVersion','pm','dev'].forEach(function(filterType) {
+        var dropdown = $('[data-filter="' + filterType + '"]');
+        if (!dropdown) return;
+        dropdown.querySelectorAll('.filter-checkbox').forEach(function(cb) { cb.checked = false; });
+        if (typeof updateSelectAllCheckbox === 'function') updateSelectAllCheckbox(filterType);
+        if (typeof updateFilterSelection === 'function') updateFilterSelection(filterType);
+    });
+
+    APP_STATE.showOnlyPastSprint = true;
+    applyFilters();
+}
+
+function handlePastDueFilter() {
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.PAST_DUE];
+    applyFilters();
+}
+
+function handleStaleFilter() {
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.STALE];
+    applyFilters();
+}
+
+function handleNeedsReviewFilter() {
+    APP_STATE.multiSelectFilters.validation = [APP_CONSTANTS.VALIDATION.NEEDS_REVIEW];
+    applyFilters();
+}
+
+function handleOutOfSyncFilter() {
+    APP_STATE.showOnlyOutOfSync = true;
+    applyFilters();
+}
+
+function handleUatFilter() {
+    APP_STATE.multiSelectFilters.projectStage = ['UAT'];
+    applyFilters();
+}
+
+function handleRetestFilter() {
+    // Find all statuses that match 'retest' case-insensitively
+    var allStatuses = new Set();
+    (APP_STATE.allData.projects || []).forEach(function(p) {
+        if (p.Status) allStatuses.add(p.Status);
+    });
+    
+    var retestStatuses = Array.from(allStatuses).filter(function(s) {
+        return s.toLowerCase() === 'retest';
+    });
+    
+    if (retestStatuses.length === 0) retestStatuses = ['Retest']; // Fallback
+    
+    APP_STATE.multiSelectFilters.status = retestStatuses;
+    applyFilters();
+}
+
+function handleCurrentSprintFilter() {
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+    // Reset manual collapse tracking so KPI can expand epics as needed
+    APP_STATE.manuallyCollapsedEpics = {};
+
+    // Clear all active filters so only the sprint filter drives visibility.
+    // Without this, a previously active status or validation filter would
+    // silently narrow the results (e.g. only "In Progress" items shown).
+    APP_STATE.multiSelectFilters = {
+        sprint: [],
+        status: [],
+        planning: [],
+        validation: [],
+        projectStage: [],
+        uatStatus: [],
+        fixVersion: [],
+        pm: [],
+        dev: []
+    };
+    APP_STATE.showOnlyOutOfSync = false;
+    APP_STATE.showOnlyPastSprint = false;
+
+    // Reset toggle buttons: In Progress OFF, Stories ON, Bugs ON, Closed OFF
+    if ($('#filter-toggle-in-progress')) $('#filter-toggle-in-progress').classList.remove('active');
+    if ($('#filter-toggle-closed'))      $('#filter-toggle-closed').classList.remove('active');
+    if ($('#filter-toggle-stories'))     $('#filter-toggle-stories').classList.add('active');
+    if ($('#filter-toggle-bugs'))        $('#filter-toggle-bugs').classList.add('active');
+
+    // Sync filter UI checkboxes to cleared state
+    ['sprint','status','planning','validation','projectStage','uatStatus','fixVersion','pm','dev'].forEach(function(filterType) {
+        var dropdown = $('[data-filter="' + filterType + '"]');
+        if (!dropdown) return;
+        dropdown.querySelectorAll('.filter-checkbox').forEach(function(cb) { cb.checked = false; });
+        if (typeof updateSelectAllCheckbox === 'function') updateSelectAllCheckbox(filterType);
+        if (typeof updateFilterSelection === 'function') updateFilterSelection(filterType);
+    });
+
+        // Normalize current sprint label to match dropdown values (e.g., "Sprint 123")
+        var normalizedCurrent = (typeof formatSprint === 'function') ? formatSprint(currentSprintName) : currentSprintName;
+        var sprintNumberMatch = (currentSprintName || '').match(/(\d+)/);
+        var currentNumber = sprintNumberMatch ? sprintNumberMatch[1] : null;
+
+        // Find the sprint filter dropdown and set it
+        var sprintDropdown = $('[data-filter="sprint"]');
+        if (sprintDropdown) {
+            var checkbox = null;
+            // Try exact normalized label first
+            if (normalizedCurrent) {
+                checkbox = sprintDropdown.querySelector('input[value="' + normalizedCurrent.replace(/"/g, '\\"') + '"]');
+            }
+            // Fallback: match by sprint number within any label if exact not found
+            if (!checkbox && currentNumber) {
+                var allCbs = sprintDropdown.querySelectorAll('.filter-checkbox');
+                for (var i = 0; i < allCbs.length; i++) {
+                    if (new RegExp('\\b' + currentNumber + '\\b').test(allCbs[i].value)) { checkbox = allCbs[i]; break; }
+                }
+            }
+            if (checkbox) {
+                // Clear any previous checks in sprint list
+                sprintDropdown.querySelectorAll('.filter-checkbox').forEach(function(cb){ cb.checked = false; });
+                checkbox.checked = true;
+                updateFilterSelection('sprint');
+                updateActiveFiltersIndicator(); // Update filter indicator
+            } else {
+                // As a last resort, set state directly so filtering still works
+                var val = normalizedCurrent || currentSprintName;
+                APP_STATE.multiSelectFilters.sprint = val ? [val] : [];
+                applyFilters();
+                updateActiveFiltersIndicator();
+            }
+        }
+
+        // Expand epics that have items in the current sprint so items are visible immediately
+        try {
+            var projects = APP_STATE.allData.projects || [];
+            var epicsWithCurrentSprintItems = new Set();
+            projects.forEach(function(item){
+                if ((item['Issue Type'] || '').toLowerCase() === 'epic') return;
+                var sprints = (item.sprint && typeof item.sprint === 'string') ? item.sprint.split(',').map(function(s){ return s.trim(); }) : [];
+                var isInCurrent = sprints.some(function(s){
+                    var lbl = (typeof formatSprint === 'function') ? formatSprint(s) : s;
+                    return (normalizedCurrent && lbl === normalizedCurrent) || (currentNumber && /\b\d+\b/.test(currentNumber) && new RegExp('\\b' + currentNumber + '\\b').test(lbl || ''));
+                });
+                if (isInCurrent && item['Epic Link']) {
+                    epicsWithCurrentSprintItems.add(normalizeString(item['Epic Link']));
+                }
+            });
+
+            setTimeout(function(){
+                $$('.row-epic').forEach(function(epicRow){
+                    var epicTitleCell = epicRow.querySelector('td:nth-child(4)');
+                    var epicSummary = epicTitleCell && epicTitleCell.textContent ? normalizeString(epicTitleCell.textContent.trim()) : '';
+                    if (epicSummary && epicsWithCurrentSprintItems.has(epicSummary)) {
+                        epicRow.classList.add('expanded');
+                    }
+                });
+                applyFilters();
+            }, 0);
+    } catch (e) { }
+    }
+}
+
+
+
+
+
+function handleSaveTask() {
+  var saveBtn = $('#modalSave');
+  if (saveBtn) {
+      if (saveBtn.disabled) return; // Prevent double clicks
+      saveBtn.disabled = true;
+      saveBtn.dataset.originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Saving...';
+  }
+
+  var taskData = {
+    ID: APP_STATE.currentEditId,
+    Title: $('#t-title').value,
+    Assignee: $('#t-assignee').value,
+    Status: $('#t-status').value,
+    Priority: $('#t-priority').value,
+    Due: $('#t-due').value,
+    Project: $('#t-project').value,
+    Tags: $('#t-tags').value,
+    Description: $('#t-desc').value
+  };
+  saveTask(taskData);
+}
+
+function handleRowExpand(expander) {
+    var row = expander.closest('tr');
+    if (!row) {
+        return;
+    }
+
+    // Limit animations to just the hierarchy impacted by this click.
+    // This reduces large-table layout/paint spikes during collapse/expand.
+    var affectedParentIds = new Set();
+    
+    // Check current state and determine new state
+    var wasExpanded = row.classList.contains('expanded');
+    var shouldExpand = !wasExpanded;
+    var id = row.dataset.id;
+
+    if (id) {
+        affectedParentIds.add(id);
+    }
+    
+    // Force the class to the new state
+    if (shouldExpand) {
+        row.classList.add('expanded');
+        // Remove from manually collapsed list if it was there
+        if (APP_STATE.manuallyCollapsedEpics[id]) {
+            delete APP_STATE.manuallyCollapsedEpics[id];
+        }
+    } else {
+        row.classList.remove('expanded');
+        // If filters are active, track that this row was manually collapsed
+        if (hasActiveFilters()) {
+            APP_STATE.manuallyCollapsedEpics[id] = true;
+        }
+
+        // If collapsing an Epic, also collapse all its expanded stories
+        if (row.classList.contains('row-epic')) {
+             var epicId = row.dataset.id;
+             // Include child story ids so bug-child rows under expanded stories can animate too.
+             var allChildStories = document.querySelectorAll('.row-story[data-parent-epic="' + epicId + '"]');
+             allChildStories.forEach(function(storyRow) {
+                 if (storyRow && storyRow.dataset && storyRow.dataset.id) {
+                     affectedParentIds.add(storyRow.dataset.id);
+                 }
+             });
+
+             var childStories = document.querySelectorAll('.row-story[data-parent-epic="' + epicId + '"].expanded');
+             childStories.forEach(function(storyRow) {
+                 storyRow.classList.remove('expanded');
+                 // If filters are active, we must mark this story as manually collapsed 
+                 // to prevent auto-expansion when the epic is re-expanded.
+                 if (hasActiveFilters()) {
+                     APP_STATE.manuallyCollapsedEpics[storyRow.dataset.id] = true;
+                 }
+             });
+        }
+    }
+    
+    // Apply filters with targeted animation; skip KPI recompute (data did not change)
+    applyFilters(false, affectedParentIds, true);
+    
+    // Ensure the class state wasn't changed by applyFilters
+    if (shouldExpand && !row.classList.contains('expanded')) {
+        row.classList.add('expanded');
+    }
+}
+
+// Removed handleCheck function - validation badge click now directly calls updateLastChecked
+
+// Local helper: format server UTC date string to yyyy-mm-dd in user's local timezone
+function formatDateInputYYYYMMDDLocal(val) {
+  try {
+    var d = (typeof parseServerDate === 'function') ? parseServerDate(val) : new Date(val);
+    if (!d || isNaN(d.getTime())) return '';
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  } catch (e) { return ''; }
+}
+
+function handleEditTask(button) {
+  var taskId = button.dataset.id;
+  var task = APP_STATE.allData.independentTasks.find(function(t) { return t.ID === taskId; });
+  if (task) {
+    APP_STATE.currentEditId = task.ID;
+    $('#t-title').value = task.Title || '';
+    $('#t-assignee').value = task.Assignee || '';
+    $('#t-status').value = task.Status || '';
+    $('#t-priority').value = task.Priority || 'Medium';
+    // Use local yyyy-mm-dd to avoid timezone shift
+    $('#t-due').value = task.Due ? formatDateInputYYYYMMDDLocal(task.Due) : '';
+    $('#t-project').value = task.Project || '';
+    $('#t-tags').value = task.Tags || '';
+    $('#t-desc').value = task.Description || '';
+    openModal('Edit Independent Task');
+  }
+}
+
+function handleFileUpload() {
+    var file = $('#csvFile').files[0];
+    if (!file) {
+        alert('Please select a file to upload.');
+        return;
+    }
+    
+    // Validate file type
+    var fileName = file.name.toLowerCase();
+    var validExtensions = ['.csv', '.xls', '.xlsx'];
+    var isValidFile = validExtensions.some(function(ext) {
+        return fileName.endsWith(ext);
+    });
+    
+    if (!isValidFile) {
+        alert('Please select a valid file (.csv, .xls, .xlsx).');
+        return;
+    }
+    
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        alert('File size too large. Please select a file smaller than 10MB.');
+        return;
+    }
+    
+    showUploadProgress();
+    updateProgress(10, 'Reading file...');
+    
+    var isExcelFile = fileName.endsWith('.xls') || fileName.endsWith('.xlsx');
+    
+    if (isExcelFile) {
+        updateProgress(15, 'Loading Excel parser...');
+        ensureXlsxLoaded(function() {
+            // Handle Excel files - convert to CSV first
+            convertExcelToCsv(file);
+        }, function(error) {
+            hideUploadProgress();
+            alert('Failed to load Excel parser: ' + error);
+        });
+    } else {
+        // Handle CSV files directly
+        var reader = new FileReader();
+        reader.onload = function(e) {
+            updateProgress(30, 'Preparing data...');
+            processFileData(e.target.result, file.name, 'text/csv');
+        };
+        reader.onerror = function() {
+            hideUploadProgress();
+            alert('Error reading file. Please try again.');
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function ensureXlsxLoaded(onSuccess, onFailure) {
+    if (typeof XLSX !== 'undefined') {
+        onSuccess();
+        return;
+    }
+
+    if (window.__xlsxLoaderPromise) {
+        window.__xlsxLoaderPromise.then(onSuccess).catch(function(error) {
+            if (typeof onFailure === 'function') onFailure(error && error.message ? error.message : error);
+        });
+        return;
+    }
+
+    window.__xlsxLoaderPromise = new Promise(function(resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js';
+        script.async = true;
+        script.onload = function() { resolve(); };
+        script.onerror = function() { reject(new Error('Unable to download XLSX library.')); };
+        document.head.appendChild(script);
+    });
+
+    window.__xlsxLoaderPromise.then(onSuccess).catch(function(error) {
+        if (typeof onFailure === 'function') onFailure(error && error.message ? error.message : error);
+    });
+}
+
+function convertExcelToCsv(file) {
+    updateProgress(20, 'Converting Excel to CSV...');
+
+    function parseWorkbookToCsvAndUpload(workbook) {
+        // --- Auto-detect sheet and header row that contains a Jira key column ---
+        var selectedSheetName = null;
+        var detectedHeaderRowIndex = -1;
+        var detectionLog = [];
+        var KEY_MATCH = function(v){
+            if (v === undefined || v === null) return false;
+            var s = String(v).replace(/^[\uFEFF\u00A0]+/, '').trim().toLowerCase();
+            return s === 'key' || s === 'issue key' || s === 'issuekey' || s === 'jira key' || s.indexOf('key') !== -1;
+        };
+
+        for (var si = 0; si < workbook.SheetNames.length; si++) {
+            var sheetName = workbook.SheetNames[si];
+            var ws = workbook.Sheets[sheetName];
+            if (!ws) continue;
+            var rows;
+            try {
+                rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, blankrows: false });
+            } catch (eConv) {
+                detectionLog.push('Skip sheet ' + sheetName + ': ' + eConv.message);
+                continue;
+            }
+            var maxSearch = Math.min(200, rows.length);
+            for (var i = 0; i < maxSearch; i++) {
+                var row = Array.isArray(rows[i]) ? rows[i] : [];
+                for (var j = 0; j < row.length; j++) {
+                    if (KEY_MATCH(row[j])) {
+                        selectedSheetName = sheetName;
+                        detectedHeaderRowIndex = i;
+                        detectionLog.push('Selected sheet "' + sheetName + '" with header at row ' + (i + 1));
+                        break;
+                    }
+                }
+                if (selectedSheetName) break;
+            }
+            if (selectedSheetName) break;
+            detectionLog.push('No key header found in first ' + maxSearch + ' rows of sheet ' + sheetName);
+        }
+
+        // Fallback: use first sheet if none matched; header assumed at first row
+        if (!selectedSheetName) {
+            selectedSheetName = workbook.SheetNames[0];
+            detectedHeaderRowIndex = 0;
+            detectionLog.push('Fallback to first sheet: ' + selectedSheetName + ' (no key header detected)');
+        }
+
+        var worksheet = workbook.Sheets[selectedSheetName];
+        if (!worksheet) {
+            throw new Error('No worksheet found in the Excel file.');
+        }
+
+        // Build trimmed rows from detected header to end and convert to CSV
+        updateProgress(28, 'Converting to CSV format...');
+        var allRows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, blankrows: false });
+        var trimmedRows = allRows.slice(Math.max(0, detectedHeaderRowIndex));
+        if (trimmedRows.length < 2) {
+            throw new Error('Detected header but no data rows found. Check the export.');
+        }
+        var newWs = XLSX.utils.aoa_to_sheet(trimmedRows);
+        var csv = XLSX.utils.sheet_to_csv(newWs, {
+            dateNF: 'yyyy-mm-dd hh:mm:ss',
+            rawNumbers: false,
+            blankrows: false
+        });
+
+        // Basic validation of CSV content
+        var lines = csv.split('\n').filter(function(line) { return line.trim().length > 0; });
+        if (lines.length < 2) {
+            throw new Error('Converted CSV appears to be empty or has no data rows.');
+        }
+
+        // Log first few lines for debugging
+        console.log('Excel detection log:', detectionLog.join(' | '));
+        console.log('Converted CSV preview (first 3 lines):');
+        lines.slice(0, 3).forEach(function(line, idx) {
+            console.log('Line ' + (idx + 1) + ':', line.substring(0, 200) + (line.length > 200 ? '...' : ''));
+        });
+
+        // Convert CSV string to data URL format
+        var csvBlob = new Blob([csv], { type: 'text/csv' });
+        var reader2 = new FileReader();
+        reader2.onload = function(e2) {
+            updateProgress(30, 'Preparing data...');
+            processFileData(e2.target.result, file.name.replace(/\.(xls|xlsx)$/i, '.csv'), 'text/csv');
+        };
+        reader2.onerror = function() {
+            hideUploadProgress();
+            alert('Converted file could not be prepared for upload. Please try saving as CSV and uploading directly.');
+        };
+        reader2.readAsDataURL(csvBlob);
+    }
+
+    function parseExcelBuffer(bufferLike) {
+        var data = new Uint8Array(bufferLike);
+        var workbook;
+        try {
+            // Preferred binary Excel path
+            workbook = XLSX.read(data, { type: 'array' });
+        } catch (binaryError) {
+            // Fallback for some HTML/text-based .xls exports
+            updateProgress(26, 'Trying HTML parsing...');
+            var textData = new TextDecoder('utf-8').decode(data);
+            workbook = XLSX.read(textData, { type: 'string' });
+        }
+        parseWorkbookToCsvAndUpload(workbook);
+    }
+    
+    var reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            updateProgress(25, 'Parsing Excel file...');
+            parseExcelBuffer(e.target.result);
+            
+        } catch (error) {
+            hideUploadProgress();
+            alert('Error converting Excel file: ' + error.message + '. Please try saving as CSV format instead.');
+        }
+    };
+    
+    reader.onerror = function() {
+        // Fallback path for browsers/environments where readAsArrayBuffer intermittently fails
+        updateProgress(24, 'Primary read failed, trying fallback...');
+        var fallbackReader = new FileReader();
+        fallbackReader.onload = function(eFallback) {
+            try {
+                var dataUrl = eFallback.target.result || '';
+                var base64 = String(dataUrl).split(',')[1] || '';
+                if (!base64) {
+                    throw new Error('Could not decode file data in fallback reader.');
+                }
+                var binary = atob(base64);
+                var len = binary.length;
+                var bytes = new Uint8Array(len);
+                for (var i = 0; i < len; i++) {
+                    bytes[i] = binary.charCodeAt(i);
+                }
+                updateProgress(25, 'Parsing Excel file (fallback)...');
+                parseExcelBuffer(bytes.buffer);
+            } catch (fallbackError) {
+                hideUploadProgress();
+                alert('Error reading Excel file: ' + fallbackError.message + '. Please try saving as CSV format and upload that file directly.');
+            }
+        };
+        fallbackReader.onerror = function() {
+            hideUploadProgress();
+            alert('Error reading Excel file. Please try saving as CSV format and upload directly.');
+        };
+        fallbackReader.readAsDataURL(file);
+    };
+
+    try {
+        reader.readAsArrayBuffer(file);
+    } catch (startReadError) {
+        // Some environments throw synchronously when array buffer reads are not supported
+        reader.onerror(startReadError);
+    }
+}
+
+function processFileData(dataUrl, fileName, mimeType) {
+    var archiveMissing = $('#archiveMissing').checked;
+    var base64Data = dataUrl.split(',')[1]; 
+    var fileData = {
+        fileName: fileName,
+        mimeType: mimeType,
+        base64Data: base64Data,
+        archiveMissing: archiveMissing
+    };
+    
+    updateProgress(50, 'Uploading to server...');
+    uploadCsvData(fileData);
+}
+
+function showUploadProgress() {
+    $('#uploadProgress').style.display = 'block';
+    $('#uploadResults').style.display = 'none';
+    $('#uploadBtn').disabled = true;
+    $('#uploadBtn').textContent = 'Uploading...';
+    $('#cancelUploadBtn').style.display = 'inline-block';
+    $('#csvFile').disabled = true;
+}
+
+function hideUploadProgress() {
+    $('#uploadProgress').style.display = 'none';
+    $('#uploadBtn').disabled = false;
+    $('#uploadBtn').textContent = 'Upload and Replace Data';
+    $('#cancelUploadBtn').style.display = 'none';
+    $('#csvFile').disabled = false;
+}
+
+function updateProgress(percentage, message) {
+    $('#progressBarFill').style.width = percentage + '%';
+    $('#progressText').textContent = message;
+}
+
+function showUploadResults(response) {
+    $('#uploadResults').style.display = 'block';
+    
+    if (response.status === 'success' && response.results) {
+        var results = response.results;
+        var summaryHtml = `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.added}</div>
+                <div class="result-stat-label">Added</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number">${results.updated}</div>
+                <div class="result-stat-label">Updated</div>
+            </div>`;
+        
+        // Add unarchived section if there are any
+        if (results.unarchived > 0) {
+            summaryHtml += `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.unarchived}</div>
+                <div class="result-stat-label">Unarchived</div>
+            </div>`;
+        }
+        
+        summaryHtml += `
+            <div class="result-stat">
+                <div class="result-stat-number">${results.archived}</div>
+                <div class="result-stat-label">Archived</div>
+            </div>
+            <div class="result-stat">
+                <div class="result-stat-number">${results.total}</div>
+                <div class="result-stat-label">Total</div>
+            </div>
+        `;
+        $('#resultsSummary').innerHTML = summaryHtml;
+        
+        var detailsHtml = '';
+        if (results.details.addedItems.length > 0) {
+            detailsHtml += '<strong>Added Items:</strong><br>';
+            results.details.addedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">+ ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        if (results.details.updatedItems.length > 0) {
+            detailsHtml += '<strong>Updated Items:</strong><br>';
+            results.details.updatedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">↻ ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        // Add unarchived items section
+        if (results.details.unarchivedItems && results.details.unarchivedItems.length > 0) {
+            detailsHtml += '<strong>Unarchived Items:</strong><br>';
+            results.details.unarchivedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">📂 ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        if (results.details.archivedItems.length > 0) {
+            detailsHtml += '<strong>Archived Items:</strong><br>';
+            results.details.archivedItems.forEach(function(item) {
+                detailsHtml += `<div class="result-item">📁 ${item.jiraId}: ${item.summary}</div>`;
+            });
+        }
+        
+        $('#resultsDetails').innerHTML = detailsHtml;
+    } else {
+        // Check if we have custom HTML content for enhanced error display
+        if (response.html) {
+            $('#resultsSummary').innerHTML = response.html;
+            $('#resultsDetails').innerHTML = '';
+        } else {
+            $('#resultsSummary').innerHTML = '<div class="text-red-600">Upload failed: ' + (response.message || 'Unknown error') + '</div>';
+            $('#resultsDetails').innerHTML = '';
+        }
+    }
+}
+
+
+// --- FILTERING AND VIEW SWITCHING ---
+function applyFilters(skipAnimation, visibleParentIds, skipKpiUpdate) {
+    var searchTerm = ($('#q') ? $('#q').value : '').toLowerCase();
+    
+    // Get multi-select filter values
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Build closed mappings from config for project stage checks (status does not determine closed)
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var mappedClosedStages = Array.isArray(cfg.closedProjectStages) && cfg.closedProjectStages.length
+        ? cfg.closedProjectStages.map(function(s){ return (s||'').toLowerCase().trim(); })
+        : ['in production','production','prod','fixed','done','canceled'];
+
+    // Build stage-status mappings for Out of Sync check
+    var stageStatusMap = {};
+    (cfg.stageStatusMappings || []).forEach(function(m){ 
+        if (m && m.stage) {
+            var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+            stageStatusMap[(m.stage+'').toLowerCase().trim()] = expectedStatuses;
+        }
+    });
+
+    // Closed visibility is controlled only by the explicit toggle now
+    var toggleClosedBtn = $('#filter-toggle-closed');
+    var includeClosed = (toggleClosedBtn ? toggleClosedBtn.classList.contains('active') : false);
+    
+    // Get story/bug toggle states
+    var includeStories = $('#filter-toggle-stories') ? $('#filter-toggle-stories').classList.contains('active') : true;
+    var includeBugs = $('#filter-toggle-bugs') ? $('#filter-toggle-bugs').classList.contains('active') : true;
+    
+    // Get In Progress toggle state
+    var toggleInProgressBtn = $('#filter-toggle-in-progress');
+    var showOnlyInProgress = (toggleInProgressBtn ? toggleInProgressBtn.classList.contains('active') : false);
+    
+    // Get statuses considered NOT in progress from config.
+    // Backward compatibility: use either `notInProgressStatuses` or legacy `inProgressStatuses` key.
+    var notInProgressStatuses = [];
+    if (APP_STATE.allData.config) {
+        var configuredNotInProgress = APP_STATE.allData.config.notInProgressStatuses || APP_STATE.allData.config.inProgressStatuses || [];
+        notInProgressStatuses = configuredNotInProgress.map(function(s){ return (s||'').toLowerCase().trim(); });
+    }
+    
+    // Save filter state whenever filters are applied
+    saveFilterState();
+
+    // Consider dropdowns/search and type toggles as user-selected filters for auto-expansion
+    var anySelectionFilterActive = !!(
+        searchTerm ||
+        statusFilters.length ||
+        sprintFilters.length ||
+        validationFilters.length ||
+        projectStageFilters.length ||
+        uatStatusFilters.length ||
+        fixVersionFilters.length ||
+        assignedPMFilters.length ||
+        assignedDevFilters.length ||
+        (includeStories === false) ||
+        (includeBugs === false) ||
+        (showOnlyInProgress === false) ||
+        (APP_STATE.showOnlyPastSprint === true)
+    );
+
+    // Update active filters indicator
+    updateActiveFiltersIndicator();
+
+    var getLatestSprint = function(sprintString) {
+        if (!sprintString || typeof sprintString !== 'string') return null;
+        var sprintNumbers = (sprintString.match(/Sprint\s?(\d+)/ig) || [])
+            .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, '')); });
+        if (sprintNumbers.length === 0) return null;
+        var latestSprintNumber = Math.max.apply(null, sprintNumbers);
+        return 'Sprint ' + latestSprintNumber;
+    };
+
+    var getLatestSprintNumber = function(sprintString) {
+        var latest = getLatestSprint(sprintString);
+        if (!latest) return null;
+        var m = latest.match(/Sprint\s?(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    };
+
+    var getCurrentSprintNumberFromStats = function() {
+        var sprintStats = APP_STATE.allData.sprintStats || {};
+        var currentSprintName = sprintStats.currentSprintName || '';
+        var m = String(currentSprintName).match(/Sprint\s?(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    };
+
+    var currentSprintNumber = getCurrentSprintNumberFromStats();
+
+    // Parse all sprint entries to normalized labels (e.g., "Sprint 123") for multi-sprint membership checks
+    var getSprintLabels = function(sprintString) {
+        if (!sprintString || typeof sprintString !== 'string') return [];
+        var labels = [];
+        sprintString.split(',').forEach(function(part){
+            var lbl = formatSprint((part || '').trim());
+            if (lbl) labels.push(lbl);
+        });
+        // Deduplicate
+        return Array.from(new Set(labels));
+    };
+
+    var isClosedByProjectStage = function(row) {
+        // Check for project stage in dropdown
+        var projectStageSelect = row.querySelector('select[data-field="Project Stage"]');
+        var stage = projectStageSelect ? projectStageSelect.value : row.dataset.projectStage || '';
+        var val = (stage || '').toLowerCase().trim();
+        return mappedClosedStages.indexOf(val) !== -1;
+    };
+
+    var matchesMultiSelectFilter = function(value, filterArray) {
+        return filterArray.length === 0 || filterArray.includes(value);
+    };
+
+    var isActionNeededRow = function(row) {
+        var validationText = (row.dataset.validation || '').toLowerCase().trim();
+        var needsReviewText = (APP_CONSTANTS && APP_CONSTANTS.VALIDATION && APP_CONSTANTS.VALIDATION.NEEDS_REVIEW
+            ? APP_CONSTANTS.VALIDATION.NEEDS_REVIEW
+            : 'Needs Review').toLowerCase().trim();
+        var pastDueText = (APP_CONSTANTS && APP_CONSTANTS.VALIDATION && APP_CONSTANTS.VALIDATION.PAST_DUE
+            ? APP_CONSTANTS.VALIDATION.PAST_DUE
+            : 'Past Due').toLowerCase().trim();
+        return validationText === needsReviewText || validationText === pastDueText;
+    };
+
+    // Always initialize allRows so downstream loops don't crash when current view is not table.
+    var allRows = $$('#list-body tr');
+
+    if (APP_STATE.currentView === 'table') {
+        var rowVisibility = new Map();
+        var epicChildrenMap = new Map(); // Track which epics have open children
+        var epicsWithMatchingChildren = new Set(); // Track epics that should be shown because they have matching children
+
+        var storiesWithMatchingChildren = new Set(); // Track stories that should be shown because they have matching children
+
+        // First pass: identify open children for each epic
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            
+            if (row.classList.contains('row-story') || row.classList.contains('row-task')) {
+                var parentEpic = row.dataset.parentEpic;
+                if (parentEpic) {
+                    if (!epicChildrenMap.has(parentEpic)) {
+                        epicChildrenMap.set(parentEpic, { total: 0, closed: 0 });
+                    }
+                    var epicData = epicChildrenMap.get(parentEpic);
+                    epicData.total++;
+                    
+                    if (isClosedByProjectStage(row)) {
+                        epicData.closed++;
+                    }
+                }
+            }
+        });
+
+        // Second pass: determine which stories/tasks match filters
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            if (row.classList.contains('row-epic')) return; // Skip epics for now
+
+            // Multi-sprint aware check: a row matches if any of its sprint labels is selected
+            var rowSprintLabels = getSprintLabels(row.dataset.sprint);
+            
+            // Apply issue type filters
+            var issueType = (row.dataset.issueType || '').toLowerCase();
+            var isStory = issueType.includes('story');
+            var isBug = issueType === 'bug';
+            var shouldShowBasedOnType = (isStory && includeStories) || (isBug && includeBugs) || (!isStory && !isBug);
+            var _matchesSearch = matchesSearch(row, searchTerm);
+            var _matchStatus = matchesMultiSelectFilter(row.dataset.status, statusFilters);
+            var _matchSprint = (sprintFilters.length === 0) || rowSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); });
+            var _matchValidation = matchesMultiSelectFilter(row.dataset.validation, validationFilters);
+            var _matchProjectStage = matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters);
+            var _matchUatStatus = matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters);
+            var rowFixVersions = splitVersionValues_(row.dataset.fixVersion || '');
+            var _matchFixVersion = (fixVersionFilters.length === 0) || rowFixVersions.some(function(v){ return fixVersionFilters.includes(v); });
+            var _matchPM = matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters);
+            var _matchDev = matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
+
+            // Out of Sync Filter
+            var _matchOutOfSync = true;
+            if (APP_STATE.showOnlyOutOfSync) {
+                // Archived items (📁) will never receive backend updates — exclude them.
+                var rowSyncStatus = (row.dataset.syncStatus || '').trim().toLowerCase();
+                if (rowSyncStatus === '📁') {
+                    _matchOutOfSync = false;
+                } else {
+
+                var projectStage = (row.dataset.projectStage || '').trim().toLowerCase();
+
+                var stageIsEmpty = !projectStage;
+                if (stageIsEmpty) {
+                    _matchOutOfSync = true;
+                } else {
+                    var status = (row.dataset.status || '').trim().toLowerCase();
+                    var expectedStatuses = stageStatusMap[projectStage] || [];
+                    var statusAlignedWithStage = false;
+                    var statusIsEmpty = !status;
+
+                    if (expectedStatuses.length > 0) {
+                        if (statusIsEmpty) {
+                            statusAlignedWithStage = false;
+                        } else {
+                            for (var si = 0; si < expectedStatuses.length; si++) {
+                                if (status === expectedStatuses[si]) {
+                                    statusAlignedWithStage = true;
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        // No stage-specific mapping: flag as mismatch
+                        statusAlignedWithStage = false;
+                    }
+
+                    if (statusAlignedWithStage) {
+                        _matchOutOfSync = false;
+                    }
+                }
+                } // end archived check
+            }
+
+            // Past Sprint Filter (KPI): item latest sprint must be older than current sprint.
+            var _matchPastSprint = true;
+            if (APP_STATE.showOnlyPastSprint) {
+                var rowLatestSprintNumber = getLatestSprintNumber(row.dataset.sprint || '');
+                _matchPastSprint = (
+                    currentSprintNumber !== null &&
+                    rowLatestSprintNumber !== null &&
+                    rowLatestSprintNumber < currentSprintNumber
+                );
+                // Also exclude items whose project stage is in pastSprintClosedStages —
+                // the counter skips these so the filter must match.
+                if (_matchPastSprint) {
+                    var pastClosedCfg = (APP_STATE.allData.config && APP_STATE.allData.config.pastSprintClosedStages) || [];
+                    var pastClosedSet = new Set(pastClosedCfg.map(function(s){ return (s||'').toLowerCase().trim(); }));
+                    var rowStage = (row.dataset.projectStage || '').toLowerCase().trim();
+                    if (rowStage && pastClosedSet.has(rowStage)) {
+                        _matchPastSprint = false;
+                    }
+                }
+            }
+
+            var isVisible;
+            if (APP_STATE.showOnlyOutOfSync) {
+                // Out-of-sync mode overrides all other filters.
+                isVisible = _matchOutOfSync;
+            } else {
+                isVisible = _matchesSearch &&
+                            _matchStatus &&
+                            _matchSprint &&
+                            _matchValidation &&
+                            _matchProjectStage &&
+                            _matchUatStatus &&
+                            _matchFixVersion &&
+                            _matchPM &&
+                            _matchDev &&
+                            (shouldShowBasedOnType || !!searchTerm) &&
+                            _matchOutOfSync &&
+                            _matchPastSprint;
+
+                // Apply "Show Only In Progress" filter
+                if (showOnlyInProgress && isVisible && notInProgressStatuses.length > 0) {
+                    var status = (row.dataset.status || '').toLowerCase().trim();
+                    var keepBecauseActionNeeded = isActionNeededRow(row);
+                    var isConfiguredNotInProgress = notInProgressStatuses.indexOf(status) !== -1;
+                    if (isConfiguredNotInProgress && !keepBecauseActionNeeded) {
+                        isVisible = false;
+                    }
+                }
+
+                // Apply closed filter logic for stories/tasks - if includeClosed is false, hide closed items
+                // EXCEPT if the item specifically matches the search term OR has open children
+                if (!includeClosed && isVisible) {
+                    var matchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
+                    if (isClosedByProjectStage(row) && !matchesSpecificSearch) {
+                        var openChildrenCount = parseInt(row.dataset.openChildren || '0');
+                        if (openChildrenCount === 0) {
+                            isVisible = false;
+                        }
+                    }
+                }
+            }
+            
+            rowVisibility.set(row, isVisible);
+            
+            // If this story/task is visible and has a parent epic, mark that epic as having matching children
+            if (isVisible && row.dataset.parentEpic) {
+                if (row.classList.contains('row-bug-child')) {
+                    storiesWithMatchingChildren.add(row.dataset.parentEpic);
+                } else if (row.classList.contains('row-task')) {
+                    epicsWithMatchingChildren.add(row.dataset.parentEpic);
+                }
+                // Stories are handled in the next pass to account for their children
+            }
+        });
+
+        // Intermediate pass: Update Story visibility based on children and propagate to Epics
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-story')) {
+                var isVisible = rowVisibility.get(row);
+                var hasMatchingChildren = storiesWithMatchingChildren.has(row.dataset.id);
+                
+                // Update expander visibility based on whether there are matching children
+                var expander = row.querySelector('.expander');
+                if (expander) {
+                    if (hasMatchingChildren) {
+                        expander.style.visibility = ''; // Reset to default
+                    } else {
+                        expander.style.visibility = 'hidden';
+                        // Also collapse the row since there's nothing to show
+                        row.classList.remove('expanded');
+                    }
+                }
+
+                if (hasMatchingChildren) {
+                    // Ensure parent is visible if it has matching children (e.g. In Progress bugs),
+                    // overriding any filters that might have hidden the parent (like "Show Only In Progress")
+                    isVisible = true;
+                    rowVisibility.set(row, true);
+                    // Auto-expand story if it has matching children
+                    if (anySelectionFilterActive && !row.classList.contains('expanded')) {
+                         // Only auto-expand if the story has not been manually collapsed by the user
+                         if (!APP_STATE.manuallyCollapsedEpics[row.dataset.id]) {
+                             row.classList.add('expanded');
+                         }
+                    }
+                }
+                
+                if (isVisible && row.dataset.parentEpic) {
+                    epicsWithMatchingChildren.add(row.dataset.parentEpic);
+                }
+            }
+        });
+
+        // Third pass: determine epic visibility
+        allRows.forEach(function(row) {
+            if (row.classList.contains('row-epic-footer')) return;
+            if (!row.classList.contains('row-epic')) return; // Only process epics
+
+            var epicId = row.dataset.id;
+            var latestSprintForRow = getLatestSprint(row.dataset.sprint);
+            // For consistency, also gather all sprint labels on the epic row
+            var epicSprintLabels = getSprintLabels(row.dataset.sprint);
+            
+            // Epic matches basic filters
+            var epicMatchesFilters = matchesSearch(row, searchTerm) &&
+                                   // Sprint filter passes if epic itself has a selected sprint OR any child matched earlier
+                                   (sprintFilters.length === 0 || epicSprintLabels.some(function(lbl){ return sprintFilters.includes(lbl); })) &&
+                                   matchesMultiSelectFilter(row.dataset.validation, validationFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.projectStage, projectStageFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.uatStatus, uatStatusFilters) &&
+                                   ((fixVersionFilters.length === 0) || splitVersionValues_(row.dataset.fixVersion || '').some(function(v){ return fixVersionFilters.includes(v); })) &&
+                                   matchesMultiSelectFilter(row.dataset.assignedPM, assignedPMFilters) &&
+                                   matchesMultiSelectFilter(row.dataset.assignedDev, assignedDevFilters);
+            
+            // Note: We don't apply status filter to epics directly since they usually don't have UAT/Retest status
+            
+            var childMatches = epicsWithMatchingChildren.has(epicId);
+            
+            var isVisible;
+            if (APP_STATE.showOnlyOutOfSync || APP_STATE.showOnlyPastSprint) {
+                // In KPI-override modes, only show epics that have matching children.
+                // This avoids showing empty epics that have no items matching the KPI filter.
+                isVisible = childMatches;
+            } else {
+                // If status filters are active, only show epics with matching children
+                if (statusFilters.length > 0) {
+                    isVisible = childMatches; // Status filters are active, so only show epics with matching children
+                } else {
+                    isVisible = epicMatchesFilters || childMatches; // No status filters, show if epic matches other filters
+                }
+
+                // Apply "Show Only In Progress" filter to Epics
+                if (showOnlyInProgress && isVisible && notInProgressStatuses.length > 0) {
+                    // Show if it has matching children (already handled by childMatches logic above, but let's be explicit)
+                    // OR if the epic itself is not in the configured not-in-progress list
+                    var status = (row.dataset.status || '').toLowerCase().trim();
+                    var isSelfInProgress = notInProgressStatuses.indexOf(status) === -1;
+                    var keepBecauseActionNeeded = isActionNeededRow(row);
+                    
+                    if (!childMatches && !isSelfInProgress && !keepBecauseActionNeeded) {
+                        isVisible = false;
+                    }
+                }
+
+                // Auto-expand epics when any selection filter is active and the epic is relevant (matches or has matching children)
+                // But respect manually collapsed epics and NEVER collapse already expanded epics
+                if (anySelectionFilterActive && isVisible && !row.classList.contains('expanded')) {
+                    // Only auto-expand if the epic has not been manually collapsed by the user
+                    if (!APP_STATE.manuallyCollapsedEpics[epicId]) {
+                        row.classList.add('expanded');
+                    }
+                }
+
+                // Apply closed filter logic for epics - if includeClosed is false, hide closed epics
+                // EXCEPT if the epic specifically matches the search term
+                if (!includeClosed && isVisible) {
+                    var epicChildren = epicChildrenMap.get(epicId);
+                    var epicIsClosed = isClosedByProjectStage(row);
+                    var epicMatchesSpecificSearch = searchTerm && matchesSearch(row, searchTerm);
+                    
+                    // Keep closed epics visible when they have matching descendants (e.g.,
+                    // nested stale items). Otherwise descendant matches can be hidden until
+                    // users disable nesting.
+                    if (epicIsClosed && !childMatches && (!epicChildren || epicChildren.total === epicChildren.closed) && !epicMatchesSpecificSearch) {
+                        isVisible = false;
+                    }
+                }
+            }
+            rowVisibility.set(row, isVisible);
+        });
+
+        // Pre-build O(1) lookup maps so the display loop below never calls querySelector per row.
+        // Without these, each row in the loop would fire a full DOM scan → O(n²) total.
+        var epicRowById = new Map();
+        var storyRowById = new Map();
+        allRows.forEach(function(r) {
+            if (r.classList.contains('row-epic')) epicRowById.set(r.dataset.id, r);
+            else if (r.classList.contains('row-story')) storyRowById.set(r.dataset.id, r);
+        });
+
+        allRows.forEach(function(row) {
+            var isVisible = rowVisibility.get(row);
+            var isEpic = row.classList.contains('row-epic');
+            var isEpicFooter = row.classList.contains('row-epic-footer');
+            var parentEpicId = row.dataset.parentEpic;
+            var parentEpic = parentEpicId ? (epicRowById.get(parentEpicId) || null) : null;
+            var hasValidParentEpic = !!parentEpic;
+            // Only treat as a child row if it has a valid, existing parent epic row
+            var isChildRow = (row.classList.contains('row-story') || row.classList.contains('row-task')) && hasValidParentEpic;
+            
+            if (isChildRow) {
+                var visibilityReason = 'visible';
+                if (!parentEpic || !parentEpic.classList.contains('expanded')) {
+                    isVisible = false;
+                    visibilityReason = 'hidden: epic collapsed or missing';
+                } else {
+                    // Check if parent epic is showing all - if so, show all children regardless of filters
+                    var isShowingAll = parentEpic.dataset.showingAll === 'true';
+                    if (!isShowingAll && !rowVisibility.get(parentEpic)) {
+                        isVisible = false;
+                        visibilityReason = 'hidden: parent epic not visible under filters';
+                    } else if (isShowingAll) {
+                        // When showing all, only apply basic visibility checks (not filters)
+                        isVisible = true;
+                        visibilityReason = 'visible: parent epic showing all children';
+                    }
+                }
+            } else if ((row.classList.contains('row-story') || row.classList.contains('row-task')) && !hasValidParentEpic) {
+                // Top-level items (no valid epic) should not be gated by epic expansion
+                // Keep isVisible as determined by filters
+            } else if (isEpicFooter) {
+                // Epic footers should be visible if their parent epic is visible and expanded.
+                // parentEpicId / parentEpic are already resolved via epicRowById in the outer scope.
+                if (!parentEpic || !rowVisibility.get(parentEpic) || !parentEpic.classList.contains('expanded')) {
+                    isVisible = false;
+                } else {
+                    // Always show footer when epic is expanded - this gives users the "Show All" option
+                    // even when no children are currently visible due to filters
+                    isVisible = true;
+                }
+            } else if (row.classList.contains('row-bug-child')) {
+                var parentStoryId = row.dataset.parentEpic; // Actually parent Story ID
+                var parentStory = parentStoryId ? (storyRowById.get(parentStoryId) || null) : null;
+                
+                if (parentStory) {
+                    // Check if parent story is expanded
+                    if (!parentStory.classList.contains('expanded')) {
+                        isVisible = false;
+                    } 
+                    // Check if parent story is effectively visible
+                    else if (parentStory.style.display === 'none') {
+                        isVisible = false;
+                    }
+                }
+            }
+            
+            if (isVisible) {
+                // If this row was in the middle of a close animation from a prior interaction,
+                // cancel it immediately so it can render without delayed pop-in.
+                if (row.classList.contains('closing')) {
+                    row.classList.remove('closing');
+                }
+
+                if (row.style.display === 'none') {
+                    // Determine if we should animate this row.
+                    // For normal filter changes (no visibleParentIds), show instantly to avoid jank.
+                    // Keep animation only for targeted expand/collapse interactions.
+                    var shouldAnimate = false;
+                    if (!skipAnimation && visibleParentIds) {
+                        var parentId = row.dataset.parentEpic;
+                        shouldAnimate = !!(parentId && visibleParentIds.has(parentId));
+                    }
+                    
+                    if (!shouldAnimate) {
+                        row.classList.add('no-animate');
+                    } else {
+                        row.classList.remove('no-animate');
+                    }
+                    
+                    row.style.display = 'table-row';
+                    
+                    // If we disabled animation, we should remove the class later so future interactions animate
+                    if (!shouldAnimate) {
+                        // Use a timeout to remove the class after the "instant" transition would have happened
+                        // This ensures the browser renders it without animation first
+                        setTimeout(function() {
+                            row.classList.remove('no-animate');
+                        }, 50);
+                    }
+                }
+            } else {
+                // If currently visible and is a story/bug, animate out
+                var isAnimatedRow = row.classList.contains('row-story') || row.classList.contains('row-bug-child');
+                
+                // Determine if we should animate out
+                // For normal filter changes (no visibleParentIds), hide instantly.
+                // Keep animation only for targeted expand/collapse interactions.
+                var shouldAnimateOut = false;
+                if (!skipAnimation && visibleParentIds && isAnimatedRow) {
+                    var parentId = row.dataset.parentEpic;
+                    shouldAnimateOut = !!(parentId && visibleParentIds.has(parentId));
+                }
+
+                if (shouldAnimateOut && row.style.display !== 'none' && isAnimatedRow && !row.classList.contains('closing')) {
+                    row.classList.remove('no-animate'); // Ensure animation is allowed
+                    row.classList.add('closing');
+                    
+                    // Define cleanup
+                    var cleanup = function() {
+                        if (row.classList.contains('closing')) {
+                            row.style.display = 'none';
+                            row.classList.remove('closing');
+                        }
+                    };
+                    
+                    // Listen for animation end (once)
+                    var onAnimationEnd = function() {
+                        cleanup();
+                        row.removeEventListener('animationend', onAnimationEnd);
+                    };
+                    row.addEventListener('animationend', onAnimationEnd);
+                    
+                    // Safety timeout slightly longer than close animation
+                    setTimeout(function() {
+                        if (row.classList.contains('closing')) {
+                            cleanup();
+                            row.removeEventListener('animationend', onAnimationEnd);
+                        }
+                    }, 260);
+                } else if (!row.classList.contains('closing')) {
+                    // If not animating (or already closed), hide immediately
+                    row.style.display = 'none';
+                }
+            }
+        });
+    }
+    
+    // Count items using the already-cached row list (avoid extra full-DOM queries)
+    var totalCount = 0;
+    var visibleCount = 0;
+    allRows.forEach(function(row) {
+        if (row.classList.contains('row-epic-footer')) return;
+        if (!(row.classList.contains('row-epic') || row.classList.contains('row-story') || row.classList.contains('row-task'))) return;
+        totalCount++;
+        if (row.style.display === 'table-row') visibleCount++;
+    });
+    
+    if ($('#count')) {
+        if (visibleCount === totalCount) {
+            $('#count').textContent = totalCount + ' items';
+        } else {
+            $('#count').textContent = visibleCount + ' of ' + totalCount + ' items shown';
+        }
+    }
+    
+    // Show/hide no-matches indicator
+    var noMatchesIndicator = $('#no-matches-indicator');
+    var hasActiveFilters = anySelectionFilterActive || !includeClosed || !includeStories || !includeBugs;
+    
+    if (noMatchesIndicator) {
+        if (hasActiveFilters && visibleCount === 0) {
+            noMatchesIndicator.classList.remove('hidden');
+            // Hide the table if it exists
+            var tableContainer = $('.table-container');
+            if (tableContainer) {
+                tableContainer.style.display = 'none';
+            }
+        } else {
+            noMatchesIndicator.classList.add('hidden');
+            // Show the table if it exists
+            var tableContainer = $('.table-container');
+            if (tableContainer) {
+                tableContainer.style.display = 'block';
+            }
+        }
+    }
+    
+    // For interaction-driven expand/collapse, defer expensive footer/KPI refresh
+    // so rows can paint immediately (reduces "empty gap then pop-in" effect).
+    var shouldDeferPostWork = !!visibleParentIds || !!skipKpiUpdate;
+    if (shouldDeferPostWork) {
+        requestAnimationFrame(function() {
+            updateEpicFooters();
+            if (!skipKpiUpdate) {
+                updateKPICards();
+            }
+        });
+    } else {
+        updateEpicFooters();
+        if (!skipKpiUpdate) {
+            updateKPICards();
+        }
+    }
+}
+
+// Update KPI card values
+function updateKPICards() {
+    updateCurrentSprintKPI();
+    updatePastSprintKPI();
+    updatePastDueKPI();
+    updateStaleKPI();
+    updateNeedsReviewKPI();
+    updateOutOfSyncKPI();
+    updateUatKPI();
+    updateRetestKPI();
+    updateProjectStageKPIs();
+}
+
+function updateProjectStageKPIs() {
+    var config = (APP_STATE.allData && APP_STATE.allData.config) || {};
+    var kpiStages = config.kpiProjectStages || [];
+    var container = document.getElementById('project-stage-kpi-cards');
+    var group = document.getElementById('project-stage-kpi-group');
+    var divider = document.getElementById('project-stage-divider');
+
+    if (!kpiStages.length || !container || !group) {
+        if (group) group.style.display = 'none';
+        if (divider) divider.style.display = 'none';
+        return;
+    }
+
+    group.style.display = 'flex';
+    if (divider) divider.style.display = 'block';
+    container.innerHTML = '';
+
+    var allProjects = APP_STATE.allData.projects || [];
+    var counts = {};
+    
+    // Initialize counts
+    kpiStages.forEach(function(stage) {
+        counts[stage.toLowerCase()] = 0;
+    });
+
+    // Count items
+    allProjects.forEach(function(project) {
+        var stage = (project['Project Stage'] || '').trim().toLowerCase();
+        if (counts.hasOwnProperty(stage)) {
+            counts[stage]++;
+        }
+    });
+
+    // Create cards
+    kpiStages.forEach(function(stage) {
+        var count = counts[stage.toLowerCase()] || 0;
+        var cardId = 'project-stage-' + stage.replace(/\s+/g, '-').toLowerCase();
+        
+        // Check if this stage is currently filtered
+        var isActive = false;
+        if (APP_STATE.multiSelectFilters && APP_STATE.multiSelectFilters.projectStage) {
+            isActive = APP_STATE.multiSelectFilters.projectStage.includes(stage);
+        }
+        
+        var activeClass = isActive ? ' active-filter' : '';
+        
+        var cardHtml = 
+            '<div class="stat-card clickable' + activeClass + '" data-filter="project-stage:' + stage + '">' +
+                '<div class="stat-icon bg-indigo-100 text-indigo-600">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+                        '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>' +
+                        '<polyline points="22 4 12 14.01 9 11.01"></polyline>' +
+                    '</svg>' +
+                '</div>' +
+                '<div class="stat-content">' +
+                    '<div class="stat-label">' + stage + '</div>' +
+                    '<div class="stat-value text-indigo-600">' + count + '</div>' +
+                '</div>' +
+            '</div>';
+            
+        container.insertAdjacentHTML('beforeend', cardHtml);
+    });
+}
+
+function updateCurrentSprintKPI() {
+    var currentSprintItems = 0;
+    var completedItems = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    // Use closedProjectStages from config, fallback to closedStages (legacy) or default list
+    var closedList = Array.isArray(cfg.closedProjectStages) ? cfg.closedProjectStages : 
+                    (Array.isArray(cfg.closedStages) ? cfg.closedStages : ['Done', 'Closed', 'Complete', 'Released']);
+    var closedSet = new Set(closedList.map(function(s){ return String(s).trim().toLowerCase(); }));
+
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        allProjects.forEach(function(project) {
+            // Count any non-epic work item in the current sprint
+            var issueType = (project['Issue Type'] || '').toLowerCase();
+            if (issueType === 'epic') return;
+
+            var sprints = project.sprint || project.Sprint || '';
+            var isInSprint = false;
+            
+            if (typeof sprints === 'string') {
+                // Split by comma and check each part exactly using formatSprint
+                var sprintParts = sprints.split(',');
+                for (var i = 0; i < sprintParts.length; i++) {
+                    if (formatSprint(sprintParts[i]) === currentSprintName) {
+                        isInSprint = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (isInSprint) {
+                currentSprintItems++;
+                
+                var stage = (project['Project Stage'] || '').trim().toLowerCase();
+                if (closedSet.has(stage)) {
+                    completedItems++;
+                }
+            }
+        });
+    }
+    
+    var countCard = $('#current-sprint-count');
+    var numberSpan = $('#current-sprint-number');
+    var progressBar = $('#current-sprint-progress');
+    var dateSpan = $('#current-sprint-date');
+    
+    if (countCard) {
+        countCard.textContent = currentSprintItems;
+    }
+    
+    if (numberSpan) {
+        if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+            var match = currentSprintName.match(/Sprint\s?(\d+)/i);
+            numberSpan.textContent = match ? '(' + match[1] + ')' : '(' + currentSprintName + ')';
+        } else {
+            numberSpan.textContent = '';
+        }
+    }
+
+    if (dateSpan) {
+        if (sprintStats.currentSprintStart && sprintStats.currentSprintEnd) {
+            try {
+                var start = new Date(sprintStats.currentSprintStart);
+                var end = new Date(sprintStats.currentSprintEnd);
+                var options = { month: 'short', day: 'numeric' };
+                dateSpan.textContent = start.toLocaleDateString('en-US', options) + ' - ' + end.toLocaleDateString('en-US', options);
+            } catch (e) {
+                console.error('Error formatting sprint dates:', e);
+                dateSpan.textContent = '';
+            }
+        } else {
+            dateSpan.textContent = '';
+        }
+    }
+
+    if (progressBar) {
+        var percentage = currentSprintItems > 0 ? (completedItems / currentSprintItems) * 100 : 0;
+        progressBar.style.width = percentage + '%';
+    }
+}
+
+function updatePastSprintKPI() {
+    var pastSprintItems = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var sprintStats = APP_STATE.allData.sprintStats || {};
+    var currentSprintName = sprintStats.currentSprintName;
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var pastClosedList = Array.isArray(cfg.pastSprintClosedStages) ? cfg.pastSprintClosedStages : [];
+    var pastClosedSet = new Set(pastClosedList.map(function(s){ return String(s).trim().toLowerCase(); }));
+    var today = new Date();
+    var sprints = {}; 
+    
+    var parseSprintDates = function(sprintString) {
+        try {
+            if (!sprintString || typeof sprintString !== 'string') return { start: null, end: null };
+            var normalized = sprintString.replace(/[–—]/g, '-');
+            var re = /(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?\s*-\s*(\d{1,2})[\.\/]?(\d{1,2})(?:[\.\/]?(\d{2,4}))?/;
+            var m = normalized.match(re);
+            if (!m) return { start: null, end: null };
+            var currentYear = today.getFullYear();
+            var sm = parseInt(m[1],10), sd = parseInt(m[2],10);
+            var sy = m[3] ? parseInt(m[3],10) : currentYear;
+            if (sy < 100) sy += 2000;
+            var em = parseInt(m[4],10), ed = parseInt(m[5],10);
+            var ey = m[6] ? parseInt(m[6],10) : sy;
+            if (ey < 100) ey += 2000;
+            var start = new Date(sy, sm - 1, sd);
+            var end = new Date(ey, em - 1, ed);
+            if (start > end) { end.setFullYear(end.getFullYear() + 1); }
+            end.setHours(23,59,59,999);
+            return { start: start, end: end };
+        } catch(e) { return { start: null, end: null }; }
+    };
+
+    // First pass: Parse all unique sprints and cache their dates
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        if (sprintString && typeof sprintString === 'string') {
+            sprintString.split(',').forEach(function(sprintStr) {
+                var trimmedSprint = sprintStr.trim();
+                if (trimmedSprint && !sprints[trimmedSprint]) {
+                    sprints[trimmedSprint] = parseSprintDates(trimmedSprint);
+                }
+            });
+        }
+    });
+
+    // Determine current sprint end date and sprint number for comparison
+    var currentSprintEndDate = null;
+    var currentSprintNum = null;
+    if (currentSprintName && currentSprintName !== 'None' && currentSprintName !== '—') {
+        var csm = String(currentSprintName).match(/Sprint\s?(\d+)/i);
+        if (csm) currentSprintNum = parseInt(csm[1], 10);
+        for (var sprintFullName in sprints) {
+            if (sprints.hasOwnProperty(sprintFullName)) {
+                var dates = sprints[sprintFullName];
+                if (dates.start && dates.end && today >= dates.start && today <= dates.end) {
+                    currentSprintEndDate = dates.end;
+                    break;
+                }
+            }
+        }
+    }
+
+    // Count items in past sprints
+    // An item is only "past sprint" if its LATEST sprint is older than the current sprint.
+    // Items that were moved from an old sprint into the current sprint must not be counted.
+    allProjects.forEach(function(project) {
+        var sprintString = project.sprint || project.Sprint || '';
+        var rawProjectStage = project['Project Stage'] || '';
+        var projectStage = rawProjectStage.trim().toLowerCase();
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+
+        if (issueType === 'epic') return;
+
+        var isClosedForPast = projectStage && pastClosedSet.has(projectStage);
+
+        if (sprintString && typeof sprintString === 'string') {
+            var isInPastSprint = false;
+
+            if (currentSprintNum !== null) {
+                // Primary: compare latest sprint number to current sprint number (matches filter logic)
+                var sprintNums = (sprintString.match(/Sprint\s?(\d+)/ig) || [])
+                    .map(function(s) { return parseInt(s.replace(/Sprint\s?/i, ''), 10); });
+                if (sprintNums.length > 0) {
+                    var latestNum = Math.max.apply(null, sprintNums);
+                    isInPastSprint = latestNum < currentSprintNum;
+                }
+            } else if (currentSprintEndDate) {
+                // Fallback: use the latest sprint end date for items using date-based sprint names
+                var latestEnd = null;
+                sprintString.split(',').forEach(function(sp) {
+                    var info = sprints[sp.trim()];
+                    if (info && info.end) {
+                        if (!latestEnd || info.end > latestEnd) latestEnd = info.end;
+                    }
+                });
+                if (latestEnd) {
+                    isInPastSprint = latestEnd < currentSprintEndDate;
+                }
+            }
+
+            if (isInPastSprint && !isClosedForPast) {
+                pastSprintItems++;
+            }
+        }
+    });
+    
+    var card = $('#past-sprint-count');
+    if (card) {
+        card.textContent = pastSprintItems;
+    }
+}
+
+function updateUatKPI() {
+    var uatCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
+
+        var status = (project['Status'] || '').trim().toLowerCase();
+        if (status === 'uat') {
+            uatCount++;
+        }
+    });
+
+    var card = $('#uat-count');
+    if (card) {
+        card.textContent = uatCount;
+    }
+}
+
+function updateRetestKPI() {
+    var retestCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
+
+        var status = (project['Status'] || '').trim().toLowerCase();
+        if (status === 'retest') {
+            retestCount++;
+        }
+    });
+
+    var card = $('#retest-count');
+    if (card) {
+        card.textContent = retestCount;
+    }
+}
+
+function updatePastDueKPI() {
+    var pastDueCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage'],
+            project['Target Date']
+        );
+        
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.PAST_DUE) {
+            pastDueCount++;
+        }
+    });
+
+    var card = $('#past-due-count');
+    if (card) {
+        card.textContent = pastDueCount;
+    }
+}
+
+function updateStaleKPI() {
+    var staleCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage'],
+            project['Target Date']
+        );
+        
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.STALE) {
+            staleCount++;
+        }
+    });
+
+    var card = $('#stale-count');
+    if (card) {
+        card.textContent = staleCount;
+    }
+}
+
+
+
+function updateNeedsReviewKPI() {
+    var needsReviewCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var validationStatus = getValidationStatus(
+            project['Planning Stage'], 
+            project['Updated'], 
+            project['Last Checked'], 
+            project['Project Stage'],
+            project['Target Date']
+        );
+        
+        if (validationStatus.text === APP_CONSTANTS.VALIDATION.NEEDS_REVIEW) {
+            needsReviewCount++;
+        }
+    });
+    
+    var card = $('#needs-review-count');
+    if (card) {
+        card.textContent = needsReviewCount;
+    }
+}
+
+function updateOutOfSyncKPI() {
+    var outOfSyncCount = 0;
+    var allProjects = APP_STATE.allData.projects || [];
+    var maps = getClosedMappings();
+    var cfg = (APP_STATE && APP_STATE.allData && APP_STATE.allData.config) || {};
+    var stageMap = {};
+    (cfg.stageStatusMappings || []).forEach(function(m){ 
+        if (m && m.stage) {
+            var expectedStatuses = (m.expectedStatuses || []).map(function(x){ return (x||'').toLowerCase().trim(); });
+            stageMap[(m.stage+'').toLowerCase().trim()] = expectedStatuses;
+        }
+    });
+
+    allProjects.forEach(function(project) {
+        var issueType = (project['Issue Type'] || '').toLowerCase();
+        if (issueType === 'epic') return;
+
+        var projectStage = (project['Project Stage'] || '').trim().toLowerCase();
+        
+        // Skip if project stage is closed
+        if (maps.stages.indexOf(projectStage) !== -1) return;
+
+        // Check for Out of Sync
+        var status = (project['Status'] || '').trim().toLowerCase();
+        var stageIsEmpty = !project['Project Stage'] || String(project['Project Stage']).trim() === '';
+        
+        if (stageIsEmpty) {
+            outOfSyncCount++;
+            return;
+        }
+
+        var expectedStatuses = stageMap[projectStage] || [];
+        var statusAlignedWithStage = false;
+        var statusIsEmpty = !project.Status || String(project.Status).trim() === '';
+
+        if (expectedStatuses.length > 0) {
+            if (statusIsEmpty) {
+                statusAlignedWithStage = false;
+            } else {
+                for (var si = 0; si < expectedStatuses.length; si++) {
+                    if (status === expectedStatuses[si]) { 
+                        statusAlignedWithStage = true; 
+                        break; 
+                    } 
+                }
+            }
+        } else {
+            // No stage-specific mapping: flag as mismatch so it gets attention
+            statusAlignedWithStage = false;
+        }
+
+        if (!statusAlignedWithStage) {
+            outOfSyncCount++;
+        }
+    });
+
+    var card = $('#out-of-sync-count');
+    if (card) {
+        card.textContent = outOfSyncCount;
+    }
+}
+
+
+
+// Helper function to check if any filters are currently active
+function hasActiveFilters() {
+    var searchTerm = $('#q').value.trim().toLowerCase();
+    var statusFilters = APP_STATE.multiSelectFilters.status || [];
+    var sprintFilters = APP_STATE.multiSelectFilters.sprint || [];
+    var validationFilters = APP_STATE.multiSelectFilters.validation || [];
+    var projectStageFilters = APP_STATE.multiSelectFilters.projectStage || [];
+    var uatStatusFilters = APP_STATE.multiSelectFilters.uatStatus || [];
+    var fixVersionFilters = APP_STATE.multiSelectFilters.fixVersion || [];
+    var assignedPMFilters = APP_STATE.multiSelectFilters.assignedPM || [];
+    var assignedDevFilters = APP_STATE.multiSelectFilters.assignedDev || [];
+    
+    // Check closed filter - "Show Closed" is a filter when ON
+    var showClosed = $('#filter-toggle-closed') ? $('#filter-toggle-closed').classList.contains('active') : false;
+    var hideStories = $('#filter-toggle-stories') ? !$('#filter-toggle-stories').classList.contains('active') : false;
+    var hideBugs = $('#filter-toggle-bugs') ? !$('#filter-toggle-bugs').classList.contains('active') : false;
+    var showOnlyInProgress = $('#filter-toggle-in-progress') ? $('#filter-toggle-in-progress').classList.contains('active') : false;
+    var showOnlyOutOfSync = APP_STATE.showOnlyOutOfSync || false;
+    var showOnlyPastSprint = APP_STATE.showOnlyPastSprint || false;
+    
+    return !!(searchTerm || statusFilters.length || sprintFilters.length || 
+              validationFilters.length || projectStageFilters.length || 
+              assignedPMFilters.length || assignedDevFilters.length || 
+              uatStatusFilters.length || fixVersionFilters.length ||
+              showClosed || hideStories || hideBugs || !showOnlyInProgress || showOnlyOutOfSync || showOnlyPastSprint);
+}
+
+
+function switchView(viewName) {
+  // If we're not changing views, just return
+  if (APP_STATE.currentView === viewName) return;
+
+  // Clean up the previous view to prevent memory leaks
+  if (typeof AppCleanup !== 'undefined' && AppCleanup.cleanupView) {
+    AppCleanup.cleanupView(APP_STATE.currentView);
+  }
+
+  // Update UI for new view
+  $$('.view-btn').forEach(function(btn) {
+    btn.classList.remove('active');
+  });
+  $('[data-view="' + viewName + '"]').classList.add('active');
+
+  // Update state with current view
+  APP_STATE.currentView = viewName;
+  
+  // Show/hide table controls based on view
+  var tableControls = $('#table-controls');
+  if (tableControls) {
+    tableControls.style.display = viewName === 'table' ? 'flex' : 'none';
+  }
+  
+  // Hide KPI Tracker when in MyTask view, show for all other views
+  var kpiContainer = $('.kpi-container');
+  if (kpiContainer) {
+    kpiContainer.style.display = viewName === 'tasks' ? 'none' : 'flex';
+  }
+  
+  // For Gantt view, we can release some data we don't need
+  if (viewName === 'gantt' && typeof AppCleanup !== 'undefined') {
+    // Only keep the active tasks data, release other large objects
+    if (APP_STATE.allData && APP_STATE.allData.fullHistory) {
+      AppCleanup.releaseData('allData.fullHistory');
+    }
+  }
+  
+  // Render the application with the new view
+  renderApp();
+}
+
+// Import functions from ui.js
+function updateFilterSelection(filterType) {
+    // This function is a placeholder for the actual implementation in ui.js.html
+    // DO NOT call window.updateFilterSelection to avoid recursive loop
+    
+    // Simple implementation just to update state
+    var dropdown = $('[data-filter="' + filterType + '"]');
+    if (!dropdown) return;
+    
+    var checkboxes = dropdown.querySelectorAll('.filter-checkbox:checked');
+    var selectedValues = Array.from(checkboxes).map(function(cb) { return cb.value; });
+    
+    // Update the state
+    APP_STATE.multiSelectFilters[filterType] = selectedValues;
+    
+    // Apply filters directly without calling ui.js's function
+    applyFilters();
+}
+
+function setupMultiSelectDropdowns() {
+  console.log("Setting up filter dropdowns");
+  
+  // Get all filter dropdowns
+  var filterDropdowns = $$('.filter-dropdown');
+  console.log("Found filter dropdowns:", filterDropdowns.length);
+  
+  // Remove any existing event listeners by cloning
+  filterDropdowns.forEach(function(dropdown) {
+    var toggle = dropdown.querySelector('.filter-dropdown-toggle');
+    if (toggle) {
+      var newToggle = toggle.cloneNode(true);
+      toggle.parentNode.replaceChild(newToggle, toggle);
+    }
+  });
+  
+  // Get fresh references after cloning
+  filterDropdowns = $$('.filter-dropdown');
+  
+  // Set up fresh event listeners
+  filterDropdowns.forEach(function(dropdown) {
+    var toggle = dropdown.querySelector('.filter-dropdown-toggle');
+    var content = dropdown.querySelector('.filter-dropdown-content');
+    
+    if (!toggle || !content) {
+      console.log("Missing toggle or content for dropdown", dropdown);
+      return;
+    }
+    
+    console.log("Setting up event listener for", dropdown.dataset.filter);
+    
+    // Toggle dropdown on click
+    toggle.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Close other dropdowns
+      filterDropdowns.forEach(function(otherDropdown) {
+        if (otherDropdown !== dropdown) {
+          otherDropdown.classList.remove('open');
+          var otherContent = otherDropdown.querySelector('.filter-dropdown-content');
+          if (otherContent) {
+            otherContent.classList.add('hidden');
+          }
+        }
+      });
+      
+      // Toggle this dropdown
+    dropdown.classList.toggle('open');
+      content.classList.toggle('hidden');
+    });
+  });
+  
+  // Close dropdowns when clicking outside
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.filter-dropdown')) {
+      filterDropdowns.forEach(function(dropdown) {
+        dropdown.classList.remove('open');
+        var content = dropdown.querySelector('.filter-dropdown-content');
+        if (content) content.classList.add('hidden');
+      });
+    }
+  });
+  
+  // Prevent dropdown from closing when clicking inside content
+  filterDropdowns.forEach(function(dropdown) {
+    var content = dropdown.querySelector('.filter-dropdown-content');
+    if (content) {
+      content.addEventListener('click', function(e) {
+        e.stopPropagation();
+      });
+    }
+  });
+}
+
+function initUserDropdown() {
+    const storedData = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
+    if (storedData.username) {
+        const displayEl = document.getElementById('currentUserDisplay');
+        const emailEl = document.getElementById('currentUserEmail');
+        
+        if (displayEl) displayEl.textContent = storedData.username;
+        
+        // Handle email location (top level or nested in user object)
+        const email = storedData.email || (storedData.user && storedData.user.email) || storedData.username;
+        if (emailEl) emailEl.textContent = email;
+    }
+}
+
+function handleLogout() {
+    if (!confirm('Are you sure you want to sign out?')) return;
+    
+    const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
+    const token = user.token;
+    
+    // Clear local storage immediately
+    localStorage.removeItem('projectHubUser');
+    
+    // Call backend to invalidate session (optional but good practice)
+    if (token) {
+        google.script.run.logout(token);
+    }
+    
+    // Redirect immediately using the global SCRIPT_URL
+    if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
+        window.top.location.href = SCRIPT_URL + "?page=login";
+    } else {
+        // Fallback if SCRIPT_URL is missing (shouldn't happen)
+        google.script.run
+            .withSuccessHandler(function(url) {
+                window.top.location.href = url + "?page=login";
+            })
+            .getScriptUrl();
+    }
+}
+
+function setupEventListeners() {
+  // View switcher
+  $$('.view-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var view = this.getAttribute('data-view');
+      if (view) {
+        switchView(view);
+      }
+    });
+  });
+
+  // Nest Bugs Toggle
+  var nestToggle = document.getElementById('toggle-nest-bugs');
+  if (nestToggle) {
+      nestToggle.addEventListener('change', function() {
+          APP_STATE.nestBugs = this.checked;
+          localStorage.setItem('nestBugsPref', this.checked);
+          if (APP_STATE.currentView === 'table') renderTable();
+      });
+      
+      // Load preference
+      var savedNest = localStorage.getItem('nestBugsPref');
+      if (savedNest !== null) {
+          APP_STATE.nestBugs = (savedNest === 'true');
+          nestToggle.checked = APP_STATE.nestBugs;
+      } else {
+          APP_STATE.nestBugs = true; // Default
+      }
+  }
+
+  setupDropdown('filter-toggle-btn', 'filter-popup', 'filter-container');
+  setupDropdown('actions-toggle-btn', 'actions-popup', 'actions-container');
+  setupDropdown('user-toggle-btn', 'user-popup', 'user-container');
+  setupDropdown('links-toggle-btn', 'links-popup', 'links-container');
+  
+  initUserDropdown();
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) {
+      logoutBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          handleLogout();
+      });
+  }
+  
+  // Note: setupMultiSelectDropdowns() is now called after data is loaded in handleDataLoaded()
+  
+  document.getElementById('forceRefreshBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      forceRefreshData();
+  });
+  document.getElementById('importBtn').addEventListener('click', function(e) {
+      e.preventDefault();
+      // Reset modal state
+      $('#csvFile').value = '';
+      $('#csvFile').disabled = false;
+      $('#uploadProgress').style.display = 'none';
+      $('#uploadResults').style.display = 'none';
+      $('#uploadBtn').disabled = false;
+      $('#uploadBtn').textContent = 'Upload and Replace Data';
+      $('#cancelUploadBtn').style.display = 'none';
+      openModal(null, 'import');
+  });
+  document.getElementById('clearFiltersBtn').addEventListener('click', handleClearFilters);
+  
+  // Quick filters dropdown event listener removed
+  document.getElementById('expandAllBtn').addEventListener('click', function() {
+    handleExpandCollapseAll(true);
+  });
+  document.getElementById('collapseAllBtn').addEventListener('click', function() {
+    handleExpandCollapseAll(false);
+  });
+  
+  // KPI card click handlers
+  document.addEventListener('click', function(e) {
+    var kpiCard = e.target.closest('.kpi-card');
+    if (kpiCard) {
+      handleKPICardClick(kpiCard);
+    }
+  });
+  
+  var tableControls = document.getElementById('table-controls');
+  if (tableControls) {
+      tableControls.addEventListener('click', function(e) {
+          var toggleBtn = e.target.closest('.filter-toggle');
+          if (toggleBtn) {
+              var wasActive = toggleBtn.classList.contains('active');
+              toggleBtn.classList.toggle('active');
+              
+              // Special handling for the closed toggle - now controls whether to include closed items in the view
+              if (toggleBtn.id === 'filter-toggle-closed') {
+                  // When active, we're including closed items in the view (not filtering to just closed)
+                  var isNowActive = toggleBtn.classList.contains('active');
+                  
+                  // Define our closed project stages and production status
+                  var closedProjectStages = ['Fixed', 'Done', 'Canceled'];
+                  var productionStatus = 'In Production';
+                  var allClosedStatuses = closedProjectStages.concat([productionStatus]);
+                  
+                  // Instead of checking statuses when toggle is active, we'll just apply filters
+                  // The applyFilters function now checks toggleBtn.classList.contains('active')
+                  // to determine whether to include closed items
+                  applyFilters();
+              } else {
+                  applyFilters();
+              }
+          }
+      });
+  }
+
+  $('#content-wrapper').addEventListener('click', function(e) {
+    var expander = e.target.closest('.expander');
+    if (expander) { handleRowExpand(expander); return; }
+    
+    // Handle validation badge click (replaces check button)
+    var validationBadge = e.target.closest('.validation-clickable[data-clickable="true"]');
+    if (validationBadge) { 
+      var jiraId = validationBadge.dataset.jiraId;
+      console.log('Validation badge clicked for Jira ID:', jiraId);
+      console.log('Badge element:', validationBadge);
+      if (jiraId) {
+        updateLastChecked(jiraId, validationBadge);
+      } else {
+        console.error('No Jira ID found on validation badge');
+      }
+      return; 
+    }
+    
+    var editButton = e.target.closest('.edit-task-btn');
+    if (editButton) { handleEditTask(editButton); return; }
+
+    // Handle info icon clicks
+    var infoButton = e.target.closest('.info-icon-btn');
+    if (infoButton) {
+      var jiraId = infoButton.dataset.jiraId;
+      if (jiraId) {
+        openStoryInfoModal(jiraId);
+      }
+      return;
+    }
+
+    var showAllBtn = e.target.closest('.show-all-stories-btn');
+    if (showAllBtn) {
+        var epicId = showAllBtn.dataset.epicId;
+        var epicRow = $('.row-epic[data-id="' + epicId + '"]');
+        if (epicRow) {
+            epicRow.dataset.showingAll = 'true';
+            applyFilters();
+        }
+    }
+    
+    var reHideBtn = e.target.closest('.re-hide-stories-btn');
+    if (reHideBtn) {
+        var epicId = reHideBtn.dataset.epicId;
+        var epicRow = $('.row-epic[data-id="' + epicId + '"]');
+        if (epicRow) {
+            epicRow.dataset.showingAll = 'false';
+            applyFilters();
+        }
+    }
+  });
+
+  var kpiContainer = $('.kpi-container') || $('.kpi-stat-bar');
+  if (kpiContainer) {
+      kpiContainer.addEventListener('click', function(e) {
+          var card = e.target.closest('.stat-card.clickable');
+          if (card) {
+              handleKPICardClick(card);
+          }
+      });
+  }
+  
+  document.body.addEventListener('change', function(e) {
+    if (e.target.matches('select[id^="f-"]')) {
+      applyFilters();
+    }
+    
+    // Handle manual field dropdown changes
+    if (e.target.matches('select.manual-field-dropdown')) {
+      var jiraId = e.target.dataset.jiraId;
+      var field = e.target.dataset.field;
+      var value = e.target.value;
+      
+      if (jiraId && field) {
+        saveManualField(jiraId, field, value);
+        
+        // Update local state immediately for real-time KPI updates
+        if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var project = APP_STATE.allData.projects.find(function(p) {
+                return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
+            });
+            
+            if (project) {
+                project[field] = value;
+            }
+        }
+      }
+
+      // Re-apply filters immediately to update KPIs and respect closed toggle
+      applyFilters();
+      
+      // Immediately update the row's sync indicator (status dot) based on new stage
+      if (field === 'Project Stage') {
+          try { if (typeof updateRowSyncIndicator === 'function') updateRowSyncIndicator(jiraId); } catch (e) { }
+      }
+      
+      // Also update the validation pill to reflect potential rule changes
+      try { if (typeof updateRowValidation === 'function') updateRowValidation(jiraId); } catch (e) { }
+    }
+    
+    // Handle manual text input changes  
+    if (e.target.matches('input.manual-text-input')) {
+      var jiraId = e.target.dataset.jiraId;
+      var field = e.target.dataset.field;
+      var value = e.target.value;
+      
+      if (jiraId && field) {
+        saveManualField(jiraId, field, value);
+        
+        // Update local state immediately
+        if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var project = APP_STATE.allData.projects.find(function(p) {
+                return (p['Jira #'] || '').toLowerCase() === (jiraId || '').toLowerCase();
+            });
+            
+            if (project) {
+                project[field] = value;
+            }
+        }
+        
+        // Update KPIs if relevant fields changed (e.g. Target Date)
+        applyFilters();
+      }
+    }
+  });
+  
+  $('#q').addEventListener('input', applyFilters);
+  
+  $('#newBtn').addEventListener('click', function() {
+    APP_STATE.currentEditId = null;
+    closeModal();
+    $('#t-priority').value = 'Medium';
+    openModal('New Independent Task');
+  });
+    
+  $('#modalClose').addEventListener('click', function() { closeModal('task'); });
+  $('#modalSave').addEventListener('click', handleSaveTask);
+  $('#importModalClose').addEventListener('click', function() { closeModal('import'); });
+  
+  // CSV Upload button handler
+  $('#uploadBtn').addEventListener('click', handleFileUpload);
+  
+  // Cancel upload button handler
+  $('#cancelUploadBtn').addEventListener('click', function() {
+    hideUploadProgress();
+    closeModal('import');
+  });
+  
+  // Story Info Modal handlers
+  $('#storyInfoClose').addEventListener('click', closeStoryInfoModal);
+  $('#storyInfoModal').addEventListener('click', function(e) {
+    if (e.target.id === 'storyInfoModal') {
+      closeStoryInfoModal();
+    }
+  });
+  
+  // Drive Link Edit handlers
+  $('#storyInfoDriveLinkEdit').addEventListener('click', function() {
+    var driveLinkElement = $('#storyInfoDriveLink');
+        var currentLink = (driveLinkElement.dataset && driveLinkElement.dataset.rawLink) || (driveLinkElement.href && driveLinkElement.href !== '#' ? driveLinkElement.href : '');
+    $('#storyInfoDriveLinkInput').value = currentLink;
+    $('#storyInfoDriveLinkView').style.display = 'none';
+    $('#storyInfoDriveLinkEditView').style.display = 'flex';
+    TimerManager.setTimeout(function() {
+      $('#storyInfoDriveLinkInput').focus();
+    }, 50, 'drive_link_focus');
+  });
+  
+  $('#storyInfoDriveLinkCancel').addEventListener('click', function() {
+    $('#storyInfoDriveLinkView').style.display = 'flex';
+    $('#storyInfoDriveLinkEditView').style.display = 'none';
+  });
+  
+  $('#storyInfoDriveLinkSave').addEventListener('click', function() {
+    var newLink = $('#storyInfoDriveLinkInput').value.trim();
+    var jiraId = $('#storyInfoModal').dataset.currentJiraId;
+    
+    if (!jiraId) {
+      console.error('No Jira ID found for Drive Link update');
+      return;
+    }
+    
+        // Normalize one or multiple links and ensure each has a protocol.
+        if (typeof normalizeMediaLinksInput_ === 'function') {
+            newLink = normalizeMediaLinksInput_(newLink);
+        } else if (newLink && !newLink.match(/^https?:\/\//i)) {
+            newLink = 'https://' + newLink;
+        }
+        $('#storyInfoDriveLinkInput').value = newLink;
+    
+    // Show loading state
+    $('#storyInfoDriveLinkSave').disabled = true;
+    $('#storyInfoDriveLinkSave').textContent = 'Saving...';
+    
+    const token = checkAuth();
+    if (!token) return;
+
+    // Call the API to update the Drive Link
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result.success) {
+                    // Update the link/preview in the view
+                    if (typeof updateStoryInfoDriveLinkUi_ === 'function') {
+                        updateStoryInfoDriveLinkUi_(newLink);
+                    }
+          
+          // Update the story data in APP_STATE
+          if (APP_STATE.allData && APP_STATE.allData.projects) {
+            var story = APP_STATE.allData.projects.find(function(p) {
+              return p['Jira #'] === jiraId;
+            });
+            if (story) {
+              story['Drive Link'] = newLink;
+            }
+          }
+          
+          // Switch back to view mode
+          $('#storyInfoDriveLinkView').style.display = 'flex';
+          $('#storyInfoDriveLinkEditView').style.display = 'none';
+          
+          // Show success message
+          showToast('Drive Link updated successfully');
+          
+          // Re-render the table to show updated drive icon
+          renderApp();
+        } else {
+          alert('Failed to update Drive Link: ' + (result.error || 'Unknown error'));
+        }
+        
+        // Reset button state
+        $('#storyInfoDriveLinkSave').disabled = false;
+        $('#storyInfoDriveLinkSave').textContent = 'Save';
+      })
+      .withFailureHandler(function(error) {
+        alert('Error updating Drive Link: ' + error);
+        $('#storyInfoDriveLinkSave').disabled = false;
+        $('#storyInfoDriveLinkSave').textContent = 'Save';
+      })
+            .updateDriveLink(token, jiraId, newLink, (typeof getSelectedWorkspaceUsername === 'function' ? getSelectedWorkspaceUsername() : null));
+  });
+}

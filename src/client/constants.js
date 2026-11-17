@@ -1,0 +1,51 @@
+/**
+ * @file constants.js
+ * @description Client-side constants and configuration settings
+ */
+
+const APP_CONSTANTS = {
+  // Local storage keys
+  STORAGE_KEYS: {
+    FILTER_STATE: 'jiraTracker_filterState',
+    DARK_MODE: 'jiraTracker_darkMode',
+    LAST_VIEW: 'jiraTracker_lastView'
+  },
+  
+  // Default filter values
+  DEFAULTS: {
+    INCLUDE_STORIES: true,
+    INCLUDE_BUGS: true,
+    INCLUDE_CLOSED: false
+  },
+  
+  // Time periods in milliseconds
+  TIME: {
+    DAY_MS: 86400000, // 24 hours
+    STALE_DAYS: 14,    // Days until an item is considered stale
+    AUTO_REFRESH_MS: 300000 // 5 minutes
+  },
+  
+  // CSS class names
+  CSS: {
+    ACTIVE: 'active',
+    HIDDEN: 'hidden',
+    SHOW: 'show',
+    EXPANDED: 'expanded'
+  },
+  
+  // View types
+  VIEWS: {
+    TABLE: 'table',
+    BOARD: 'board',
+    GANTT: 'gantt'
+  },
+  
+  // Validation status types
+  VALIDATION: {
+    PAST_DUE: 'Past Due',
+    NEEDS_REVIEW: 'Needs Review',
+    STALE: 'Stale',
+    UP_TO_DATE: 'Up to Date',
+    CLOSED: 'Closed'
+  }
+};

@@ -1,0 +1,195 @@
+/**
+ * @file gantt.js
+ * @description Renders a Gantt chart view of the project data.
+ */
+
+// --- DATE HELPERS (local tz display) ---
+function _normalizeUtcString(val) {
+    if (!val && val !== 0) return null;
+    if (val instanceof Date) return isNaN(val.getTime()) ? null : val.toISOString();
+    var s = String(val).trim(); if (!s) return null;
+    if (/Z$/i.test(s) || /[+-]\d{2}:?\d{2}$/.test(s)) {
+        var d1 = new Date(s); return isNaN(d1.getTime()) ? null : d1.toISOString();
+    }
+    // Handle common US-style slash date-times as UTC: M/D/YYYY HH:mm[:ss][ AM/PM]
+    var slashDateTimeRe = /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i;
+    var m = s.match(slashDateTimeRe);
+    if (m) {
+        var mm = parseInt(m[1], 10);
+        var dd = parseInt(m[2], 10);
+        var yy = parseInt(m[3], 10);
+        if (yy < 100) yy += 2000;
+        var hh = parseInt(m[4], 10);
+        var mi = parseInt(m[5], 10);
+        var ss = m[6] ? parseInt(m[6], 10) : 0;
+        var ampm = m[7] ? m[7].toUpperCase() : '';
+        if (ampm) {
+            if (ampm === 'AM') { if (hh === 12) hh = 0; }
+            else if (ampm === 'PM') { if (hh !== 12) hh += 12; }
+        }
+        var utcMs = Date.UTC(yy, mm - 1, dd, hh, mi, ss);
+        var dSlash = new Date(utcMs);
+        return isNaN(dSlash.getTime()) ? null : dSlash.toISOString();
+    }
+    // Date-only string -> treat as LOCAL date (no TZ shift)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+        var parts = s.split('-');
+        var dLocal = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+        return isNaN(dLocal.getTime()) ? null : dLocal.toISOString();
+    }
+    if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}$/.test(s)) {
+        var d2 = new Date(s.replace(' ', 'T') + 'Z');
+        return isNaN(d2.getTime()) ? null : d2.toISOString();
+    }
+    var d3 = new Date(s); return isNaN(d3.getTime()) ? null : d3.toISOString();
+}
+function _parseServerDate(val) {
+    // Prefer global helper if available
+    try { if (typeof parseServerDate === 'function') return parseServerDate(val); } catch (_) {}
+    var iso = _normalizeUtcString(val); return iso ? new Date(iso) : null;
+}
+
+// --- DATA PROCESSING ---
+function processGanttData(projects) {
+    // Filter for items that have both a valid start and end date
+    var plottableItems = projects.filter(function(p) {
+        return p['Start Date'] && p['End Date'];
+    });
+
+    var stories = plottableItems.filter(function(p) { return p['Issue Type'] !== 'Epic'; });
+    var epics = projects.filter(function(p) { return p['Issue Type'] === 'Epic'; });
+    var allDates = [];
+    var ganttItems = [];
+
+    // First pass: Process all stories with valid dates
+    for (var i = 0; i < stories.length; i++) {
+        var story = stories[i];
+        var startDate = _parseServerDate(story['Start Date']);
+        var endDate = _parseServerDate(story['End Date']);
+
+        // Ensure dates are valid before proceeding
+        if (startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate >= startDate) {
+            allDates.push(startDate, endDate);
+            ganttItems.push({
+                type: 'story',
+                item: story,
+                startDate: startDate,
+                endDate: endDate
+            });
+        }
+    }
+
+    // Second pass: Calculate epic durations based on their children
+    for (var j = 0; j < epics.length; j++) {
+        var epic = epics[j];
+        
+        var normalizedEpicSummary = normalizeString(epic.Summary);
+        var epicId = epic['Jira #'];
+        
+        var childStories = ganttItems.filter(function(gi) {
+            if (gi.type !== 'story') return false;
+            
+            // Check Epic Link
+            if (normalizeString(gi.item['Epic Link']) === normalizedEpicSummary) return true;
+            
+            // Check Linked Issues
+            var links = (gi.item['Links'] || gi.item['Linked Issues'] || '').split(',');
+            return links.some(function(link) { return link.trim() === epicId; });
+        });
+
+        if (childStories.length > 0) {
+            var epicStartDate = new Date(Math.min.apply(null, childStories.map(function(cs) { return cs.startDate; })));
+            var epicEndDate = new Date(Math.max.apply(null, childStories.map(function(cs) { return cs.endDate; })));
+            allDates.push(epicStartDate, epicEndDate);
+            ganttItems.push({
+                type: 'epic',
+                item: epic,
+                startDate: epicStartDate,
+                endDate: epicEndDate,
+                children: childStories
+            });
+        }
+    }
+
+    if (allDates.length === 0) {
+        return { items: [], timelineStart: new Date(), timelineEnd: new Date() };
+    }
+
+    var timelineStart = new Date(Math.min.apply(null, allDates));
+    var timelineEnd = new Date(Math.max.apply(null, allDates));
+    timelineStart.setDate(timelineStart.getDate() - 2);
+    timelineEnd.setDate(timelineEnd.getDate() + 5);
+
+    return { items: ganttItems, timelineStart: timelineStart, timelineEnd: timelineEnd };
+}
+
+// --- RENDERING ---
+function renderGanttChart(projects) {
+    var wrapper = $('#content-wrapper');
+    var ganttData = processGanttData(projects);
+
+    if (ganttData.items.length === 0) {
+        wrapper.innerHTML = '<p class="p-8 text-center text-gray-500">No items with a valid Start and End Date to display in Gantt view.</p>';
+        return;
+    }
+
+    var timelineStart = ganttData.timelineStart;
+    var timelineEnd = ganttData.timelineEnd;
+    var totalDays = Math.ceil((timelineEnd - timelineStart) / (1000 * 60 * 60 * 24));
+    
+    // Build Headers
+    var dayHeadersHtml = '';
+    var monthHeadersHtml = '';
+    var date = new Date(timelineStart);
+    var monthMap = {};
+
+    for (var i = 1; i <= totalDays; i++) {
+        var monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+        if (!monthMap[monthName]) monthMap[monthName] = { start: i, span: 0 };
+        monthMap[monthName].span++;
+        dayHeadersHtml += '<div class="gantt-header-cell">' + date.getDate() + '</div>';
+        date.setDate(date.getDate() + 1);
+    }
+    for (var month in monthMap) {
+        monthHeadersHtml += '<div class="gantt-month-header" style="--start: ' + monthMap[month].start + '; --span: ' + monthMap[month].span + ';">' + month + '</div>';
+    }
+    var headerHtml = '<div class="gantt-header-name">Task</div>' +
+                     '<div class="gantt-header-timeline">' + monthHeadersHtml + dayHeadersHtml + '</div>';
+    
+    // Build Rows
+    var rowsHtml = '';
+    var epics = ganttData.items.filter(function(gi) { return gi.type === 'epic'; });
+    epics.sort(function(a, b) { return a.startDate - b.startDate; }); // Sort epics by start date
+    for (var k = 0; k < epics.length; k++) {
+        var epicData = epics[k];
+        var startOffset = Math.ceil((epicData.startDate - timelineStart) / (1000 * 60 * 60 * 24));
+        var duration = Math.ceil((epicData.endDate - epicData.startDate) / (1000 * 60 * 60 * 24)) || 1;
+
+        rowsHtml += '<div class="gantt-row-name">' + epicData.item.Summary + '</div>' +
+                    '<div class="gantt-row-timeline">' +
+                        '<div class="gantt-bar bar-epic" style="--start: ' + startOffset + '; --span: ' + duration + ';">' +
+                            '<div class="tooltip">' + epicData.item.Summary + '<br><b>Start:</b> ' + epicData.startDate.toLocaleDateString() + '<br><b>End:</b> ' + epicData.endDate.toLocaleDateString() + '</div>' +
+                        '</div>' +
+                    '</div>';
+
+        var childStories = ganttData.items.filter(function(gi) {
+            return gi.type === 'story' && normalizeString(gi.item['Epic Link']) === normalizeString(epicData.item.Summary);
+        });
+        childStories.sort(function(a, b) { return a.startDate - b.startDate; }); // Sort stories by start date
+        
+        for (var l = 0; l < childStories.length; l++) {
+            var storyData = childStories[l];
+            var storyStartOffset = Math.ceil((storyData.startDate - timelineStart) / (1000 * 60 * 60 * 24));
+            var storyDuration = Math.ceil((storyData.endDate - storyData.startDate) / (1000 * 60 * 60 * 24)) || 1;
+            
+            rowsHtml += '<div class="gantt-row-name gantt-row-name-story">' + storyData.item.Summary + '</div>' +
+                        '<div class="gantt-row-timeline">' +
+                            '<div class="gantt-bar bar-story" style="--start: ' + storyStartOffset + '; --span: ' + storyDuration + ';">' +
+                               '<div class="tooltip">' + storyData.item.Summary + '<br><b>Start:</b> ' + storyData.startDate.toLocaleDateString() + '<br><b>End:</b> ' + storyData.endDate.toLocaleDateString() + '</div>' +
+                            '</div>' +
+                        '</div>';
+        }
+    }
+
+    wrapper.innerHTML = '<div class="gantt-container">' + headerHtml + rowsHtml + '</div>';
+}

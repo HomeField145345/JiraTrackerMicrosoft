@@ -1,0 +1,138 @@
+/**
+ * @file AppCleanup.js
+ * @description Provides centralized application cleanup functions to prevent memory leaks
+ */
+
+var AppCleanup = (function() {
+  // Reference collection for cached DOM elements
+  var domRefs = {};
+  
+  return {
+    /**
+     * Caches a DOM reference for later cleanup
+     * @param {string} id - Identifier for the reference
+     * @param {Element} element - DOM element to cache
+     */
+    cacheRef: function(id, element) {
+      domRefs[id] = element;
+    },
+    
+    /**
+     * Clears a specific cached DOM reference
+     * @param {string} id - Reference ID to clear
+     */
+    clearRef: function(id) {
+      if (domRefs[id]) {
+        domRefs[id] = null;
+        delete domRefs[id];
+      }
+    },
+    
+    /**
+     * Clears all cached DOM references
+     */
+    clearAllRefs: function() {
+      for (var id in domRefs) {
+        if (domRefs.hasOwnProperty(id)) {
+          domRefs[id] = null;
+        }
+      }
+      domRefs = {};
+    },
+    
+    /**
+     * Cleans up a specific view before navigation
+     * @param {string} viewName - Name of the view to clean up
+     */
+    cleanupView: function(viewName) {
+      // Clear all timers and intervals
+      TimerManager.clearAll();
+      
+      // Clean up view-specific event listeners
+      switch(viewName) {
+        case 'dashboard':
+          // Clean up dashboard-specific resources
+          break;
+        case 'gantt':
+          // Clean up gantt-specific resources
+          
+          // Clear gantt chart DOM elements to prevent memory leaks
+          var ganttContainer = $('#gantt-container', true);
+          if (ganttContainer) {
+            // Remove all child elements to prevent memory leaks from SVG elements
+            while (ganttContainer.firstChild) {
+              ganttContainer.removeChild(ganttContainer.firstChild);
+            }
+          }
+          
+          // Remove any gantt-specific event listeners
+          var ganttElements = [
+            '#gantt-zoom-in', 
+            '#gantt-zoom-out', 
+            '#gantt-today',
+            '#gantt-scale-selector'
+          ];
+          
+          ganttElements.forEach(function(selector) {
+            var element = $(selector);
+            if (element) {
+              EventManager.removeAllEventListenersFromElement(element);
+            }
+          });
+          
+          // Clear gantt-specific data from memory
+          if (window.ganttTaskData) {
+            window.ganttTaskData = null;
+          }
+          
+          // Clear any local storage specific to Gantt view
+          try {
+            localStorage.removeItem('gantt_scroll_position');
+            localStorage.removeItem('gantt_zoom_level');
+          } catch (e) {}
+          
+          break;
+        case 'config':
+          // Clean up config-specific resources  
+          break;
+      }
+    },
+    
+    /**
+     * Releases large data from memory when switching views
+     * @param {string} dataKey - Key of the data object to release in APP_STATE
+     */
+    releaseData: function(dataKey) {
+      if (APP_STATE && APP_STATE[dataKey]) {
+        // Keep a reference to re-fetch later if needed
+        APP_STATE[dataKey + '_needsRefresh'] = true;
+        APP_STATE[dataKey] = null;
+      }
+    },
+    
+    /**
+     * Performs a full cleanup of the application
+     * Call this when unloading the page
+     */
+    fullCleanup: function() {
+      // Clear all timers
+      TimerManager.clearAll();
+      
+      // Remove all tracked event listeners
+      EventManager.removeAllEventListeners();
+      
+      // Clear all cached DOM references
+      this.clearAllRefs();
+      
+      // Clear large data objects
+      if (APP_STATE) {
+        APP_STATE.allData = null;
+      }
+      
+      // Force garbage collection hint (doesn't guarantee collection)
+      if (window.gc) {
+        try { window.gc(); } catch (e) {}
+      }
+    }
+  };
+})();

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="ProjectHub static preview">
+  <title>ProjectHub | Project tracker</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Neue Haas Grotesk", "Helvetica Neue", Arial, sans-serif;
+      color: #000000;
+      background: #ffffff;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: #ffffff;
+    }
+
+    .page {
+      width: min(100%, 1600px);
+      margin: 0 auto;
+      padding: 32px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      border-radius: 9999px;
+      background: #ee0000;
+      color: #ffffff;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .brand-name {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 28px;
+    }
+
+    main {
+      max-width: 960px;
+      margin: 64px auto 0;
+    }
+
+    .eyebrow {
+      margin: 0 0 8px;
+      color: #6f7171;
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 5vw, 40px);
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .intro {
+      max-width: 680px;
+      margin: 16px 0 32px;
+      color: #6f7171;
+      font-size: 16px;
+      line-height: 24px;
+    }
+
+    .empty-state {
+      padding: 32px;
+      border: 1px solid #d8dada;
+      border-radius: 12px;
+      background: #f6f6f6;
+    }
+
+    .empty-state h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 500;
+      line-height: 28px;
+    }
+
+    .empty-state p {
+      max-width: 640px;
+      margin: 0;
+      color: #6f7171;
+      font-size: 16px;
+      line-height: 24px;
+    }
+
+    @media (max-width: 600px) {
+      .page {
+        padding: 20px;
+      }
+
+      main {
+        margin-top: 48px;
+      }
+
+      .empty-state {
+        padding: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="header">
+      <div class="brand-mark" aria-hidden="true">P</div>
+      <p class="brand-name">ProjectHub</p>
+    </header>
+
+    <main>
+      <p class="eyebrow">Static preview</p>
+      <h1>Project tracker</h1>
+      <p class="intro">
+        This GitHub Pages site is ready for the tracker interface. Project data
+        and integrations have not been connected.
+      </p>
+
+      <section class="empty-state" aria-labelledby="empty-state-title">
+        <h2 id="empty-state-title">No project data yet</h2>
+        <p>
+          This preview contains no live Jira records or user information.
+          Fictional sample data can be added here when it is ready.
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

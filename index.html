@@ -11,6 +11,13 @@
       font-family: "Neue Haas Grotesk", "Helvetica Neue", Arial, sans-serif;
       color: #000000;
       background: #ffffff;
+      --surface: #ffffff;
+      --surface-subtle: #f6f6f6;
+      --ink: #000000;
+      --muted: #6f7171;
+      --line: #d8dada;
+      --brand: #ee0000;
+      --radius: 12px;
       font-synthesis: none;
       text-rendering: optimizeLegibility;
       -webkit-font-smoothing: antialiased;
@@ -25,102 +32,410 @@
       min-width: 320px;
       min-height: 100vh;
       margin: 0;
-      background: #ffffff;
+      background: var(--surface);
+    }
+
+    button,
+    input {
+      font: inherit;
     }
 
     .page {
       width: min(100%, 1600px);
       margin: 0 auto;
-      padding: 32px;
+      padding: 24px 32px 40px;
     }
 
     .header {
       display: flex;
       align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 56px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
       gap: 12px;
-      min-height: 48px;
+      min-width: max-content;
     }
 
     .brand-mark {
       display: grid;
-      width: 40px;
-      height: 40px;
+      width: 36px;
+      height: 36px;
       place-items: center;
-      border-radius: 9999px;
-      background: #ee0000;
+      border-radius: 50%;
+      background: var(--brand);
       color: #ffffff;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
     }
 
     .brand-name {
       margin: 0;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 700;
-      line-height: 28px;
+      line-height: 24px;
+    }
+
+    .preview-label {
+      padding: 4px 8px;
+      border: 1px solid var(--line);
+      border-radius: 9999px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 16px;
+      white-space: nowrap;
+    }
+
+    .header-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: right;
     }
 
     main {
-      max-width: 960px;
-      margin: 64px auto 0;
+      padding-top: 32px;
+    }
+
+    .page-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 24px;
     }
 
     .eyebrow {
-      margin: 0 0 8px;
-      color: #6f7171;
-      font-size: 14px;
+      margin: 0 0 4px;
+      color: var(--muted);
+      font-size: 13px;
       font-weight: 500;
-      line-height: 20px;
+      line-height: 18px;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(28px, 5vw, 40px);
+      font-size: clamp(26px, 4vw, 32px);
       font-weight: 700;
       line-height: 1.2;
     }
 
     .intro {
-      max-width: 680px;
-      margin: 16px 0 32px;
-      color: #6f7171;
-      font-size: 16px;
-      line-height: 24px;
+      max-width: 700px;
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    .button {
+      display: inline-flex;
+      min-height: 40px;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .button:disabled {
+      color: var(--muted);
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .button-primary {
+      border-color: var(--ink);
+      background: var(--ink);
+      color: #ffffff;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .metric {
+      min-height: 92px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .metric-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .metric-value {
+      display: block;
+      font-size: 22px;
+      font-weight: 500;
+    }
+
+    .workspace {
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .workspace-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .view-tabs {
+      display: flex;
+      gap: 4px;
+      overflow-x: auto;
+    }
+
+    .view-tab {
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .view-tab:focus-visible,
+    .button:focus-visible {
+      outline: 2px solid var(--ink);
+      outline-offset: 2px;
+    }
+
+    .view-tab[aria-selected="true"] {
+      background: var(--surface-subtle);
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .toolbar-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .search {
+      width: min(280px, 34vw);
+      min-height: 40px;
+      padding: 8px 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink);
+      font-size: 14px;
+    }
+
+    .search:disabled {
+      background: var(--surface-subtle);
+      cursor: not-allowed;
+    }
+
+    .view-panel {
+      min-height: 310px;
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+
+    th {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
     }
 
     .empty-state {
+      display: grid;
+      min-height: 250px;
+      align-content: center;
+      justify-items: center;
       padding: 32px;
-      border: 1px solid #d8dada;
-      border-radius: 12px;
-      background: #f6f6f6;
+      text-align: center;
+    }
+
+    .empty-icon {
+      display: grid;
+      width: 44px;
+      height: 44px;
+      margin-bottom: 16px;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--muted);
+      font-size: 20px;
     }
 
     .empty-state h2 {
       margin: 0 0 8px;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 500;
-      line-height: 28px;
-    }
-
-    .empty-state p {
-      max-width: 640px;
-      margin: 0;
-      color: #6f7171;
-      font-size: 16px;
       line-height: 24px;
     }
 
-    @media (max-width: 600px) {
+    .empty-state p {
+      max-width: 480px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 20px;
+    }
+
+    .board-columns {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+      gap: 12px;
+      padding: 16px;
+    }
+
+    .board-column {
+      min-height: 250px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-subtle);
+    }
+
+    .board-column h2 {
+      margin: 0;
+      padding: 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .board-placeholder {
+      padding: 20px 12px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+    }
+
+    .timeline {
+      overflow-x: auto;
+      padding: 20px 16px;
+    }
+
+    .timeline-head {
+      display: grid;
+      min-width: 640px;
+      grid-template-columns: 220px repeat(5, minmax(80px, 1fr));
+    }
+
+    .timeline-head span {
+      min-height: 48px;
+      padding: 14px 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+
+    .page-footer {
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 18px;
+    }
+
+    @media (max-width: 760px) {
       .page {
-        padding: 20px;
+        padding: 16px;
       }
 
-      main {
-        margin-top: 48px;
+      .header-note {
+        display: none;
+      }
+
+      .page-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .workspace-header,
+      .toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar-group,
+      .search {
+        width: 100%;
+      }
+
+      .board-columns {
+        grid-template-columns: 1fr;
       }
 
       .empty-state {
-        padding: 24px;
+        min-height: 220px;
+        padding: 24px 16px;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .brand {
+        gap: 8px;
+      }
+
+      .brand-name {
+        font-size: 16px;
+      }
+
+      .preview-label {
+        font-size: 11px;
       }
     }
   </style>
@@ -128,26 +443,154 @@
 <body>
   <div class="page">
     <header class="header">
-      <div class="brand-mark" aria-hidden="true">P</div>
-      <p class="brand-name">ProjectHub</p>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">P</div>
+        <p class="brand-name">ProjectHub</p>
+        <span class="preview-label">Static preview</span>
+      </div>
+      <p class="header-note">Data and integrations are not connected</p>
     </header>
 
     <main>
-      <p class="eyebrow">Static preview</p>
-      <h1>Project tracker</h1>
-      <p class="intro">
-        This GitHub Pages site is ready for the tracker interface. Project data
-        and integrations have not been connected.
-      </p>
-
-      <section class="empty-state" aria-labelledby="empty-state-title">
-        <h2 id="empty-state-title">No project data yet</h2>
-        <p>
-          This preview contains no live Jira records or user information.
-          Fictional sample data can be added here when it is ready.
-        </p>
+      <section class="page-heading" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">Workspace</p>
+          <h1 id="page-title">Project tracker</h1>
+          <p class="intro">
+            Track project status, delivery progress, and team tasks in one place.
+            This preview contains no project records.
+          </p>
+        </div>
+        <button class="button button-primary" type="button" disabled title="Connect a backend to enable this action">+ New task</button>
       </section>
+
+      <section class="metrics" aria-label="Project overview">
+        <article class="metric"><span class="metric-label">Current sprint</span><strong class="metric-value" aria-label="No data">—</strong></article>
+        <article class="metric"><span class="metric-label">Past due</span><strong class="metric-value" aria-label="No data">—</strong></article>
+        <article class="metric"><span class="metric-label">Needs review</span><strong class="metric-value" aria-label="No data">—</strong></article>
+        <article class="metric"><span class="metric-label">Out of sync</span><strong class="metric-value" aria-label="No data">—</strong></article>
+      </section>
+
+      <section class="workspace" aria-label="Project workspace">
+        <div class="workspace-header">
+          <nav class="view-tabs" role="tablist" aria-label="Workspace views">
+            <button class="view-tab" id="tab-table" type="button" role="tab" aria-selected="true" aria-controls="panel-table" data-view="table">Table</button>
+            <button class="view-tab" id="tab-board" type="button" role="tab" aria-selected="false" aria-controls="panel-board" data-view="board" tabindex="-1">Board</button>
+            <button class="view-tab" id="tab-timeline" type="button" role="tab" aria-selected="false" aria-controls="panel-timeline" data-view="timeline" tabindex="-1">Timeline</button>
+            <button class="view-tab" id="tab-tasks" type="button" role="tab" aria-selected="false" aria-controls="panel-tasks" data-view="tasks" tabindex="-1">My tasks</button>
+          </nav>
+          <span class="preview-label">No records loaded</span>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <input class="search" type="search" aria-label="Search projects" placeholder="Search projects" disabled>
+            <button class="button" type="button" disabled title="Connect a backend to enable filters">Filters</button>
+          </div>
+          <div class="toolbar-group">
+            <button class="button" type="button" disabled title="Connect a backend to import data">Import</button>
+            <button class="button" type="button" disabled title="Connect a backend to refresh data">Refresh</button>
+          </div>
+        </div>
+
+        <section class="view-panel" id="panel-table" role="tabpanel" aria-labelledby="tab-table">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Jira ID</th>
+                  <th scope="col">Summary</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Assignee</th>
+                  <th scope="col">Sprint</th>
+                  <th scope="col">Project stage</th>
+                  <th scope="col">Target date</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+          <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">+</div>
+            <h2>No project data yet</h2>
+            <p>This preview has no live Jira records or user information. Add fictional sample data when it is ready.</p>
+          </div>
+        </section>
+
+        <section class="view-panel" id="panel-board" role="tabpanel" aria-labelledby="tab-board" hidden>
+          <div class="board-columns">
+            <article class="board-column"><h2>Not started</h2><p class="board-placeholder">No sample items</p></article>
+            <article class="board-column"><h2>In progress</h2><p class="board-placeholder">No sample items</p></article>
+            <article class="board-column"><h2>Done</h2><p class="board-placeholder">No sample items</p></article>
+          </div>
+        </section>
+
+        <section class="view-panel" id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden>
+          <div class="timeline" aria-label="Empty project timeline">
+            <div class="timeline-head" aria-hidden="true">
+              <span>Project</span><span>Month 1</span><span>Month 2</span><span>Month 3</span><span>Month 4</span><span>Month 5</span>
+            </div>
+            <div class="empty-state">
+              <div class="empty-icon" aria-hidden="true">—</div>
+              <h2>No timeline data yet</h2>
+              <p>Project dates will appear here after sample data is connected.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="view-panel" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Task</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Priority</th>
+                  <th scope="col">Due date</th>
+                  <th scope="col">Project</th>
+                </tr>
+              </thead>
+            </table>
+          </div>
+          <div class="empty-state">
+            <div class="empty-icon" aria-hidden="true">+</div>
+            <h2>No tasks yet</h2>
+            <p>This preview does not connect to Google Tasks or any task database.</p>
+          </div>
+        </section>
+      </section>
+      <p class="page-footer">Static UI preview. Actions that require a backend are intentionally unavailable.</p>
     </main>
   </div>
+  <script>
+    (function() {
+      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"][data-view]'));
+
+      function activateTab(tab, moveFocus) {
+        tabs.forEach(function(item) {
+          var selected = item === tab;
+          item.setAttribute('aria-selected', String(selected));
+          item.tabIndex = selected ? 0 : -1;
+          document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
+        });
+        if (moveFocus) tab.focus();
+      }
+
+      tabs.forEach(function(tab, index) {
+        tab.addEventListener('click', function() {
+          activateTab(tab, false);
+        });
+        tab.addEventListener('keydown', function(event) {
+          var nextIndex = index;
+          if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
+          else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
+          else if (event.key === 'Home') nextIndex = 0;
+          else if (event.key === 'End') nextIndex = tabs.length - 1;
+          else return;
+          event.preventDefault();
+          activateTab(tabs[nextIndex], true);
+        });
+      });
+    }());
+  </script>
 </body>
 </html>

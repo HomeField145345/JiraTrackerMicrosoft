@@ -15,8 +15,7 @@ The static preview is separate from the private Excel tracker. The Excel tracker
      "ownerObjectId": "701dad25-b25b-42f6-b787-09f78541279f",
      "target": {
        "driveId": "b!f-BDej4rLk6BaMq9gw3hEqGrohYq9idLjYJzrtuGfu7TZUUOHGERTLDwaDKPqanl",
-       "folderId": "01423ZPGN6Y2GOVW7725BZO354PWSELRRZ",
-"
+       "folderId": "01423ZPGN6Y2GOVW7725BZO354PWSELRRZ"
      }
    }
    ```
@@ -27,6 +26,7 @@ The static preview is separate from the private Excel tracker. The Excel tracker
 Use the workbook as an app-managed file: keep its name, tabs and headers unchanged, and close Excel before saving changes from the tracker. If you want custom formulas or formatting, use a copy. Writes replace the workbook and check its Microsoft revision before committing; the tracker is intended for one writer, not simultaneous Excel editing or concurrent use across devices. The Excel workbook limit is 20 MiB.
 
 Run `npm test` to check workbook provisioning and persistence with a simulated Microsoft Graph service.
+If setup fails, open the browser developer console to see the configuration response status and which fields failed validation. Diagnostics do not print the ID values.
 
 ## Deploy to GitHub Pages
 

@@ -36,6 +36,43 @@ function renderRows(id, records, keys) {
   element(id).replaceChildren(rows);
 }
 
+const isGuid = value =>
+  typeof value === 'string' && /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
+
+function getConfigProblems(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return ['excel-config.json must contain a JSON object'];
+  }
+
+  const problems = [];
+  for (const field of ['clientId', 'tenantId', 'ownerObjectId']) {
+    if (!isGuid(value[field])) {
+      problems.push(`${field} must be a valid GUID`);
+    }
+  }
+
+  if (value.target !== undefined && value.target !== null) {
+    if (typeof value.target !== 'object' || Array.isArray(value.target)) {
+      problems.push('target must be a JSON object');
+    } else {
+      const { driveId, folderId } = value.target;
+      const hasDriveId = typeof driveId === 'string' && driveId.trim() !== '';
+      const hasFolderId = typeof folderId === 'string' && folderId.trim() !== '';
+      if (hasDriveId !== hasFolderId) {
+        problems.push('target.driveId and target.folderId must both be set, or both omitted');
+      }
+      if (driveId !== undefined && !hasDriveId) {
+        problems.push('target.driveId must be a non-empty string');
+      }
+      if (folderId !== undefined && !hasFolderId) {
+        problems.push('target.folderId must be a non-empty string');
+      }
+    }
+  }
+
+  return problems;
+}
+
 async function run(action, getPayload) {
   if (!client || busy) return;
   busy = true;
@@ -76,14 +113,40 @@ async function run(action, getPayload) {
 
 async function initialize() {
   try {
-    const response = await fetch('./excel-config.json', { cache: 'no-store' });
-    if (!response.ok) throw new Error('Excel is not configured. Follow the Microsoft 365 setup guide.');
-    config = await response.json();
-    const guid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
-    if (![config.clientId, config.tenantId, config.ownerObjectId].every(value => guid.test(value)) ||
-        Boolean(config.target?.driveId) !== Boolean(config.target?.folderId)) {
-      throw new Error('The Microsoft 365 setup is incomplete. Check the tenant, app, owner, and destination IDs.');
+    const configUrl = new URL('./excel-config.json', location.href);
+    console.info('[Excel tracker] Loading configuration', configUrl.href);
+    const response = await fetch(configUrl, { cache: 'no-store' });
+    const contentType = response.headers.get('content-type');
+    console.info('[Excel tracker] Configuration response', {
+      status: response.status,
+      contentType
+    });
+    if (!response.ok) {
+      throw new Error(`Could not load excel-config.json (HTTP ${response.status}).`);
     }
+
+    try {
+      config = await response.json();
+    } catch (error) {
+      console.error('[Excel tracker] Configuration response is not valid JSON', {
+        contentType,
+        message: error.message
+      });
+      throw new Error('The excel-config.json response is not valid JSON. Check the file or EXCEL_CONFIG Actions variable.');
+    }
+
+    const problems = getConfigProblems(config);
+    console.info('[Excel tracker] Configuration field check', {
+      clientIdValid: isGuid(config?.clientId),
+      tenantIdValid: isGuid(config?.tenantId),
+      ownerObjectIdValid: isGuid(config?.ownerObjectId),
+      sharePointTargetConfigured: Boolean(config?.target?.driveId && config?.target?.folderId)
+    });
+    if (problems.length) {
+      console.error('[Excel tracker] Configuration validation failed', { problems });
+      throw new Error(`The Microsoft 365 setup is incomplete: ${problems.join('; ')}.`);
+    }
+
     scopes = [config.target?.driveId ? 'Files.ReadWrite.All' : 'Files.ReadWrite'];
     const app = new PublicClientApplication({
       auth: {
@@ -98,6 +161,10 @@ async function initialize() {
     element('status').textContent = 'Sign in to create or open your tracker workbook.';
     element('connect').hidden = false;
   } catch (error) {
+    console.error('[Excel tracker] Initialization failed', {
+      name: error.name,
+      message: error.message
+    });
     element('status').textContent = error.message;
   }
 }

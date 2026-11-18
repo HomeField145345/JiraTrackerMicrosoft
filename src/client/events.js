@@ -2473,7 +2473,7 @@ function initUserDropdown() {
         const displayEl = document.getElementById('currentUserDisplay');
         const emailEl = document.getElementById('currentUserEmail');
         
-        if (displayEl) displayEl.textContent = storedData.username;
+        if (displayEl) displayEl.textContent = storedData.displayName || storedData.username;
         
         // Handle email location (top level or nested in user object)
         const email = storedData.email || (storedData.user && storedData.user.email) || storedData.username;
@@ -2483,29 +2483,7 @@ function initUserDropdown() {
 
 function handleLogout() {
     if (!confirm('Are you sure you want to sign out?')) return;
-    
-    const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
-    const token = user.token;
-    
-    // Clear local storage immediately
-    localStorage.removeItem('projectHubUser');
-    
-    // Call backend to invalidate session (optional but good practice)
-    if (token) {
-        google.script.run.logout(token);
-    }
-    
-    // Redirect immediately using the global SCRIPT_URL
-    if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
-        window.top.location.href = SCRIPT_URL + "?page=login";
-    } else {
-        // Fallback if SCRIPT_URL is missing (shouldn't happen)
-        google.script.run
-            .withSuccessHandler(function(url) {
-                window.top.location.href = url + "?page=login";
-            })
-            .getScriptUrl();
-    }
+    window.ProjectHubExcel.signOut();
 }
 
 function setupEventListeners() {
@@ -2772,90 +2750,5 @@ function setupEventListeners() {
     if (e.target.id === 'storyInfoModal') {
       closeStoryInfoModal();
     }
-  });
-  
-  // Drive Link Edit handlers
-  $('#storyInfoDriveLinkEdit').addEventListener('click', function() {
-    var driveLinkElement = $('#storyInfoDriveLink');
-        var currentLink = (driveLinkElement.dataset && driveLinkElement.dataset.rawLink) || (driveLinkElement.href && driveLinkElement.href !== '#' ? driveLinkElement.href : '');
-    $('#storyInfoDriveLinkInput').value = currentLink;
-    $('#storyInfoDriveLinkView').style.display = 'none';
-    $('#storyInfoDriveLinkEditView').style.display = 'flex';
-    TimerManager.setTimeout(function() {
-      $('#storyInfoDriveLinkInput').focus();
-    }, 50, 'drive_link_focus');
-  });
-  
-  $('#storyInfoDriveLinkCancel').addEventListener('click', function() {
-    $('#storyInfoDriveLinkView').style.display = 'flex';
-    $('#storyInfoDriveLinkEditView').style.display = 'none';
-  });
-  
-  $('#storyInfoDriveLinkSave').addEventListener('click', function() {
-    var newLink = $('#storyInfoDriveLinkInput').value.trim();
-    var jiraId = $('#storyInfoModal').dataset.currentJiraId;
-    
-    if (!jiraId) {
-      console.error('No Jira ID found for Drive Link update');
-      return;
-    }
-    
-        // Normalize one or multiple links and ensure each has a protocol.
-        if (typeof normalizeMediaLinksInput_ === 'function') {
-            newLink = normalizeMediaLinksInput_(newLink);
-        } else if (newLink && !newLink.match(/^https?:\/\//i)) {
-            newLink = 'https://' + newLink;
-        }
-        $('#storyInfoDriveLinkInput').value = newLink;
-    
-    // Show loading state
-    $('#storyInfoDriveLinkSave').disabled = true;
-    $('#storyInfoDriveLinkSave').textContent = 'Saving...';
-    
-    const token = checkAuth();
-    if (!token) return;
-
-    // Call the API to update the Drive Link
-    google.script.run
-      .withSuccessHandler(function(result) {
-        if (result.success) {
-                    // Update the link/preview in the view
-                    if (typeof updateStoryInfoDriveLinkUi_ === 'function') {
-                        updateStoryInfoDriveLinkUi_(newLink);
-                    }
-          
-          // Update the story data in APP_STATE
-          if (APP_STATE.allData && APP_STATE.allData.projects) {
-            var story = APP_STATE.allData.projects.find(function(p) {
-              return p['Jira #'] === jiraId;
-            });
-            if (story) {
-              story['Drive Link'] = newLink;
-            }
-          }
-          
-          // Switch back to view mode
-          $('#storyInfoDriveLinkView').style.display = 'flex';
-          $('#storyInfoDriveLinkEditView').style.display = 'none';
-          
-          // Show success message
-          showToast('Drive Link updated successfully');
-          
-          // Re-render the table to show updated drive icon
-          renderApp();
-        } else {
-          alert('Failed to update Drive Link: ' + (result.error || 'Unknown error'));
-        }
-        
-        // Reset button state
-        $('#storyInfoDriveLinkSave').disabled = false;
-        $('#storyInfoDriveLinkSave').textContent = 'Save';
-      })
-      .withFailureHandler(function(error) {
-        alert('Error updating Drive Link: ' + error);
-        $('#storyInfoDriveLinkSave').disabled = false;
-        $('#storyInfoDriveLinkSave').textContent = 'Save';
-      })
-            .updateDriveLink(token, jiraId, newLink, (typeof getSelectedWorkspaceUsername === 'function' ? getSelectedWorkspaceUsername() : null));
   });
 }

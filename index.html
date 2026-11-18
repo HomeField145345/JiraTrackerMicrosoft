@@ -5,98 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Project Tracker Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./assets/css/Gantt.css">
+  <link rel="stylesheet" href="./assets/css/Dashboard.css">
+  <link rel="stylesheet" href="./assets/css/Config.css">
   <script>
-    const SCRIPT_URL = "<?= url ?>";
     window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-    function safeParseStorageItem(key, fallback) {
-      try {
-        const raw = localStorage.getItem(key);
-        if (!raw) return fallback;
-        const parsed = JSON.parse(raw);
-        return (parsed && typeof parsed === 'object') ? parsed : fallback;
-      } catch (e) {
-        try { localStorage.removeItem(key); } catch (inner) {}
-        return fallback;
-      }
-    }
-
-    // Shared helper for included scripts
     window.getStoredProjectHubUser = function() {
-      return safeParseStorageItem('projectHubUser', {});
+      return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
     };
 
-    function injectDeferredAssetHtml(html) {
-      var container = document.createElement('div');
-      container.innerHTML = html;
-      Array.prototype.slice.call(container.childNodes).forEach(function(node) {
-        if (node.nodeType !== 1) return;
-
-        if (node.tagName === 'SCRIPT') {
-          var script = document.createElement('script');
-          if (node.src) {
-            script.src = node.src;
-          } else {
-            script.text = node.textContent || '';
-          }
-          document.body.appendChild(script);
-        } else if (node.tagName === 'STYLE') {
-          document.head.appendChild(node.cloneNode(true));
-        }
-      });
-    }
-
     function loadDeferredDashboardAsset(filename) {
-      if (window.__deferredDashboardAssets[filename]) {
-        return window.__deferredDashboardAssets[filename];
+      if (!/^(gantt|Config)\.js$/.test(filename)) {
+        return Promise.reject(new Error('Asset not allowed: ' + filename));
       }
-
-      var user = window.getStoredProjectHubUser();
-      if (!user || !user.token) {
-        return Promise.reject(new Error('Missing auth token'));
+      if (!window.__deferredDashboardAssets[filename]) {
+        window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+          var script = document.createElement('script');
+          script.src = './src/client/' + filename;
+          script.onload = function() { resolve(); };
+          script.onerror = function() {
+            delete window.__deferredDashboardAssets[filename];
+            reject(new Error('Could not load ' + filename + '.'));
+          };
+          document.body.appendChild(script);
+        });
       }
-
-      window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
-        google.script.run
-          .withSuccessHandler(function(html) {
-            try {
-              injectDeferredAssetHtml(html);
-              resolve();
-            } catch (error) {
-              reject(error);
-            }
-          })
-          .withFailureHandler(function(error) {
-            reject(error);
-          })
-          .getDeferredAsset(user.token, filename);
-      });
-
       return window.__deferredDashboardAssets[filename];
     }
-    
-    // Early authentication check - redirect to login if not authenticated
-    (function() {
-      const user = window.getStoredProjectHubUser();
-      if (!user.token) {
-        // User is not authenticated, redirect to login page
-        window.location.href = SCRIPT_URL + "?page=login";
-      }
-    })();
   </script>
-  <?!= include('Gantt.css'); ?>
-  <?!= include('Dashboard.css'); ?>
-  <?!= include('Config.css'); ?>
 </head>
 <body>
   <div class="app" role="application">
-    <!-- Impersonation Banner -->
-    <div id="impersonation-banner" class="hidden bg-orange-500 text-white px-4 py-2 text-center text-sm font-bold flex justify-center items-center gap-4 shadow-md w-full flex-shrink-0">
-        <span id="impersonation-text">You are viewing as: User</span>
-        <button id="stop-impersonation-btn" class="bg-white text-orange-600 px-3 py-1 rounded hover:bg-orange-50 transition-colors text-xs uppercase tracking-wide">
-            Stop Impersonating
-        </button>
+    <!-- Microsoft sign-in -->
+    <div id="signin-panel" class="loading-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="signin-title">
+      <div class="bg-white rounded-xl shadow-xl p-8 max-w-md w-full">
+        <h1 id="signin-title" class="text-2xl font-normal text-black mb-2">Project tracker</h1>
+        <p id="signin-status" class="text-sm mb-6" style="color:#6F7171" role="status">Loading Microsoft 365 setup…</p>
+        <div class="flex flex-wrap items-center gap-4">
+          <button id="signin-btn" type="button" class="btn primary" hidden>Sign in with Microsoft</button>
+          <a href="./excel.html" class="text-sm underline">Go to Excel tracker</a>
+        </div>
+      </div>
     </div>
 
     <!-- Loading indicator -->
@@ -116,13 +66,6 @@
         </div>
       </div>
       
-      <!-- Workspace Selector (Hidden by default, shown for QA/View Only) -->
-      <div id="workspace-selector-container" class="hidden">
-        <select id="workspace-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-          <option value="" disabled selected>Select Workspace</option>
-        </select>
-      </div>
-
       <div class="search-container">
         <div class="search-icon">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -620,7 +563,7 @@
                     <option value="done">Done</option>
                     <option value="all">All</option>
                 </select>
-                <button id="refresh-tasks-btn" class="btn btn-sm" title="Sync latest Google tasks and reload Task Hub">
+                <button id="refresh-tasks-btn" class="btn btn-sm" title="Reload tasks from the workbook">
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path></svg>
                   Refresh
                 </button>
@@ -647,27 +590,8 @@
                     <label class="text-xs font-medium text-gray-600 mb-1 block">Recurrence</label>
                     <select id="quick-add-recurrence" class="select"><option value="">None</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
                 </div>
-                <div>
-                    <label class="text-xs font-medium text-gray-600 mb-1 block">Task list</label>
-                    <select id="quick-add-list" class="select"><option value="">Local only</option></select>
-                </div>
                 <button id="quick-add-save" class="btn btn-sm primary">Add</button>
                 <button id="quick-add-cancel" class="btn btn-sm">Cancel</button>
-            </div>
-        </div>
-
-        <!-- Collapsible Google Tasks Sync Bar -->
-        <div class="mx-4 mb-4 bg-white border border-gray-200 rounded-lg">
-            <button id="toggle-sync-bar" class="w-full flex items-center justify-between p-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg">
-            <span>Google Task Lists</span>
-                <svg id="sync-bar-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-            </button>
-            <div id="sync-bar-content" class="hidden px-3 pb-3">
-          <p class="text-xs text-gray-500 mb-2">Task list options used by Quick Add load here.</p>
-                <div class="flex flex-wrap items-center gap-2">
-                    <select id="google-task-list-select" class="select min-w-[260px]"><option value="">Loading lists...</option></select>
-                </div>
-                <p id="google-tasks-sync-status" class="text-xs text-gray-500 mt-2"></p>
             </div>
         </div>
 
@@ -826,20 +750,6 @@
                 <div class="detail-label">Sprint</div>
                 <div id="panel-sprint" class="detail-value"></div>
             </div>
-            <div class="detail-group">
-                <div class="detail-label">Drive Link</div>
-                <div id="panel-drive-link-view" class="drive-link-view">
-                    <a id="panel-drive-link" href="#" target="_blank"></a>
-                    <button id="panel-drive-link-edit" class="btn">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/></svg>
-                    </button>
-                </div>
-                <div id="panel-drive-link-edit-view" class="drive-link-edit-view" style="display: none;">
-                    <input id="panel-drive-link-input" class="input" placeholder="Paste Google Drive link here...">
-                    <button id="panel-drive-link-save" class="btn primary">Save</button>
-                    <button id="panel-drive-link-cancel" class="btn">Cancel</button>
-                </div>
-            </div>
         </div>
     </div>
   </div>
@@ -897,35 +807,6 @@
           <div class="story-info-label">Acceptance Criteria</div>
           <div id="storyInfoAcceptanceCriteria" class="story-info-value preformatted"></div>
         </div>
-        <div class="story-info-section full-width">
-          <div class="story-info-label">Links</div>
-          <div class="story-info-links">
-            <div class="story-info-link-item">
-              <div id="storyInfoDriveLinkView" class="story-info-link-view">
-                <a id="storyInfoDriveLink" href="#" target="_blank" class="story-info-link-clickable">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M.5 3l.04.87a1.99 1.99 0 0 0 .342 1.311l.637.637L7.086 8l-5.12 5.12-.637.637a1.99 1.99 0 0 0-.342 1.311L.5 16H2a1 1 0 0 0 .707-.293l2.414-2.414a1 1 0 0 0 .293-.707v-1.172h3.793a1 1 0 0 0 .707-.293L15.043 8 9.207 2.157A1 1 0 0 0 8.5 2H4.707v-1.172a1 1 0 0 0-.293-.707L2.707.293A1 1 0 0 0 2 0H.5zM2 1l1 1v1.172A1 1 0 0 0 4.172 4H8.5a1 1 0 0 0 .707-.293L13.854 8l-4.647 4.646a1 1 0 0 0-.707.293H4.172A1 1 0 0 0 3 13.828V14l-1 1H2z"/>
-                  </svg>
-                  <span id="storyInfoDriveLinkText">Drive Link</span>
-                </a>
-                <button id="storyInfoDriveLinkEdit" class="btn-icon-small" title="Edit Drive Link">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
-                    <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
-                  </svg>
-                </button>
-              </div>
-              <div id="storyInfoDriveLinkEditView" class="story-info-link-edit-view" style="display: none;">
-                <input id="storyInfoDriveLinkInput" class="input input-sm" placeholder="Paste Google Drive link here..." />
-                <div class="story-info-link-edit-actions">
-                  <button id="storyInfoDriveLinkSave" class="btn btn-sm primary">Save</button>
-                  <button id="storyInfoDriveLinkCancel" class="btn btn-sm">Cancel</button>
-                </div>
-              </div>
-              <div id="storyInfoDrivePreview" class="story-info-media-preview" style="display: none;"></div>
-            </div>
-          </div>
-        </div>
         <div class="story-info-section">
           <div class="story-info-label">Created</div>
           <div id="storyInfoCreated" class="story-info-value"></div>
@@ -941,12 +822,8 @@
             <span>Project Artifacts</span>
             <div style="display:flex;align-items:center;gap:8px;">
               <span id="artifactsReadiness" class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
-              <button id="createProjectFolderBtn" onclick="createProjectFolderUI_()" class="text-xs px-3 py-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium" style="white-space:nowrap;" title="Create or repair project folder in Google Drive">
-                📁 Create folder
-              </button>
             </div>
           </div>
-          <div id="projectFolderStatus" style="display:none;padding:4px 8px;margin-bottom:4px;border-radius:6px;font-size:0.78em;"></div>
           <div class="story-info-value" style="padding:0;">
             <table id="artifactsTable" style="width:100%;border-collapse:collapse;font-size:0.85em;">
               <thead>
@@ -993,8 +870,6 @@
                 <button class="tab-btn active" data-target="#tab-dropdowns" role="tab" aria-selected="true">Dropdowns</button>
                 <button class="tab-btn" data-target="#tab-mappings" role="tab" aria-selected="false">Mappings</button>
                 <button class="tab-btn" data-target="#tab-links" role="tab" aria-selected="false">Links</button>
-                <button class="tab-btn hidden" id="tab-users-btn" data-target="#tab-users" role="tab" aria-selected="false">Users</button>
-                <button class="tab-btn" data-target="#tab-maintenance" role="tab" aria-selected="false">Maintenance</button>
             </nav>
           </div>
         </div>
@@ -1251,7 +1126,7 @@
                     </div>
                     <div>
                         <label for="newLinkUrl" class="block text-sm font-medium text-gray-700">Link URL</label>
-                        <input type="url" id="newLinkUrl" placeholder="https://docs.google.com/..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        <input type="url" id="newLinkUrl" placeholder="https://" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                     </div>
                 </div>
                 <div class="flex justify-between items-center mt-3">
@@ -1259,65 +1134,6 @@
                     <button id="addLinkBtn" class="px-3 py-1.5 bg-gray-200 text-sm text-gray-800 rounded-md hover:bg-gray-300">Add Link</button>
                 </div>
                 <div id="linksList" class="mt-4 space-y-2"></div>
-            </section>
-
-            <!-- Users Panel -->
-            <section id="tab-users" class="tab-panel hidden">
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <h3 class="text-lg font-medium text-gray-900">User Management</h3>
-                        <button id="addUserBtn" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Add User</button>
-                    </div>
-                    <div id="global-sheet-link-bar" class="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
-                        <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/></svg>
-                        <span class="font-medium text-gray-700">Global sheet:</span>
-                        <a id="global-sheet-link" href="#" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline truncate">Loading...</a>
-                    </div>
-                    <div class="overflow-x-auto border rounded-md">
-                        <table class="min-w-full divide-y divide-gray-200">
-                            <thead class="bg-gray-50">
-                                <tr>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Sheet</th>
-                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
-                                <!-- Users will be populated here -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Maintenance Panel -->
-            <section id="tab-maintenance" class="tab-panel hidden">
-                <div class="space-y-6">
-                    <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
-                        <h3 class="text-lg font-medium text-gray-900 mb-2">Database Health Check</h3>
-                        <p class="text-sm text-gray-500 mb-4">
-                            Scans the database structure (Sheets and Headers) and automatically fixes missing elements.
-                            Useful when deploying updates or fixing corrupted sheets.
-                        </p>
-                        
-                        <div class="flex items-end gap-4">
-                            <div class="flex-1">
-                                <label for="maintenanceTargetId" class="block text-sm font-medium text-gray-700">Target Spreadsheet ID (Optional)</label>
-                                <input type="text" id="maintenanceTargetId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Leave blank to check Global Database">
-                            </div>
-                            <button id="runMaintenanceBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                Fix Headers & Sheets
-                            </button>
-                        </div>
-                        
-                        <div id="maintenanceLogs" class="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200 text-xs font-mono text-gray-600 h-32 overflow-y-auto hidden">
-                            <!-- Logs go here -->
-                        </div>
-                    </div>
-                </div>
             </section>
         </div>
 
@@ -1337,74 +1153,17 @@
     </div>
   </div>
 
-  <!-- User Management Modal -->
-  <div id="user-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-      <div id="user-modal-overlay" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
-      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
-      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
-        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
-          <div class="sm:flex sm:items-start">
-            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
-              <h3 class="text-lg leading-6 font-medium text-gray-900" id="user-modal-title">Add User</h3>
-              <div class="mt-4 space-y-4">
-                <input type="hidden" id="userId">
-                <div>
-                  <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                  <input type="text" id="username" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                </div>
-                <div>
-                  <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
-                  <input type="email" id="email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                </div>
-                <div>
-                  <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
-                  <select id="role" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
-                    <option value="project_manager">Project Manager</option>
-                    <option value="qa_tester">QA Tester</option>
-                    <option value="view_only">View Only</option>
-                    <option value="admin">Admin</option>
-                  </select>
-                </div>
-                <div class="flex items-center">
-                  <input type="checkbox" id="isActive" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
-                  <label for="isActive" class="ml-2 block text-sm text-gray-900">Active</label>
-                </div>
-                <div>
-                  <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                  <input type="password" id="password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Leave blank to keep unchanged">
-                </div>
-                <div>
-                  <label for="dataSheetId" class="block text-sm font-medium text-gray-700">Data Sheet ID</label>
-                  <input type="text" id="dataSheetId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Spreadsheet ID for Project Data">
-                  <p class="mt-1 text-xs text-gray-500">Leave blank to use the Global Spreadsheet.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
-          <button id="saveUserBtn" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
-            Save
-          </button>
-          <button id="closeUserModalBtn" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <?!= include('constants.js.html'); ?>
-  <?!= include('TimerManager.js.html'); ?>
-  <?!= include('EventManager.js.html'); ?>
-  <?!= include('AppCleanup.js.html'); ?>
-  <?!= include('state.js.html'); ?>
-  <?!= include('utils.js.html'); ?>
-  <?!= include('ui.js.html'); ?>
-  <?!= include('api.js.html'); ?>
-  <?!= include('events.js.html'); ?>
-  <?!= include('Dashboard.js.html'); ?>
+  <script src="./dashboard-excel.js"></script>
+  <script src="./src/client/constants.js"></script>
+  <script src="./src/client/TimerManager.js"></script>
+  <script src="./src/client/EventManager.js"></script>
+  <script src="./src/client/AppCleanup.js"></script>
+  <script src="./src/client/state.js"></script>
+  <script src="./src/client/utils.js"></script>
+  <script src="./src/client/ui.js"></script>
+  <script src="./src/client/api.js"></script>
+  <script src="./src/client/events.js"></script>
+  <script src="./src/client/Dashboard.js"></script>
   
   <script>
     // Config Modal Logic
@@ -1417,7 +1176,7 @@
 
         function openConfig() {
             configModal.classList.remove('hidden');
-          loadDeferredDashboardAsset('Config.js.html')
+          loadDeferredDashboardAsset('Config.js')
             .then(function() {
               if (typeof loadConfigData === 'function') {
                 loadConfigData();

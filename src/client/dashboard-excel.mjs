@@ -184,6 +184,7 @@ export function createExcelBridge({
     initialize,
     signIn,
     signOut,
+    showSignIn: (message) => showSignIn(message || 'Sign in with Microsoft to continue.'),
     call,
     user,
     whenSignedIn: () => signedIn,

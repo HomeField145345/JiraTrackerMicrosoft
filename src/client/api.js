@@ -1,104 +1,35 @@
 /**
  * @file api.js
- * @description Handles all server communication with Google Apps Script.
+ * @description Handles dashboard data calls to the Excel workbook bridge (callServer).
  */
 
 // --- AUTHENTICATION ---
 function getToken() {
-  const user = (typeof getStoredProjectHubUser === 'function')
-    ? getStoredProjectHubUser()
-    : (function() {
-        try { return JSON.parse(localStorage.getItem('projectHubUser') || '{}'); }
-        catch (e) { try { localStorage.removeItem('projectHubUser'); } catch (inner) {} return {}; }
-      })();
-  return user.token;
+  var excel = window.ProjectHubExcel;
+  return excel && excel.isSignedIn() ? 'microsoft' : null;
 }
 
 function checkAuth() {
   const token = getToken();
   if (!token) {
-    // Show session expired modal instead of auto-redirecting
     showSessionExpiredModal();
     return null;
   }
   return token;
 }
 
-function getSelectedWorkspaceUsername() {
-  const selector = document.getElementById('workspace-select');
-  return (selector && selector.value) ? selector.value : null;
-}
-
 function showSessionExpiredModal() {
-    // Hide loading overlay if it's visible
-    hideLoading();
-
-    // Create modal if it doesn't exist
-    let modal = document.getElementById('session-expired-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'session-expired-modal';
-        // Increased z-index to ensure it's above everything including loading overlay
-        modal.className = 'fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900 bg-opacity-75';
-        modal.innerHTML = `
-            <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
-                    <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
-                </div>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">Session Expired</h3>
-                <p class="text-sm text-gray-500 mb-6">Your session has expired. Please log in again to continue.</p>
-                <button onclick="redirectToLogin()" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
-                    Log In
-                </button>
-            </div>
-        `;
-        document.body.appendChild(modal);
-    }
-    modal.classList.remove('hidden');
+  hideLoading();
+  if (window.ProjectHubExcel) window.ProjectHubExcel.showSignIn();
 }
 
 window.redirectToLogin = function() {
-    var targetUrl = (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) ? SCRIPT_URL : null;
-    
-    if (targetUrl) {
-         if (document.referrer && document.referrer.indexOf('/dev') !== -1) {
-             targetUrl = targetUrl.replace('/exec', '/dev');
-         }
-         window.location.href = targetUrl + "?page=login";
-    } else {
-        google.script.run.withSuccessHandler(function(url) {
-             if (document.referrer && document.referrer.indexOf('/dev') !== -1) {
-                 url = url.replace('/exec', '/dev');
-             }
-            window.location.href = url + "?page=login";
-        }).getScriptUrl();
-    }
+  if (window.ProjectHubExcel) window.ProjectHubExcel.signIn();
 };
 
-function tryConsumePreloadedData(targetUsername) {
-  if (!targetUsername || typeof sessionStorage === 'undefined') {
-    return false;
-  }
-
-  try {
-    var raw = sessionStorage.getItem('dashboardInitialData');
-    if (!raw) return false;
-
-    var payload = JSON.parse(raw);
-    if (!payload || payload.targetUsername !== targetUsername || !payload.data) {
-      return false;
-    }
-
-    sessionStorage.removeItem('dashboardInitialData');
-    APP_STATE.currentWorkspaceUsername = targetUsername;
-    handleDataLoaded(payload.data);
-    return true;
-  } catch (e) {
-    try { sessionStorage.removeItem('dashboardInitialData'); } catch (inner) {}
-    return false;
-  }
+function getErrorMessage_(error) {
+  if (error && error.message) return error.message;
+  return String(error || 'Something went wrong.');
 }
 
 // --- DATA FETCHING & CALLBACKS ---
@@ -266,61 +197,42 @@ function handleUpdateSuccess(response) {
 }
 
 // --- SERVER-CALLING FUNCTIONS ---
-function refreshData(targetUsername) {
+function refreshData() {
   const token = checkAuth();
   if (!token) return;
 
   showLoading('Loading project data...');
-  
-  // If no target specified, try to get from selector if it exists
-  if (!targetUsername) {
-    const selector = document.getElementById('workspace-select');
-    if (selector && selector.value) {
-      targetUsername = selector.value;
-    }
-  }
 
-  APP_STATE.currentWorkspaceUsername = targetUsername || null;
-
-  google.script.run
-    .withSuccessHandler(handleDataLoaded)
-    .withFailureHandler(function(error) {
+  callServer('getProjectData', []).then(handleDataLoaded, function(error) {
       hideLoading();
       handleFailure(error);
-    })
-    .getProjectData(token, targetUsername);
+    });
 }
 
 function forceRefreshData() {
   const token = checkAuth();
   if (!token) return;
-  const targetUsername = getSelectedWorkspaceUsername();
 
-  showLoading('Fetching latest data from sheet...');
-  showToast('Fetching latest data from sheet...');
+  showLoading('Fetching latest data from the workbook...');
+  showToast('Fetching latest data from the workbook...');
   var btn = $('#forceRefreshBtn');
   if(btn) btn.disabled = true;
   
-  google.script.run
-    .withSuccessHandler(function(data) {
+  callServer('forceGetProjectData', []).then(function(data) {
         handleDataLoaded(data);
         if(btn) btn.disabled = false;
-    })
-    .withFailureHandler(function(error) {
+    }, function(error) {
         hideLoading();
         handleFailure(error);
         if(btn) btn.disabled = false;
-    })
-    .forceGetProjectData(token, targetUsername);
+    });
 }
 
 function saveTask(taskData) {
   const token = checkAuth();
   if (!token) return;
-  const targetUsername = getSelectedWorkspaceUsername();
 
-  google.script.run
-    .withSuccessHandler(function(response) {
+  callServer('saveIndependentTask', [taskData]).then(function(response) {
       handleUpdateSuccess(response);
       if (response.status === 'success') {
         closeModal();
@@ -333,22 +245,19 @@ function saveTask(taskData) {
               if (saveBtn.dataset.originalText) saveBtn.textContent = saveBtn.dataset.originalText;
           }
       }
-    })
-    .withFailureHandler(function(e) {
-        handleFailure(e);
+    }, function(e) {
+        showToast(getErrorMessage_(e));
         var saveBtn = $('#modalSave');
         if (saveBtn) {
             saveBtn.disabled = false;
             if (saveBtn.dataset.originalText) saveBtn.textContent = saveBtn.dataset.originalText;
         }
-    })
-    .saveIndependentTask(token, taskData, targetUsername);
+    });
 }
 
 function saveManualField(jiraId, field, value) {
   const token = checkAuth();
   if (!token) return;
-  const targetUsername = getSelectedWorkspaceUsername();
 
   // Create a unique key for this field on this item
   const key = 'save-' + jiraId + '-' + field;
@@ -356,25 +265,21 @@ function saveManualField(jiraId, field, value) {
   // Debounce the server call (1 second delay)
   // This prevents flooding the server if the user types quickly or changes their mind
   KeyedDebouncer.debounce(key, function() {
-      google.script.run
-        .withSuccessHandler(function(response) {
+      callServer('saveManualData', [jiraId, field, value]).then(function(response) {
           handleUpdateSuccess(response);
           if (response.status === 'success') {
             // Update validation status in real-time after saving any manual field
             updateRowValidation(jiraId);
           }
-        })
-        .withFailureHandler(function(e) {
-            handleFailure(e);
-        })
-        .saveManualData(token, jiraId, field, value, targetUsername);
+        }, function(e) {
+            showToast(getErrorMessage_(e));
+        });
   }, 1000);
 }
 
 function updateLastChecked(jiraId, element) {
   const token = checkAuth();
   if (!token) return;
-  const targetUsername = getSelectedWorkspaceUsername();
 
   // Element can be either a button or a validation badge
   var isButton = element && element.tagName === 'BUTTON';
@@ -396,8 +301,7 @@ function updateLastChecked(jiraId, element) {
     }
   }
   
-  google.script.run
-    .withSuccessHandler(function(response) {
+  callServer('updateLastChecked', [jiraId]).then(function(response) {
       console.log('updateLastChecked response:', response);
       handleUpdateSuccess(response);
       if (response.status === 'success') {
@@ -421,9 +325,8 @@ function updateLastChecked(jiraId, element) {
           // Badge text should be updated by updateRowValidation, not here
         }
       }
-    })
-    .withFailureHandler(function(error) {
-      handleFailure(error);
+    }, function(error) {
+      showToast(getErrorMessage_(error));
       // Re-enable the element on failure
       if (element) {
         element.disabled = false;
@@ -434,19 +337,16 @@ function updateLastChecked(jiraId, element) {
           element.style.pointerEvents = '';
         }
       }
-    })
-    .updateLastChecked(token, jiraId, targetUsername);
+    });
 }
 
 function uploadCsvData(fileData) {
     const token = checkAuth();
     if (!token) return;
-  const targetUsername = getSelectedWorkspaceUsername();
 
     updateProgress(75, 'Processing data on server...');
     
-    google.script.run
-        .withSuccessHandler(function(response) {
+    callServer('importJiraFile', [fileData]).then(function(response) {
             console.log('UPLOAD SUCCESS RESPONSE:', JSON.stringify(response, null, 2));
             if (response.results) {
                 console.log('UPLOAD RESULTS SUMMARY:');
@@ -474,8 +374,7 @@ function uploadCsvData(fileData) {
                 handleUpdateSuccess(response);
                 refreshData();
             }, 500);
-        })
-        .withFailureHandler(function(error) {
+        }, function(error) {
             hideUploadProgress();
             var errorMessage = error.message || 'Upload failed. Please try again.';
             
@@ -491,7 +390,7 @@ function uploadCsvData(fileData) {
                 '<ul class="list-disc ml-5 mt-1">' +
                 '<li>Ensure your file has a "Key" or "Issue Key" column</li>' +
                 '<li>Try exporting as CSV directly from Jira instead of Excel</li>' +
-                '<li>Open the file in Excel/Google Sheets first, then save as CSV</li>' +
+                '<li>Open the file in Excel first, then save as CSV</li>' +
                 '</ul>' +
                 '</div>' +
                 '</div>';
@@ -501,7 +400,5 @@ function uploadCsvData(fileData) {
                 message: 'Upload failed',
                 html: resultsHtml
             });
-            handleFailure(error);
-        })
-        .importJiraFile(token, fileData, targetUsername);
+        });
 }

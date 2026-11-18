@@ -159,15 +159,13 @@
                     stageStatusMappings: getCurrentMappingsAsArray()
                 };
 
-                google.script.run
-                    .withSuccessHandler(function(response) {
+                callServer('saveConfiguration', [optionsData]).then(function(response) {
                         if (response.status === 'success') {
                             if (statusEl) { statusEl.textContent = response.message || 'Configuration Saved!'; statusEl.className = 'text-sm text-green-600'; }
                             try {
                                 // Apply new config immediately across the dashboard.
                                 if (typeof refreshData === 'function') {
-                                    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
-                                    refreshData(targetUsername);
+                                    refreshData();
                                 }
                             } catch (refreshError) {
                                 console.warn('Config saved, but refresh failed:', refreshError);
@@ -178,9 +176,7 @@
                         saveBtn.disabled = false;
                         saveBtn.textContent = 'Save Configuration';
                         setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
-                    })
-                    .withFailureHandler(handleFailure)
-                    .saveConfiguration(token, optionsData);
+                    }, handleFailure);
             });
         }
 
@@ -240,10 +236,7 @@
         var statusEl = document.getElementById('configStatus');
         if (statusEl) statusEl.textContent = 'Loading configuration...';
 
-        google.script.run
-            .withSuccessHandler(onConfigDataLoaded)
-            .withFailureHandler(handleFailure)
-            .getConfigData(token);
+        callServer('getConfigData', []).then(onConfigDataLoaded, handleFailure);
     };
 
     function renderKpiStageSelector(groupedStages, selectedStages) {
@@ -487,8 +480,7 @@
             if (!token) return;
             
             // Get the project data from the global state
-            google.script.run
-                .withSuccessHandler(function(response) {
+            callServer('getProjectData', []).then(function(response) {
                     // getProjectData() returns a JSON string (stringified for transport reliability)
                     if (typeof response === 'string') {
                         try { response = JSON.parse(response); } catch (e) { response = null; }
@@ -552,16 +544,14 @@
                             statusEl.className = 'text-sm text-red-600';
                         }
                     }
-                })
-                .withFailureHandler(function(error) {
+                }, function(error) {
                     
                     var statusEl = document.getElementById('refreshDataStatus');
                     if (statusEl) {
                         statusEl.textContent = 'Error: ' + error.message;
                         statusEl.className = 'text-sm text-red-600';
                     }
-                })
-                .getProjectData(token); // This should call the same function as the dashboard
+                }); // This should call the same function as the dashboard
         }
         
         function renderStatusValuesList() {
@@ -825,14 +815,11 @@
         
         // Try to trigger refresh via Google Apps Script
         try {
-            google.script.run
-                .withSuccessHandler(function(result) {
+            callServer('updateSyncIndicators', [currentMappings]).then(function(result) {
                     
-                })
-                .withFailureHandler(function(error) {
+                }, function(error) {
                     
-                })
-                .updateSyncIndicators(token, currentMappings);
+                });
         } catch (e) {
             
         }
@@ -876,24 +863,18 @@
         const tbody = document.getElementById('users-table-body');
         if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Loading users...</td></tr>';
 
-        google.script.run
-            .withSuccessHandler(renderUsersTable)
-            .withFailureHandler(function(error) {
+        callServer('getUsersList', []).then(renderUsersTable, function(error) {
                 const tbody = document.getElementById('users-table-body');
                 if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Error loading users: ' + error.message + '</td></tr>';
-            })
-            .getUsersList(token);
+            });
 
-        google.script.run
-            .withSuccessHandler(function(url) {
+        callServer('getGlobalSheetUrl', []).then(function(url) {
                 const linkEl = document.getElementById('global-sheet-link');
                 if (linkEl && url) {
                     linkEl.href = url;
                     linkEl.textContent = 'Open global spreadsheet ↗';
                 }
-            })
-            .withFailureHandler(function() {})
-            .getGlobalSheetUrl(token);
+            }, function() {});
     }
 
     function formatRole(role) {
@@ -955,8 +936,7 @@
         const tbody = document.getElementById('users-table-body');
         tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-blue-600 animate-pulse">Migrating user data... This may take a minute...</td></tr>';
 
-        google.script.run
-            .withSuccessHandler(function(response) {
+        callServer('migrateUserToPersonalDatabase', [userId]).then(function(response) {
                 if (response.success) {
                     alert('Migration Successful!\nNew Sheet URL: ' + response.newSheetUrl);
                     loadUsersList(); // Reload list to show new ID
@@ -964,12 +944,10 @@
                     alert('Migration Failed: ' + response.message);
                     loadUsersList(); // Reload to restore table
                 }
-            })
-            .withFailureHandler(function(error) {
+            }, function(error) {
                 alert('Migration Error: ' + error.message);
                 loadUsersList();
-            })
-            .migrateUserToPersonalDatabase(token, userId);
+            });
     };
 
     window.loginAsUser = function(userId) {
@@ -984,8 +962,7 @@
             localStorage.setItem('originalAdmin', JSON.stringify(currentUser));
         }
 
-        google.script.run
-            .withSuccessHandler(function(response) {
+        callServer('impersonateUser', [userId]).then(function(response) {
                 if (response.success) {
                     // Update local storage with new user session
                     const user = response.user;
@@ -997,11 +974,9 @@
                 } else {
                     alert('Error logging in as user: ' + response.message);
                 }
-            })
-            .withFailureHandler(function(error) {
+            }, function(error) {
                 alert('Error logging in as user: ' + error.message);
-            })
-            .impersonateUser(token, userId);
+            });
     };
 
     function showImpersonationSuccessModal(username) {
@@ -1097,8 +1072,7 @@
         saveBtn.textContent = 'Saving...';
         saveBtn.disabled = true;
 
-        google.script.run
-            .withSuccessHandler(function(response) {
+        callServer('saveUser', [userData]).then(function(response) {
                 saveBtn.textContent = originalText;
                 saveBtn.disabled = false;
                 if (response.success) {
@@ -1107,13 +1081,11 @@
                 } else {
                     alert('Error saving user: ' + response.message);
                 }
-            })
-            .withFailureHandler(function(error) {
+            }, function(error) {
                 saveBtn.textContent = originalText;
                 saveBtn.disabled = false;
                 alert('Error saving user: ' + error.message);
-            })
-            .saveUser(token, userData);
+            });
     }
 
     window.deleteUser = function(userId) {
@@ -1122,18 +1094,15 @@
         const token = getToken();
         if (!token) return;
 
-        google.script.run
-            .withSuccessHandler(function(response) {
+        callServer('deleteUser', [userId]).then(function(response) {
                 if (response.success) {
                     loadUsersList();
                 } else {
                     alert('Error deleting user: ' + response.message);
                 }
-            })
-            .withFailureHandler(function(error) {
+            }, function(error) {
                 alert('Error deleting user: ' + error.message);
-            })
-            .deleteUser(token, userId);
+            });
     };
 
     // Initialize user management when DOM is ready
@@ -1155,8 +1124,7 @@
                 logsDiv.classList.remove('hidden');
                 logsDiv.textContent = 'Starting maintenance check...';
                 
-                google.script.run
-                    .withSuccessHandler(function(response) {
+                callServer('runDatabaseMaintenance', [targetId]).then(function(response) {
                         runMaintenanceBtn.disabled = false;
                         runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
                         
@@ -1165,13 +1133,11 @@
                         } else {
                             logsDiv.textContent = 'Error: ' + response.message;
                         }
-                    })
-                    .withFailureHandler(function(error) {
+                    }, function(error) {
                         runMaintenanceBtn.disabled = false;
                         runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
                         logsDiv.textContent = 'Error: ' + error.message;
-                    })
-                    .runDatabaseMaintenance(token, targetId);
+                    });
             });
         }
     });

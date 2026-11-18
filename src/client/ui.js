@@ -684,7 +684,6 @@ function saveArtifacts_(jiraId) {
 
     var token = (typeof checkAuth === 'function') ? checkAuth() : null;
     if (!token) return;
-    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
 
     // Update readiness badge immediately
     var complete = 0, total = 0;
@@ -704,127 +703,17 @@ function saveArtifacts_(jiraId) {
     }
 
     // Save via existing ManualData mechanism
-    google.script.run
-        .withSuccessHandler(function() {
+    callServer('saveManualData', [jiraId, 'Artifacts', jsonStr]).then(function() {
             // Update local data so reopening the modal shows latest
             if (APP_STATE.allData && APP_STATE.allData.projects) {
                 var story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
                 if (story) story['Artifacts'] = jsonStr;
             }
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
             console.error('[Artifacts] save failed:', err);
-        })
-        .saveManualData(token, jiraId, 'Artifacts', jsonStr, targetUsername);
+        });
 }
 
-// ═══════════════════════════════════════════════
-// PROJECT FOLDER CREATION (Google Drive)
-// ═══════════════════════════════════════════════
-
-function createProjectFolderUI_() {
-    var btn = document.getElementById('createProjectFolderBtn');
-    var statusEl = document.getElementById('projectFolderStatus');
-    var jiraId = document.getElementById('storyInfoId') ? document.getElementById('storyInfoId').textContent.trim() : null;
-    var epicTitle = document.getElementById('storyInfoSummary') ? document.getElementById('storyInfoSummary').textContent.trim() : '';
-
-    if (!jiraId) { alert('No epic ID found.'); return; }
-
-    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
-    if (!token) return;
-
-    // Check if we already have a stored folder ID from artifacts data
-    var existingFolderId = null;
-    var story = null;
-    if (APP_STATE.allData && APP_STATE.allData.projects) {
-        story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
-        if (story && story['Artifacts']) {
-            try {
-                var parsed = JSON.parse(story['Artifacts']);
-                if (parsed.project_folder && parsed.project_folder.folderId) {
-                    existingFolderId = parsed.project_folder.folderId;
-                }
-            } catch(e) {}
-        }
-    }
-
-    // Show loading state
-    btn.disabled = true;
-    btn.textContent = '⏳ Creating...';
-    statusEl.style.display = 'block';
-    statusEl.style.background = '#f3f4f6';
-    statusEl.style.color = '#6b7280';
-    statusEl.textContent = 'Creating project folder structure in Google Drive...';
-
-    google.script.run
-        .withSuccessHandler(function(result) {
-            btn.disabled = false;
-            btn.textContent = '📁 Create folder';
-
-            // Show success status with link
-            statusEl.style.display = 'block';
-            statusEl.style.background = '#d1fae5';
-            statusEl.style.color = '#047857';
-            statusEl.innerHTML = '✅ Folder ready: <a href="' + result.rootFolderUrl + '" target="_blank" style="color:#047857;text-decoration:underline;font-weight:500;">Open in Drive ↗</a>';
-
-            // Auto-populate the project_folder artifact link + status
-            var linkInput = document.querySelector('.artifact-link-input[data-key="project_folder"]');
-            if (linkInput) {
-                linkInput.value = result.rootFolderUrl;
-            }
-            var statusSel = document.querySelector('.artifact-status-select[data-key="project_folder"]');
-            if (statusSel && statusSel.value === 'Not Started') {
-                statusSel.value = 'Complete';
-                statusSel.style.cssText = 'font-size:0.78em;padding:2px 6px;border-radius:6px;border:1px solid #e5e7eb;cursor:pointer;color:#047857;background:#d1fae5;';
-                var row = statusSel.closest('tr');
-                if (row) row.style.opacity = '1';
-            }
-
-            // Store folderId + subfolder IDs in artifacts JSON for re-run safety
-            _updateArtifactsFolderData_(jiraId, result);
-
-            // Trigger artifact save to persist link + status + folderId
-            saveArtifacts_(jiraId);
-        })
-        .withFailureHandler(function(err) {
-            btn.disabled = false;
-            btn.textContent = '📁 Create folder';
-            statusEl.style.display = 'block';
-            statusEl.style.background = '#fee2e2';
-            statusEl.style.color = '#b91c1c';
-            statusEl.textContent = '❌ Error: ' + (err.message || err);
-        })
-        .createProjectFolder(token, jiraId, epicTitle, existingFolderId);
-}
-
-/**
- * Stores the root folder ID and subfolder IDs into the artifacts data
- * so re-runs can find the existing folder by ID instead of searching.
- * @private
- */
-function _updateArtifactsFolderData_(jiraId, driveResult) {
-    var story = null;
-    if (APP_STATE.allData && APP_STATE.allData.projects) {
-        story = APP_STATE.allData.projects.find(function(p) { return p['Jira #'] === jiraId; });
-    }
-    if (!story) return;
-
-    var saved = {};
-    if (story['Artifacts']) {
-        try { saved = JSON.parse(story['Artifacts']); } catch(e) { saved = {}; }
-    }
-
-    // Merge folder data into the project_folder artifact entry
-    if (!saved.project_folder) saved.project_folder = {};
-    saved.project_folder.folderId = driveResult.rootFolderId;
-    saved.project_folder.link = driveResult.rootFolderUrl;
-    saved.project_folder.subfolders = driveResult.subfolders;
-    if (saved.project_folder.status === 'Not Started' || !saved.project_folder.status) {
-        saved.project_folder.status = 'Complete';
-    }
-
-    story['Artifacts'] = JSON.stringify(saved);
-}
 // --- DATA VALIDATION & FORMATTING ---
 function getValidationStatus(planningStage, updatedStr, checkedStr, projectStage, targetDateStr) {
     const projectStageStatus = (projectStage || '').toLowerCase().trim();
@@ -2063,7 +1952,7 @@ function renderTasksView() {
     if (totalEl) totalEl.textContent = filtered.length + ' task' + (filtered.length !== 1 ? 's' : '');
 
     if (filtered.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-8 text-sm">No tasks to show. Click + New Task or sync from Google.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-8 text-sm">No tasks to show. Select + New Task to add one.</td></tr>';
         wireTaskHubButtons_();
         return;
     }
@@ -2114,7 +2003,7 @@ function renderTasksView() {
     var html = '';
     buckets.forEach(function(bucket) {
         if (bucket.tasks.length === 0) return;
-        html += '<tr class="' + bucket.cls + '"><td colspan="6" class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">' + bucket.label + ' <span class="font-normal opacity-70">(' + bucket.tasks.length + ')</span></td></tr>';
+        html += '<tr class="' + bucket.cls + '"><td colspan="5" class="px-3 py-1.5 text-xs font-semibold uppercase tracking-wide">' + bucket.label + ' <span class="font-normal opacity-70">(' + bucket.tasks.length + ')</span></td></tr>';
         bucket.tasks.forEach(function(task) {
             html += buildTaskRow_(task);
         });
@@ -2144,7 +2033,6 @@ function buildTaskRow_(task) {
     var status = task.Status || 'Open';
     var priority = task.Priority || 'Medium';
     var recurrence = task.Recurrence || '';
-    var isGoogle = String(id).indexOf('GTASK-') === 0;
     var isDone = status === 'Done';
 
     var dueLabel = '';
@@ -2165,7 +2053,6 @@ function buildTaskRow_(task) {
 
     var titleCls = isDone ? 'line-through text-gray-400' : 'text-gray-900';
     var rowCls = isDone ? 'opacity-60' : '';
-    var sourceBadge = isGoogle ? '<span class="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Google</span>' : '<span class="text-xs px-1.5 py-0.5 rounded bg-green-100 text-green-700">Local</span>';
     var recurBadge = recurrence ? ' <span class="text-xs text-purple-500" title="Recurs ' + recurrence + '">\uD83D\uDD01</span>' : '';
 
     return '<tr class="border-b border-gray-100 hover:bg-gray-50 ' + rowCls + '">' +
@@ -2173,7 +2060,6 @@ function buildTaskRow_(task) {
         '<td class="px-3 py-2 task-row-click cursor-pointer" data-task-id="' + id + '"><span class="font-medium text-sm ' + titleCls + '">' + title + '</span>' + recurBadge + (task.Project ? ' <span class="text-xs text-gray-400">' + task.Project + '</span>' : '') + '</td>' +
         '<td class="px-3 py-2"><span class="text-xs px-1.5 py-0.5 rounded ' + prioBg + '">' + priority + '</span></td>' +
         '<td class="px-3 py-2 text-xs text-gray-600">' + dueLabel + '</td>' +
-        '<td class="px-3 py-2">' + sourceBadge + '</td>' +
         '<td class="px-3 py-2"><span class="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">' + status + '</span></td>' +
     '</tr>';
 }
@@ -2190,7 +2076,7 @@ function wireTaskHubButtons_() {
     var refreshBtn = document.getElementById('refresh-tasks-btn');
     if (refreshBtn && !refreshBtn._wired) {
         refreshBtn._wired = true;
-        refreshBtn.addEventListener('click', function() { taskHub_refreshFromGoogle_(); });
+        refreshBtn.addEventListener('click', function() { taskHub_refreshFromWorkbook_(); });
     }
 
     var addBtn = document.getElementById('add-task-btn');
@@ -2202,7 +2088,6 @@ function wireTaskHubButtons_() {
                 bar.classList.remove('hidden');
                 var titleInput = document.getElementById('quick-add-title');
                 if (titleInput) titleInput.focus();
-                taskHub_populateQuickAddListDropdown_();
             }
         });
     }
@@ -2244,17 +2129,6 @@ function wireTaskHubButtons_() {
         });
     }
 
-    var toggleSync = document.getElementById('toggle-sync-bar');
-    if (toggleSync && !toggleSync._wired) {
-        toggleSync._wired = true;
-        toggleSync.addEventListener('click', function() {
-            var content = document.getElementById('sync-bar-content');
-            var chevron = document.getElementById('sync-bar-chevron');
-            if (content) content.classList.toggle('hidden');
-            if (chevron) chevron.style.transform = content.classList.contains('hidden') ? '' : 'rotate(180deg)';
-        });
-    }
-
     var drawerClose = document.getElementById('drawer-close-btn');
     if (drawerClose && !drawerClose._wired) {
         drawerClose._wired = true;
@@ -2278,11 +2152,6 @@ function wireTaskHubButtons_() {
         drawerDelete.addEventListener('click', function() { taskHub_deleteFromDrawer_(); });
     }
 
-    var select = document.getElementById('google-task-list-select');
-    if (select && !select._loaded) {
-        select._loaded = true;
-        taskHub_loadGoogleLists_();
-    }
 }
 
 /* ─── TASK HUB ACTIONS ─── */
@@ -2296,21 +2165,18 @@ function taskHub_refreshData_(options) {
         if (onComplete) onComplete();
         return;
     }
-    var targetUsername = (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null;
     var tbody = document.getElementById('tasks-table-body');
     if (tbody && !preserveRows) {
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center text-gray-400 py-6 animate-pulse">Reloading Task Hub...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center text-gray-400 py-6 animate-pulse">Reloading Task Hub...</td></tr>';
     }
-    google.script.run
-        .withSuccessHandler(function(data) {
+    callServer('getProjectData', []).then(function(data) {
             if (data) {
                 if (typeof data === 'string') { try { data = JSON.parse(data); } catch(e) { console.error('[TaskHub] parse error', e); if (onComplete) onComplete(); return; } }
                 APP_STATE.allData = data;
                 renderTasksView();
             }
             if (onComplete) onComplete();
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
             console.error('[TaskHub] refresh failed', err);
             if (preserveRows) {
                 if (typeof showToast === 'function') {
@@ -2319,17 +2185,12 @@ function taskHub_refreshData_(options) {
                 if (onComplete) onComplete();
                 return;
             }
-            if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center text-red-400 py-6">Refresh failed: ' + (err && err.message ? err.message : err) + '</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="text-center text-red-400 py-6">Refresh failed: ' + (err && err.message ? err.message : err) + '</td></tr>';
             if (onComplete) onComplete();
-        })
-        .getProjectData(token, targetUsername);
+        });
 }
 
-function taskHub_refreshFromGoogle_() {
-    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
-    if (!token) return;
-
-    var status = document.getElementById('google-tasks-sync-status');
+function taskHub_refreshFromWorkbook_() {
     var refreshBtn = document.getElementById('refresh-tasks-btn');
     var originalLabel = refreshBtn ? refreshBtn.textContent : '';
 
@@ -2337,34 +2198,12 @@ function taskHub_refreshFromGoogle_() {
         refreshBtn.disabled = true;
         refreshBtn.textContent = 'Refreshing...';
     }
-    if (status) status.textContent = 'Syncing latest Google tasks...';
-
-    google.script.run
-        .withSuccessHandler(function(response) {
-            if (status) {
-                if (response && response.status === 'success') {
-                    status.textContent = response.message || 'Google tasks synced.';
-                } else {
-                    status.textContent = (response && response.message) || 'Google sync completed.';
-                }
-            }
-            taskHub_refreshData_({ preserveRows: true, onComplete: function() {
-                if (refreshBtn) {
-                    refreshBtn.disabled = false;
-                    refreshBtn.textContent = originalLabel || 'Refresh';
-                }
-            } });
-        })
-        .withFailureHandler(function(error) {
-            if (status) status.textContent = 'Refresh failed: ' + (error && error.message ? error.message : error);
-            taskHub_refreshData_({ preserveRows: true, onComplete: function() {
-                if (refreshBtn) {
-                    refreshBtn.disabled = false;
-                    refreshBtn.textContent = originalLabel || 'Refresh';
-                }
-            } });
-        })
-        .syncAllGoogleTaskLists(token, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+    taskHub_refreshData_({ preserveRows: true, onComplete: function() {
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = originalLabel || 'Refresh';
+        }
+    } });
 }
 
 function taskHub_toggleComplete_(taskId) {
@@ -2378,13 +2217,10 @@ function taskHub_toggleComplete_(taskId) {
         renderTasksView();
     }
 
-    google.script.run
-        .withSuccessHandler(function() { taskHub_refreshData_({ preserveRows: true }); })
-        .withFailureHandler(function(err) {
+    callServer('toggleTaskComplete', [taskId]).then(function() { taskHub_refreshData_({ preserveRows: true }); }, function(err) {
             if (typeof showToast === 'function') showToast('Toggle failed: ' + (err && err.message ? err.message : err));
             taskHub_refreshData_({ preserveRows: true });
-        })
-        .toggleTaskComplete(token, taskId, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+        });
 }
 
 function taskHub_quickAdd_() {
@@ -2399,15 +2235,13 @@ function taskHub_quickAdd_() {
         Due: document.getElementById('quick-add-due').value || '',
         Priority: document.getElementById('quick-add-priority').value || 'Medium',
         Recurrence: document.getElementById('quick-add-recurrence').value || '',
-        TaskListId: document.getElementById('quick-add-list').value || '',
         Status: 'Open'
     };
 
     var saveBtn = document.getElementById('quick-add-save');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Adding...'; }
 
-    google.script.run
-        .withSuccessHandler(function(res) {
+    callServer('createTaskAndSync', [taskData]).then(function(res) {
             if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Add'; }
             if (titleEl) titleEl.value = '';
             document.getElementById('quick-add-due').value = '';
@@ -2415,28 +2249,10 @@ function taskHub_quickAdd_() {
             document.getElementById('quick-add-recurrence').value = '';
             if (typeof showToast === 'function') showToast(res.message || 'Task created');
             taskHub_refreshData_({ preserveRows: true });
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
             if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Add'; }
             if (typeof showToast === 'function') showToast('Failed: ' + (err && err.message ? err.message : err));
-        })
-        .createTaskAndSync(token, taskData, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
-}
-
-function taskHub_populateQuickAddListDropdown_() {
-    var listSelect = document.getElementById('quick-add-list');
-    var sourceSelect = document.getElementById('google-task-list-select');
-    if (!listSelect || !sourceSelect) return;
-    listSelect.innerHTML = '<option value="">Local only</option>';
-    for (var i = 0; i < sourceSelect.options.length; i++) {
-        var opt = sourceSelect.options[i];
-        if (opt.value) {
-            var clone = document.createElement('option');
-            clone.value = opt.value;
-            clone.textContent = '\u2197 ' + opt.textContent;
-            listSelect.appendChild(clone);
-        }
-    }
+        });
 }
 
 /* ─── TASK DETAIL DRAWER ─── */
@@ -2448,7 +2264,7 @@ function taskHub_openDrawer_(taskId) {
 
     APP_STATE._editingTaskId = taskId;
 
-    document.getElementById('drawer-title').textContent = String(task.ID || '').indexOf('GTASK-') === 0 ? 'Google Task' : 'Personal Task';
+    document.getElementById('drawer-title').textContent = 'Personal Task';
     document.getElementById('drawer-task-title').value = task.Title || '';
     document.getElementById('drawer-task-status').value = task.Status || 'Open';
     document.getElementById('drawer-task-priority').value = task.Priority || 'Medium';
@@ -2536,72 +2352,31 @@ function taskHub_saveFromDrawer_() {
     var saveBtn = document.getElementById('drawer-save-btn');
     if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...'; }
 
-    google.script.run
-        .withSuccessHandler(function() {
+    callServer('updateTaskAndSync', [taskData]).then(function() {
             if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
             if (typeof showToast === 'function') showToast('Task updated');
             taskHub_closeDrawer_();
             taskHub_refreshData_({ preserveRows: true });
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
             if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save changes'; }
             if (typeof showToast === 'function') showToast('Save failed: ' + (err && err.message ? err.message : err));
-        })
-        .updateTaskAndSync(token, taskData, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
+        });
 }
 
 function taskHub_deleteFromDrawer_() {
     if (!APP_STATE._editingTaskId) return;
-    if (!confirm('Delete this task? This will also remove it from Google Tasks if synced.')) return;
+    if (!confirm('Delete this task?')) return;
 
     var token = (typeof checkAuth === 'function') ? checkAuth() : null;
     if (!token) return;
 
-    google.script.run
-        .withSuccessHandler(function() {
+    callServer('deleteTaskAndSync', [APP_STATE._editingTaskId]).then(function() {
             if (typeof showToast === 'function') showToast('Task deleted');
             taskHub_closeDrawer_();
             taskHub_refreshData_({ preserveRows: true });
-        })
-        .withFailureHandler(function(err) {
+        }, function(err) {
             if (typeof showToast === 'function') showToast('Delete failed: ' + (err && err.message ? err.message : err));
-        })
-        .deleteTaskAndSync(token, APP_STATE._editingTaskId, (typeof getSelectedWorkspaceUsername === 'function') ? getSelectedWorkspaceUsername() : null);
-}
-
-/* ─── GOOGLE TASKS SYNC ─── */
-
-function taskHub_loadGoogleLists_() {
-    var token = (typeof checkAuth === 'function') ? checkAuth() : null;
-    if (!token) return;
-    var select = document.getElementById('google-task-list-select');
-    var status = document.getElementById('google-tasks-sync-status');
-    if (!select) return;
-
-    select.innerHTML = '<option value="">Loading...</option>';
-    if (status) status.textContent = 'Loading Google Task lists...';
-
-    google.script.run
-        .withSuccessHandler(function(lists) {
-            select.innerHTML = '';
-            if (!lists || !lists.length) {
-                select.innerHTML = '<option value="">No task lists found</option>';
-                if (status) status.textContent = 'No lists found. You may need to authorize the Tasks scope in Apps Script.';
-                return;
-            }
-            lists.forEach(function(list) {
-                var opt = document.createElement('option');
-                opt.value = list.id;
-                opt.textContent = list.title;
-                select.appendChild(opt);
-            });
-            if (status) status.textContent = 'Loaded ' + lists.length + ' list(s). Select one and click Sync selected list.';
-        })
-        .withFailureHandler(function(error) {
-            select.innerHTML = '<option value="">Unable to load</option>';
-            if (status) status.textContent = 'Failed: ' + (error && error.message ? error.message : error);
-        })
-        .getGoogleTaskLists(token);
+        });
 }
 
 function renderBoard() {

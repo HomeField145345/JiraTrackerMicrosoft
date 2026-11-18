@@ -13,6 +13,8 @@ class ExcelStorage {
     }
     this.drive = target.driveId ? `/drives/${encodeURIComponent(target.driveId)}` : '/me/drive';
     this.folder = target.folderId ? `/items/${encodeURIComponent(target.folderId)}` : '/root';
+    this.fileName = target.fileName;
+    this.folderSegments = target.folderPath?.split('/') ?? [];
   }
 
   async graph(path, init = {}) {
@@ -28,10 +30,11 @@ class ExcelStorage {
     return `/items/${encodeURIComponent(id)}`;
   }
 
-  async open(allowCreate, itemId) {
-    const path = itemId ? this.itemPath(itemId) : `${this.folder}:/${EXCEL_FILE_NAME}`;
+  async open(action, itemId) {
+    const workbookPath = [...this.folderSegments, this.fileName ?? EXCEL_FILE_NAME].map(encodeURIComponent).join('/');
+    const path = itemId ? this.itemPath(itemId) : `${this.folder}:/${workbookPath}`;
     const response = await this.graph(`${path}?$select=id,eTag,file,size,webUrl,@microsoft.graph.downloadUrl`);
-    if (response.status === 404 && allowCreate && !itemId) {
+    if (response.status === 404 && action === 'connect' && !itemId && this.fileName === undefined) {
       WorkbookService.replaceAll([]);
       setupSheets(WorkbookService.getActiveWorkbook(), false);
       const { upserts: [data] } = WorkbookService.takeChanges();
@@ -42,16 +45,26 @@ class ExcelStorage {
       const item = await this.upload(data, `${this.itemPath(destination.id)}:/${EXCEL_FILE_NAME}:`);
       return { item, data, created: true };
     }
+    if (response.status === 404 && this.fileName !== undefined && !itemId) {
+      throw new Error('Could not find the configured workbook (Microsoft HTTP 404). Check the filename and folder in excel-config.json.');
+    }
     this.check(response, 'open the workbook');
     const item = await response.json();
-    const url = this.httpsUrl(item['@microsoft.graph.downloadUrl']);
     if (!item.id || !item.file || !item.eTag) throw new Error('The destination is not a valid Excel file.');
     if (item.size > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
+    const url = this.httpsUrl(item['@microsoft.graph.downloadUrl']);
     const download = await this.request(url, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
     this.check(download, 'download the workbook');
     const bytes = await download.arrayBuffer();
     if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
-    return { item, data: await this.decode(bytes), created: false };
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(bytes);
+    const needsSetup = this.fileName !== undefined && !workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
+    if (needsSetup && !['connect', 'refresh', 'configure'].includes(action)) {
+      throw new Error('Set up the workbook before saving tracker data.');
+    }
+    const data = this.decode(workbook, needsSetup);
+    return { item, data, needsSetup, created: false };
   }
 
   async save(data, item) {
@@ -110,19 +123,22 @@ class ExcelStorage {
     return workbook.xlsx.writeBuffer();
   }
 
-  async decode(bytes) {
-    const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(bytes);
+  decode(workbook, needsSetup) {
     const marker = workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
-    if (!marker || marker.getCell('A1').value !== EXCEL_SCHEMA_VERSION) {
-      throw new Error(`${EXCEL_FILE_NAME} already exists but is not a compatible tracker workbook. It was not changed.`);
+    if (!needsSetup && marker?.getCell('A1').value !== EXCEL_SCHEMA_VERSION) {
+      throw new Error(`${this.fileName ?? EXCEL_FILE_NAME} already exists but is not a compatible tracker workbook. It was not changed.`);
     }
     const schema = trackerSheetSchema();
-    if (workbook.worksheets.length !== Object.keys(schema).length + 1) {
+    const hasUnexpectedTab = workbook.worksheets.some(sheet =>
+      !Object.hasOwn(schema, sheet.name) &&
+      !(needsSetup ? sheet.name === 'Sheet1' && sheet.actualRowCount === 0 : sheet === marker)
+    );
+    if (hasUnexpectedTab) {
       throw new Error('The tracker workbook has unexpected or missing tabs. It was not changed.');
     }
     const sheets = Object.entries(schema).map(([name, headers]) => {
       const sheet = workbook.getWorksheet(name);
+      if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
       if (!sheet || headers.some((header, i) => sheet.getCell(1, i + 1).value !== header) ||
           sheet.columnCount > headers.length) {
         throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
@@ -142,7 +158,7 @@ class ExcelStorage {
       });
       return { name, rows };
     });
-    return { id: PRIMARY_WORKBOOK_ID, name: EXCEL_FILE_NAME, sheets };
+    return { id: PRIMARY_WORKBOOK_ID, name: this.fileName ?? EXCEL_FILE_NAME, sheets };
   }
 
   httpsUrl(value) {

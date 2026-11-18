@@ -1,6 +1,6 @@
 # ProjectHub
 
-The static preview is separate from the private Excel tracker. The Excel tracker reads Jira issues and tasks from `ProjectHub.xlsx`, imports Jira CSV files, and saves new tasks back to the workbook. It does not migrate browser data or connect the legacy Apps Script dashboard.
+The static preview is separate from the private Excel tracker. The Excel tracker reads Jira issues and tasks from a Microsoft 365 workbook, imports Jira CSV files, and saves new tasks back to the workbook. It does not migrate browser data or connect the legacy Apps Script dashboard.
 
 ## Set up private Microsoft 365 storage
 
@@ -20,13 +20,16 @@ The static preview is separate from the private Excel tracker. The Excel tracker
    }
    ```
 
-4. Run `npm ci` and `npm run build`. Serve `dist/` over HTTPS (or localhost); for example, run `python -m http.server 8000 --bind 127.0.0.1 --directory dist`. Do not serve the sign-in callback with a `Cross-Origin-Opener-Policy` header, which prevents Microsoft's popup callback from communicating with the tracker.
-5. Open **Excel tracker**, then select **Sign in**. On the first connection it creates the workbook with the Jira, manual data, configuration, tasks, users, sessions, and admin configuration tabs and their required headers. It does not put passwords or session tokens in the workbook. Subsequent connections load the existing file. An unrelated workbook of the same name is not overwritten.
+4. To connect an existing workbook, open its folder in OneDrive or SharePoint and copy the exact filename, including `.xlsx`. Use the filename only, not a path or sharing link. For SharePoint, add `target.fileName` alongside the library `driveId` and the target folder's `folderId`. For the owner's work OneDrive, omit both IDs and use `"target": { "fileName": "Team Tracker.xlsx" }` to look in the root. For a OneDrive subfolder, add its relative path: `"target": { "folderPath": "Documents/Tracking", "fileName": "Team Tracker.xlsx" }`. If you omit `fileName` and `folderPath`, the tracker still opens or creates `ProjectHub.xlsx` as before.
+5. Run `npm ci` and `npm run build`. Serve `dist/` over HTTPS (or localhost); for example, run `python -m http.server 8000 --bind 127.0.0.1 --directory dist`. Do not serve the sign-in callback with a `Cross-Origin-Opener-Policy` header, which prevents Microsoft's popup callback from communicating with the tracker.
+6. Open **Excel tracker**, then select **Sign in**. When `fileName` is set, sign-in does not create or modify any workbook. Use **Open in Excel** to confirm the file, then close it in Excel. If it needs initialization, select **Set up workbook** to add the Jira, manual data, configuration, tasks, users, sessions, and admin configuration tabs and headers.
+
+Use an existing blank workbook (a blank `Sheet1` is fine) or a workbook with only tracker tabs that are blank or already have the exact tracker headers. Setup keeps matching literal cell data and removes the blank starter tab. It rewrites the workbook in the tracker layout and does not preserve custom formatting or other Excel features, so keep a backup. Setup refuses unrelated populated sheets, mismatched headers, and formulas rather than overwriting them. It does not seed passwords or session tokens.
 
 Use the workbook as an app-managed file: keep its name, tabs and headers unchanged, and close Excel before saving changes from the tracker. If you want custom formulas or formatting, use a copy. Writes replace the workbook and check its Microsoft revision before committing; the tracker is intended for one writer, not simultaneous Excel editing or concurrent use across devices. The Excel workbook limit is 20 MiB.
 
 Run `npm test` to check workbook provisioning and persistence with a simulated Microsoft Graph service.
-If setup fails, open the browser developer console to see the configuration response status and which fields failed validation. Diagnostics do not print the ID values.
+If setup fails, open the browser developer console before selecting **Sign in**. Filter for `[Excel tracker]` to see the requested scope and whether authentication, owner verification, or the workbook operation failed. Authentication errors may include an MSAL error code, an AADSTS code, and a correlation ID; workbook errors may include an HTTP status. A Microsoft permission prompt that remains open has not yet returned an error to the app. Diagnostics do not print account IDs, tokens, file contents, or raw authentication error messages. Do not share tokens, account details, or other sensitive information when sharing logs.
 
 ## Deploy to GitHub Pages
 

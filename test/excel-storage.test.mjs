@@ -4,11 +4,12 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint } = {}) {
+function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup } = {}) {
   const transfer = 'https://storage.example.test';
   const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
   const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
-  const folderPath = sharepoint ? '/drives/library/items/folder' : '/me/drive/items/folder';
+  const destinationPath = sharepoint ? '/drives/library/items/folder' : '/me/drive/items/folder';
+  const lookup = expectedLookup ?? `${folder}:/${encodeURIComponent(fileName ?? 'ProjectHub.xlsx')}`;
   const item = { id: 'file', eTag: '"1"', file: {}, webUrl: `${transfer}/excel` };
   let bytes = foreignWorkbook;
   let pending;
@@ -35,11 +36,12 @@ function harness({ foreignWorkbook, sharepoint } = {}) {
     assert.equal(url.origin, 'https://graph.microsoft.com');
     assert.equal(init.headers.Authorization, 'Bearer simulated');
     const path = url.pathname.replace('/v1.0', '');
-    if (path === `${folder}:/ProjectHub.xlsx` || path === itemPath) {
+    if (path === lookup || path === itemPath) {
       return bytes ? json({ ...item, '@microsoft.graph.downloadUrl': `${transfer}/read` }) : json({}, 404);
     }
     if (path === folder) return json({ id: 'folder', folder: {} });
-    if (path === `${folderPath}:/ProjectHub.xlsx:/createUploadSession`) {
+    if (path === `${destinationPath}:/ProjectHub.xlsx:/createUploadSession`) {
+      assert.equal(fileName, undefined, 'an explicitly selected workbook must never be created');
       assert.equal(JSON.parse(init.body).item['@microsoft.graph.conflictBehavior'], 'fail');
       assert.equal(JSON.parse(init.body).deferCommit, true);
       return bytes ? json({}, 409) : json({ uploadUrl: `${transfer}/upload` });
@@ -60,7 +62,7 @@ function harness({ foreignWorkbook, sharepoint } = {}) {
   return {
     run: (action, itemId, payload) => context.runExcelOperation({
       action, itemId, payload, accessToken: 'simulated',
-      target: sharepoint ? { driveId: 'library', folderId: 'folder' } : undefined
+      target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
     }),
     revision: () => commits,
     workbook: async () => {
@@ -100,6 +102,53 @@ test('does not replace an unrelated file at the OneDrive destination', async () 
   workbook.addWorksheet('Another workbook').getCell('A1').value = 'Keep this';
   const graph = harness({ foreignWorkbook: await workbook.xlsx.writeBuffer() });
   await assert.rejects(graph.run('connect'), /not a compatible tracker workbook/);
+  assert.equal(graph.revision(), 0);
+});
+
+test('opens a file in a OneDrive subfolder without writing, then sets it up in place on request', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  workbook.addWorksheet('JiraData');
+  const tasks = workbook.addWorksheet('IndependentTasks');
+  tasks.addRow(['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner']);
+  tasks.addRow(['existing', 'Keep this task', '', 'Not started']);
+  const graph = harness({
+    foreignWorkbook: await workbook.xlsx.writeBuffer(),
+    folderPath: 'Documents/Team #1',
+    fileName: 'Tracker.xlsx',
+    expectedLookup: '/me/drive/root:/Documents/Team%20%231/Tracker.xlsx'
+  });
+  const { itemId, needsSetup, created } = await graph.run('connect');
+  assert.equal(needsSetup, true);
+  assert.equal(created, false);
+  assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
+  await assert.rejects(graph.run('addTask', itemId, 'Not yet'), /Set up the workbook/);
+  assert.equal(graph.revision(), 0);
+
+  const configured = await graph.run('configure', itemId);
+  assert.equal(configured.itemId, itemId);
+  assert.equal(configured.projects.independentTasks[0].Title, 'Keep this task');
+  const saved = await graph.workbook();
+  assert.equal(saved.getWorksheet('JiraData').getCell('A1').value, 'Sync Status');
+  assert.equal(saved.getWorksheet('ManualData').getCell('A1').value, 'Jira #');
+  assert.equal(saved.getWorksheet('Sheet1'), undefined);
+  assert.equal((await graph.run('connect')).projects.independentTasks.length, 1);
+  assert.equal((await graph.run('configure', itemId)).message, 'Workbook is already set up.');
+  assert.equal(graph.revision(), 1);
+});
+
+test('does not create an explicitly selected workbook when it is missing', async () => {
+  const graph = harness({ fileName: 'Missing.xlsx' });
+  await assert.rejects(graph.run('connect'), /could not find the configured workbook/i);
+  assert.equal(graph.revision(), 0);
+});
+
+test('refuses to configure a workbook with an unrelated populated sheet', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1').getCell('A1').value = 'Keep this';
+  const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
+  await assert.rejects(graph.run('connect'), /unexpected or missing tabs/);
+  await assert.rejects(graph.run('configure', 'file'), /unexpected or missing tabs/);
   assert.equal(graph.revision(), 0);
 });
 

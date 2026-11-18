@@ -55,7 +55,7 @@ function getConfigProblems(value) {
     if (typeof value.target !== 'object' || Array.isArray(value.target)) {
       problems.push('target must be a JSON object');
     } else {
-      const { driveId, folderId } = value.target;
+      const { driveId, folderId, fileName, folderPath } = value.target;
       const hasDriveId = typeof driveId === 'string' && driveId.trim() !== '';
       const hasFolderId = typeof folderId === 'string' && folderId.trim() !== '';
       if (hasDriveId !== hasFolderId) {
@@ -67,6 +67,19 @@ function getConfigProblems(value) {
       if (folderId !== undefined && !hasFolderId) {
         problems.push('target.folderId must be a non-empty string');
       }
+      if (fileName !== undefined && (typeof fileName !== 'string' || fileName !== fileName.trim() ||
+          fileName.length <= '.xlsx'.length || !/\.xlsx$/i.test(fileName) || /[/\\:*?"<>|]/.test(fileName))) {
+        problems.push('target.fileName must be an .xlsx filename, not a path or link');
+      }
+      if (folderPath !== undefined) {
+        if (typeof folderPath !== 'string' || folderPath.split('/').some(part =>
+          !part || part !== part.trim() || part.endsWith('.') || /[\\:*?"<>|]/.test(part))) {
+          problems.push('target.folderPath must be relative to the work OneDrive root, e.g. Documents/Tracking');
+        }
+        if (fileName === undefined || driveId !== undefined || folderId !== undefined) {
+          problems.push('target.folderPath requires target.fileName and must not be used with SharePoint drive or folder IDs');
+        }
+      }
     }
   }
 
@@ -76,38 +89,64 @@ function getConfigProblems(value) {
 async function run(action, getPayload) {
   if (!client || busy) return;
   busy = true;
-  element('workspace').setAttribute('aria-busy', 'true');
+  element('workbook').setAttribute('aria-busy', 'true');
   element('status').textContent = 'Connecting to Excel…';
+  let stage = 'authentication';
   try {
+    console.info('[Excel tracker] Authentication started', {
+      action,
+      method: action === 'connect' ? 'popup' : 'silent',
+      scopes
+    });
     const auth = action === 'connect' ?
       await client.acquireTokenPopup({ scopes, account, prompt: account ? undefined : 'select_account' }) :
       await client.acquireTokenSilent({ scopes, account });
+    console.info('[Excel tracker] Authentication completed', { action });
+    stage = 'owner verification';
     const claims = auth.account?.idTokenClaims;
     if (claims?.oid?.toLowerCase() !== config.ownerObjectId.toLowerCase() ||
         claims?.tid?.toLowerCase() !== config.tenantId.toLowerCase()) {
       throw new Error('Sign in with the Microsoft account configured as the tracker owner.');
     }
     account = auth.account;
+    stage = 'preparing request';
     const payload = getPayload ? await getPayload() : undefined;
+    stage = 'workbook operation';
+    console.info('[Excel tracker] Workbook operation started', { action });
     const result = await request(action, auth.accessToken, payload);
+    console.info('[Excel tracker] Workbook operation completed', { action, created: result.created });
+    stage = 'rendering';
     itemId = result.itemId;
     const fileLink = element('workbook-link');
-    if (result.webUrl?.startsWith('https://')) {
-      fileLink.href = result.webUrl;
-      fileLink.hidden = false;
+    fileLink.hidden = !result.webUrl?.startsWith('https://');
+    if (!fileLink.hidden) fileLink.href = result.webUrl;
+    element('workbook').hidden = false;
+    element('configure').hidden = !result.needsSetup;
+    element('workspace').hidden = Boolean(result.needsSetup);
+    if (result.needsSetup) {
+      element('status').textContent = `Connected to ${config.target.fileName}. Set up the workbook to add the required tabs and headers.`;
+      return;
     }
     renderRows('jira', result.projects.projects, ['Jira #', 'Summary', 'Status', 'Assignee']);
     renderRows('tasks', result.projects.independentTasks, ['Title', 'Status']);
-    element('workspace').hidden = false;
     element('status').textContent = result.message || (result.created ? 'Workbook created.' : 'Workbook connected.');
     if (action === 'addTask') element('task-form').reset();
     if (action === 'import') element('import-form').reset();
   } catch (error) {
+    const errorCode = typeof error.errorCode === 'string' && /^[a-z0-9_]{1,80}$/i.test(error.errorCode) ?
+      error.errorCode : undefined;
+    const aadstsCode = typeof error.message === 'string' ? error.message.match(/\bAADSTS\d+\b/i)?.[0] : undefined;
+    const httpStatus = stage === 'workbook operation' && typeof error.message === 'string' ?
+      error.message.match(/\(Microsoft HTTP (\d{3})\)/)?.[1] : undefined;
+    console.error('[Excel tracker] Operation failed', {
+      action, stage, errorCode, aadstsCode, httpStatus,
+      correlationId: isGuid(error.correlationId) ? error.correlationId : undefined
+    });
     element('status').textContent = error.name === 'InteractionRequiredAuthError' ?
       'Sign in again, then retry.' : error.message;
   } finally {
     busy = false;
-    element('workspace').setAttribute('aria-busy', 'false');
+    element('workbook').setAttribute('aria-busy', 'false');
   }
 }
 
@@ -158,7 +197,8 @@ async function initialize() {
     });
     await app.initialize();
     client = app;
-    element('status').textContent = 'Sign in to create or open your tracker workbook.';
+    element('status').textContent = config.target?.fileName ?
+      `Sign in to connect to ${config.target.fileName}.` : 'Sign in to create or open your tracker workbook.';
     element('connect').hidden = false;
   } catch (error) {
     console.error('[Excel tracker] Initialization failed', {
@@ -171,6 +211,11 @@ async function initialize() {
 
 element('connect').onclick = () => run('connect');
 element('refresh').onclick = () => run('refresh');
+element('configure').onclick = () => {
+  if (!busy && confirm(`Set up ${config.target.fileName} as a ProjectHub workbook? This replaces the file contents with the tracker layout. Keep a backup and close the file in Excel before continuing.`)) {
+    return run('configure');
+  }
+};
 element('task-form').onsubmit = event => {
   event.preventDefault();
   run('addTask', () => element('title').value);

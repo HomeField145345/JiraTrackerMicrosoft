@@ -4,10 +4,17 @@ importScripts('platform/ExcelStorage.js');
 
 async function runExcelOperation({ action, accessToken, target, itemId, payload }) {
   const storage = new ExcelStorage(accessToken, target);
-  const { item, data, created } = await storage.open(action === 'connect', itemId);
+  if (action === 'configure' && (target?.fileName === undefined || !itemId)) {
+    throw new Error('Connect to a specific existing workbook before setting it up.');
+  }
+  const { item, data, created, needsSetup } = await storage.open(action, itemId);
+  const connection = { itemId: item.id, webUrl: item.webUrl, created };
+  if (needsSetup && action !== 'configure') return { ...connection, needsSetup };
+  if (needsSetup) await storage.save(data, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
-  let message;
+  let message = action === 'configure' ?
+    (needsSetup ? 'Workbook set up.' : 'Workbook is already set up.') : undefined;
   if (action === 'import') {
     const result = importJiraCsv_(payload, null);
     if (result.status !== 'success') throw new Error(result.message);
@@ -24,12 +31,12 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
   if (changes) await storage.save(changes.upserts[0], item);
   const projects = _getRawProjectData(null);
   if (!projects) throw new Error('Could not read the tracker data from Excel.');
-  return { itemId: item.id, webUrl: item.webUrl, created, message, projects };
+  return { ...connection, message, projects };
 }
 
 self.onmessage = async function ({ data }) {
   try {
-    if (!['connect', 'refresh', 'import', 'addTask'].includes(data.action) ||
+    if (!['connect', 'refresh', 'configure', 'import', 'addTask'].includes(data.action) ||
         (data.action !== 'connect' && !data.itemId)) throw new Error('Connect a tracker workbook first.');
     if (!navigator.locks) throw new Error('Excel storage requires a browser with Web Locks support.');
     const result = await navigator.locks.request('projecthub-excel-store', () => runExcelOperation(data));

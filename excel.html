@@ -30,35 +30,38 @@
     <p>Save Jira issues and tasks to your private Microsoft 365 workbook.</p>
     <button id="connect" type="button" hidden>Sign in</button>
     <p id="status" role="status">Loading Excel setup…</p>
-    <div id="workspace" hidden>
+    <div id="workbook" hidden>
       <div class="actions">
         <a id="workbook-link" target="_blank" rel="noopener noreferrer" hidden>Open in Excel</a>
+        <button id="configure" type="button" hidden>Set up workbook</button>
         <button id="refresh" type="button">Refresh</button>
       </div>
-      <section aria-labelledby="jira-title">
-        <h2 id="jira-title">Your Jira issues</h2>
-        <form id="import-form">
-          <label for="csv">Jira CSV</label>
-          <input id="csv" type="file" accept=".csv,text/csv" required>
-          <button type="submit">Import CSV</button>
-        </form>
-        <div class="table-scroll"><table aria-labelledby="jira-title">
-          <thead><tr><th scope="col">Jira ID</th><th scope="col">Summary</th><th scope="col">Status</th><th scope="col">Assignee</th></tr></thead>
-          <tbody id="jira"></tbody>
-        </table></div>
-      </section>
-      <section aria-labelledby="tasks-title">
-        <h2 id="tasks-title">Your tracker tasks</h2>
-        <form id="task-form">
-          <label for="title">Task title</label>
-          <input id="title" type="text" maxlength="200" required>
-          <button type="submit">Add task</button>
-        </form>
-        <div class="table-scroll"><table aria-labelledby="tasks-title">
-          <thead><tr><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
-          <tbody id="tasks"></tbody>
-        </table></div>
-      </section>
+      <div id="workspace" hidden>
+        <section aria-labelledby="jira-title">
+          <h2 id="jira-title">Your Jira issues</h2>
+          <form id="import-form">
+            <label for="csv">Jira CSV</label>
+            <input id="csv" type="file" accept=".csv,text/csv" required>
+            <button type="submit">Import CSV</button>
+          </form>
+          <div class="table-scroll"><table aria-labelledby="jira-title">
+            <thead><tr><th scope="col">Jira ID</th><th scope="col">Summary</th><th scope="col">Status</th><th scope="col">Assignee</th></tr></thead>
+            <tbody id="jira"></tbody>
+          </table></div>
+        </section>
+        <section aria-labelledby="tasks-title">
+          <h2 id="tasks-title">Your tracker tasks</h2>
+          <form id="task-form">
+            <label for="title">Task title</label>
+            <input id="title" type="text" maxlength="200" required>
+            <button type="submit">Add task</button>
+          </form>
+          <div class="table-scroll"><table aria-labelledby="tasks-title">
+            <thead><tr><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
+            <tbody id="tasks"></tbody>
+          </table></div>
+        </section>
+      </div>
     </div>
   </main>
   <script type="module" src="./excel-tracker.js"></script>

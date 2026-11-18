@@ -10,12 +10,13 @@ The static preview is separate from the private Excel tracker. The Excel tracker
 
    ```json
    {
-     "clientId": "APPLICATION-CLIENT-ID",
-     "tenantId": "DIRECTORY-TENANT-ID",
-     "ownerObjectId": "ENTRA-USER-OBJECT-ID",
+     "clientId": "72bd4fd7-8964-4d83-bf34-adaa27a5d264",
+     "tenantId": "e741d71c-c6b6-47b0-803c-0f3b32b07556",
+     "ownerObjectId": "701dad25-b25b-42f6-b787-09f78541279f",
      "target": {
-       "driveId": "SHAREPOINT-LIBRARY-DRIVE-ID",
-       "folderId": "DESTINATION-FOLDER-ITEM-ID"
+       "driveId": "b!f-BDej4rLk6BaMq9gw3hEqGrohYq9idLjYJzrtuGfu7TZUUOHGERTLDwaDKPqanl",
+       "folderId": "01423ZPGN6Y2GOVW7725BZO354PWSELRRZ",
+"
      }
    }
    ```

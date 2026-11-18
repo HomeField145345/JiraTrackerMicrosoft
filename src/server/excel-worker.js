@@ -7,10 +7,10 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
   if (action === 'configure' && (target?.fileName === undefined || !itemId)) {
     throw new Error('Connect to a specific existing workbook before setting it up.');
   }
-  const { item, data, created, needsSetup } = await storage.open(action, itemId);
+  const { item, data, workbook, created, needsSetup } = await storage.open(action, itemId);
   const connection = { itemId: item.id, webUrl: item.webUrl, created };
   if (needsSetup && action !== 'configure') return { ...connection, needsSetup };
-  if (needsSetup) await storage.save(data, item);
+  if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
   let message = action === 'configure' ?

@@ -66,12 +66,68 @@ class ExcelStorage {
     if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(bytes);
-    const needsSetup = this.fileName !== undefined && !workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
+    const marker = workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
+    const needsSetup = this.fileName !== undefined && (!marker || marker.actualRowCount === 0);
     if (needsSetup && !['connect', 'refresh', 'configure'].includes(action)) {
       throw new Error('Set up the workbook before saving tracker data.');
     }
     const data = this.decode(workbook, needsSetup);
-    return { item, data, needsSetup, created: false };
+    return { item, data, workbook, needsSetup, created: false };
+  }
+
+  async configure(workbook, item) {
+    const path = this.itemPath(item.id);
+    const current = await this.graph(`${path}?$select=eTag`, { cache: 'no-store' });
+    this.check(current, 'check the workbook revision before setup');
+    if ((await current.json()).eTag !== item.eTag) this.conflict();
+
+    const session = await this.graph(`${path}/workbook/createSession`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persistChanges: true })
+    });
+    this.check(session, 'start workbook setup');
+    const { id } = await session.json();
+    if (typeof id !== 'string' || !id) throw new Error('Microsoft did not return a workbook setup session. Refresh before retrying.');
+    const update = async (suffix, method, body) => {
+      const response = await this.graph(`${path}/workbook/${suffix}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'workbook-session-id': id },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      });
+      this.check(response, 'update the workbook setup');
+    };
+
+    let failure;
+    try {
+      for (const [name, headers] of Object.entries(trackerSheetSchema())) {
+        let sheet = workbook.getWorksheet(name);
+        if (!sheet) {
+          await update('worksheets/add', 'POST', { name });
+          sheet = workbook.addWorksheet(name);
+        }
+        if (sheet.actualRowCount === 0) {
+          const address = `A1:${sheet.getColumn(headers.length).letter}1`;
+          await update(`worksheets/${encodeURIComponent(name)}/range(address='${address}')`, 'PATCH', { values: [headers] });
+        }
+      }
+      if (!workbook.getWorksheet(EXCEL_SCHEMA_SHEET)) {
+        await update('worksheets/add', 'POST', { name: EXCEL_SCHEMA_SHEET });
+      }
+      await update(`worksheets/${EXCEL_SCHEMA_SHEET}`, 'PATCH', { visibility: 'VeryHidden' });
+      // Mark setup complete only after every tracker sheet and header exists.
+      await update(`worksheets/${EXCEL_SCHEMA_SHEET}/range(address='A1')`, 'PATCH', { values: [[EXCEL_SCHEMA_VERSION]] });
+    } catch (error) {
+      failure = error;
+    }
+    try {
+      await update('closeSession', 'POST');
+    } catch (error) {
+      throw new Error(`${failure ? `${failure.message} ` : ''}Could not close the workbook setup session. Refresh before retrying.`, { cause: error });
+    }
+    if (failure) {
+      throw new Error(`${failure.message} Setup may be incomplete; refresh and retry Set up workbook.`, { cause: failure });
+    }
   }
 
   async save(data, item) {
@@ -150,7 +206,7 @@ class ExcelStorage {
     const schema = trackerSheetSchema();
     const hasUnexpectedTab = workbook.worksheets.some(sheet =>
       !Object.hasOwn(schema, sheet.name) &&
-      !(needsSetup ? sheet.name === 'Sheet1' && sheet.actualRowCount === 0 : sheet === marker)
+      sheet !== marker && !(sheet.name === 'Sheet1' && sheet.actualRowCount === 0)
     );
     if (hasUnexpectedTab) {
       throw new Error('The tracker workbook has unexpected or missing tabs. It was not changed.');

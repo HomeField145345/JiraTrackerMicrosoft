@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204 } = {}) {
+function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204, setupFailure } = {}) {
   const transfer = 'https://storage.example.test';
   const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
   const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
@@ -15,13 +15,21 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
   let pending;
   let commits = 0;
   let cancellations = 0;
+  let uploadSessions = 0;
+  let setupWrites = 0;
+  let setupSessionOpen = false;
+  let closedSetupSessions = 0;
   let interfere = false;
+  let changeOnDownload = false;
   const json = (value, status = 200) => Response.json(value, { status });
   const graphFetch = async (input, init = {}) => {
     const url = new URL(input);
     if (url.origin === transfer) {
       assert.equal(init.headers?.Authorization, undefined);
-      if (url.pathname === '/read') return new Response(bytes);
+      if (url.pathname === '/read') {
+        if (changeOnDownload) item.eTag = '"external-change"';
+        return new Response(bytes);
+      }
       assert.equal(url.pathname, '/upload');
       if (init.method === 'DELETE') {
         cancellations++;
@@ -44,6 +52,52 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     assert.equal(url.origin, 'https://graph.microsoft.com');
     assert.equal(init.headers.Authorization, 'Bearer simulated');
     const path = url.pathname.replace('/v1.0', '');
+    if (path.startsWith(`${itemPath}/workbook/`)) {
+      const operation = decodeURIComponent(path.slice(`${itemPath}/workbook/`.length));
+      if (operation === 'createSession') {
+        assert.equal(init.method, 'POST');
+        assert.equal(JSON.parse(init.body).persistChanges, true);
+        assert.equal(setupSessionOpen, false);
+        setupSessionOpen = true;
+        return json({ id: 'setup-session' }, 201);
+      }
+      assert.equal(init.headers['workbook-session-id'], 'setup-session');
+      assert.equal(setupSessionOpen, true);
+      if (operation === 'closeSession') {
+        assert.equal(init.method, 'POST');
+        setupSessionOpen = false;
+        closedSetupSessions++;
+        return new Response(null, { status: 204 });
+      }
+      if (setupFailure === operation) {
+        setupFailure = undefined;
+        return json({}, 503);
+      }
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(bytes);
+      const body = JSON.parse(init.body);
+      if (operation === 'worksheets/add') {
+        assert.equal(init.method, 'POST');
+        workbook.addWorksheet(body.name);
+      } else {
+        assert.equal(init.method, 'PATCH');
+        const range = operation.match(/^worksheets\/([^/]+)\/range\(address='([^']+)'\)$/);
+        if (range) {
+          const sheet = workbook.getWorksheet(range[1]);
+          assert.ok(sheet, 'header writes must target an existing worksheet');
+          assert.equal(sheet.actualRowCount, 0, 'setup must not overwrite existing rows');
+          assert.equal(range[2], body.values[0].length === 1 ? 'A1' : `A1:${sheet.getColumn(body.values[0].length).letter}1`);
+          sheet.getRow(1).values = body.values[0];
+        } else {
+          assert.equal(operation, 'worksheets/_ProjectHub');
+          assert.equal(body.visibility, 'VeryHidden');
+          workbook.getWorksheet('_ProjectHub').state = 'veryHidden';
+        }
+      }
+      bytes = await workbook.xlsx.writeBuffer();
+      item.eTag = `"setup-${++setupWrites}"`;
+      return json({});
+    }
     if (path === lookup || path === itemPath) {
       if (!bytes) return json({}, 404);
       if (url.searchParams.get('select') === 'id,@microsoft.graph.downloadUrl') {
@@ -56,12 +110,14 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     }
     if (path === folder) return json({ id: 'folder', folder: {} });
     if (path === `${destinationPath}:/ProjectHub.xlsx:/createUploadSession`) {
+      uploadSessions++;
       assert.equal(fileName, undefined, 'an explicitly selected workbook must never be created');
       assert.equal(JSON.parse(init.body).item['@microsoft.graph.conflictBehavior'], 'fail');
       assert.equal(JSON.parse(init.body).deferCommit, true);
       return bytes ? json({}, 409) : json({ uploadUrl: `${transfer}/upload` });
     }
     assert.equal(path, `${itemPath}/createUploadSession`);
+    uploadSessions++;
     assert.equal(init.headers['If-Match'], item.eTag);
     return json({ uploadUrl: `${transfer}/upload` });
   };
@@ -89,12 +145,16 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     }),
     revision: () => commits,
     cancellations: () => cancellations,
+    uploadSessions: () => uploadSessions,
+    setupWrites: () => setupWrites,
+    closedSetupSessions: () => closedSetupSessions,
     workbook: async () => {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(bytes);
       return workbook;
     },
-    interfere: () => { interfere = true; }
+    interfere: () => { interfere = true; },
+    changeOnDownload: () => { changeOnDownload = true; }
   };
 }
 
@@ -133,10 +193,12 @@ test('does not replace an unrelated file at the OneDrive destination', async () 
 test('opens a file in a OneDrive subfolder without writing, then sets it up in place on request', async () => {
   const workbook = new ExcelJS.Workbook();
   workbook.addWorksheet('Sheet1');
-  workbook.addWorksheet('JiraData');
+  workbook.addWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
   const tasks = workbook.addWorksheet('IndependentTasks');
   tasks.addRow(['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner']);
   tasks.addRow(['existing', 'Keep this task', '', 'Not started']);
+  tasks.getColumn(2).width = 45;
+  tasks.getCell('B2').font = { italic: true };
   const graph = harness({
     foreignWorkbook: await workbook.xlsx.writeBuffer(),
     folderPath: 'Documents/Team #1',
@@ -157,10 +219,67 @@ test('opens a file in a OneDrive subfolder without writing, then sets it up in p
   const saved = await graph.workbook();
   assert.equal(saved.getWorksheet('JiraData').getCell('A1').value, 'Sync Status');
   assert.equal(saved.getWorksheet('ManualData').getCell('A1').value, 'Jira #');
-  assert.equal(saved.getWorksheet('Sheet1'), undefined);
+  assert.ok(saved.getWorksheet('Sheet1'), 'setup must not delete existing worksheets');
+  assert.equal(saved.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
+  assert.equal(saved.getWorksheet('IndependentTasks').getColumn(2).width, 45);
+  assert.equal(saved.getWorksheet('IndependentTasks').getCell('B2').font.italic, true);
+  assert.equal(saved.getWorksheet('_ProjectHub').state, 'veryHidden');
+  assert.equal(graph.uploadSessions(), 0, 'setup must never upload a replacement file');
+  assert.equal(graph.closedSetupSessions(), 1);
+  const setupWrites = graph.setupWrites();
   assert.equal((await graph.run('connect')).projects.independentTasks.length, 1);
   assert.equal((await graph.run('configure', itemId)).message, 'Workbook is already set up.');
-  assert.equal(graph.revision(), 1);
+  assert.equal(graph.setupWrites(), setupWrites);
+  assert.equal(graph.revision(), 0);
+});
+
+test('sets up an existing SharePoint workbook without creating an upload session', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  const graph = harness({
+    sharepoint: true, fileName: 'Existing.xlsx',
+    foreignWorkbook: await workbook.xlsx.writeBuffer()
+  });
+  const { itemId } = await graph.run('connect');
+  await graph.run('configure', itemId);
+  assert.equal(graph.uploadSessions(), 0);
+  assert.equal(graph.closedSetupSessions(), 1);
+  assert.equal((await graph.workbook()).getWorksheet('JiraData').getCell('B1').value, 'Jira #');
+});
+
+test('refuses setup if the workbook changed after it was read', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
+  const { itemId } = await graph.run('connect');
+  graph.changeOnDownload();
+  await assert.rejects(graph.run('configure', itemId), /file changed/);
+  assert.equal(graph.setupWrites(), 0);
+  assert.equal(graph.uploadSessions(), 0);
+  assert.equal(graph.closedSetupSessions(), 0);
+});
+
+test('closes a failed setup session and resumes partial setup without duplicating tabs', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  const graph = harness({
+    fileName: 'Existing.xlsx',
+    foreignWorkbook: await workbook.xlsx.writeBuffer(),
+    setupFailure: "worksheets/_ProjectHub/range(address='A1')"
+  });
+  const { itemId } = await graph.run('connect');
+  await assert.rejects(graph.run('configure', itemId), /Microsoft HTTP 503.*Setup may be incomplete/);
+  assert.equal(graph.closedSetupSessions(), 1);
+  assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
+  const partial = await graph.workbook();
+  assert.equal(partial.getWorksheet('_ProjectHub').getCell('A1').value, null);
+  await graph.run('configure', itemId);
+  assert.equal(graph.closedSetupSessions(), 2);
+  assert.equal(graph.uploadSessions(), 0);
+  const saved = await graph.workbook();
+  assert.equal(saved.worksheets.length, partial.worksheets.length);
+  assert.equal(saved.getWorksheet('_ProjectHub').getCell('A1').value, 'ProjectHub/1');
+  assert.notEqual((await graph.run('refresh', itemId)).needsSetup, true);
 });
 
 test('does not create an explicitly selected workbook when it is missing', async () => {
@@ -202,18 +321,19 @@ test('does not commit when the workbook changes during upload', async () => {
 });
 
 test('cancels a locked upload without replacing the workbook', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
+  const source = harness();
+  await source.run('connect');
+  const workbook = await source.workbook();
   const graph = harness({
     fileName: 'Existing.xlsx',
     foreignWorkbook: await workbook.xlsx.writeBuffer(),
     commitStatus: 423
   });
   const { itemId } = await graph.run('connect');
-  await assert.rejects(graph.run('configure', itemId), /Microsoft HTTP 423/);
+  await assert.rejects(graph.run('addTask', itemId, 'Not saved'), /Microsoft HTTP 423/);
   assert.equal(graph.cancellations(), 1);
   assert.equal(graph.revision(), 0);
-  assert.equal((await graph.workbook()).getWorksheet('Sheet1').getCell('A1').value, null);
+  assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').rowCount, 1);
 });
 
 test('reports cleanup failure along with the original commit failure', async () => {

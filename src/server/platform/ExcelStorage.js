@@ -5,7 +5,7 @@ const EXCEL_MAX_BYTES = 20 * 1024 * 1024;
 const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
 
 class ExcelStorage {
-  constructor(accessToken, target = {}, request = fetch) {
+  constructor(accessToken, target = {}, request = globalThis.fetch.bind(globalThis)) {
     this.accessToken = accessToken;
     this.request = request;
     if (Boolean(target.driveId) !== Boolean(target.folderId)) {

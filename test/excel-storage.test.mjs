@@ -16,7 +16,7 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
   let commits = 0;
   let interfere = false;
   const json = (value, status = 200) => Response.json(value, { status });
-  const fetch = async (input, init = {}) => {
+  const graphFetch = async (input, init = {}) => {
     const url = new URL(input);
     if (url.origin === transfer) {
       assert.equal(init.headers?.Authorization, undefined);
@@ -50,7 +50,15 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     assert.equal(init.headers['If-Match'], item.eTag);
     return json({ uploadUrl: `${transfer}/upload` });
   };
-  const context = vm.createContext({ ExcelJS, fetch, Date, TextDecoder, atob, URL, crypto, console });
+  const context = vm.createContext({ ExcelJS, graphFetch, Date, TextDecoder, atob, URL, crypto, console });
+  // Match browser workers, which reject fetch calls with the wrong receiver.
+  vm.runInContext(`
+    globalThis.fetch = function (input, init) {
+      'use strict';
+      if (this !== globalThis) throw new TypeError('Illegal invocation');
+      return graphFetch(input, init);
+    };
+  `, context);
   context.self = context;
   context.importScripts = (...paths) => {
     for (const path of paths) {

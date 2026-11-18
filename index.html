@@ -1,596 +1,1446 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="ProjectHub static preview">
-  <title>ProjectHub | Project tracker</title>
-  <style>
-    :root {
-      color-scheme: light;
-      font-family: "Neue Haas Grotesk", "Helvetica Neue", Arial, sans-serif;
-      color: #000000;
-      background: #ffffff;
-      --surface: #ffffff;
-      --surface-subtle: #f6f6f6;
-      --ink: #000000;
-      --muted: #6f7171;
-      --line: #d8dada;
-      --brand: #ee0000;
-      --radius: 12px;
-      font-synthesis: none;
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Project Tracker Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    const SCRIPT_URL = "<?= url ?>";
+    window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      min-width: 320px;
-      min-height: 100vh;
-      margin: 0;
-      background: var(--surface);
-    }
-
-    button,
-    input {
-      font: inherit;
-    }
-
-    .page {
-      width: min(100%, 1600px);
-      margin: 0 auto;
-      padding: 24px 32px 40px;
-    }
-
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 24px;
-      min-height: 56px;
-      padding-bottom: 20px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      min-width: max-content;
-    }
-
-    .brand-mark {
-      display: grid;
-      width: 36px;
-      height: 36px;
-      place-items: center;
-      border-radius: 50%;
-      background: var(--brand);
-      color: #ffffff;
-      font-size: 18px;
-      font-weight: 700;
-    }
-
-    .brand-name {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 700;
-      line-height: 24px;
-    }
-
-    .preview-label {
-      padding: 4px 8px;
-      border: 1px solid var(--line);
-      border-radius: 9999px;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 16px;
-      white-space: nowrap;
-    }
-
-    .header-note {
-      margin: 0;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: right;
-    }
-
-    main {
-      padding-top: 32px;
-    }
-
-    .page-heading {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      margin-bottom: 24px;
-    }
-
-    .eyebrow {
-      margin: 0 0 4px;
-      color: var(--muted);
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 18px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: clamp(26px, 4vw, 32px);
-      font-weight: 700;
-      line-height: 1.2;
-    }
-
-    .intro {
-      max-width: 700px;
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 20px;
-    }
-
-    .button {
-      display: inline-flex;
-      min-height: 40px;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      padding: 8px 14px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: var(--ink);
-      font-size: 14px;
-      white-space: nowrap;
-    }
-
-    .button:disabled {
-      color: var(--muted);
-      cursor: not-allowed;
-      opacity: 0.65;
-    }
-
-    .button-primary {
-      border-color: var(--ink);
-      background: var(--ink);
-      color: #ffffff;
-    }
-
-    .metrics {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
-    }
-
-    .metric {
-      min-height: 92px;
-      padding: 16px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-    }
-
-    .metric-label {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .metric-value {
-      display: block;
-      font-size: 22px;
-      font-weight: 500;
-    }
-
-    .workspace {
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface);
-    }
-
-    .workspace-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 16px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .view-tabs {
-      display: flex;
-      gap: 4px;
-      overflow-x: auto;
-    }
-
-    .view-tab {
-      min-height: 40px;
-      padding: 8px 12px;
-      border: 0;
-      border-radius: 8px;
-      background: transparent;
-      color: var(--muted);
-      cursor: pointer;
-      font-size: 14px;
-      white-space: nowrap;
-    }
-
-    .view-tab:focus-visible,
-    .button:focus-visible {
-      outline: 2px solid var(--ink);
-      outline-offset: 2px;
-    }
-
-    .view-tab[aria-selected="true"] {
-      background: var(--surface-subtle);
-      color: var(--ink);
-      font-weight: 600;
-    }
-
-    .toolbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-    }
-
-    .toolbar-group {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .search {
-      width: min(280px, 34vw);
-      min-height: 40px;
-      padding: 8px 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      color: var(--ink);
-      font-size: 14px;
-    }
-
-    .search:disabled {
-      background: var(--surface-subtle);
-      cursor: not-allowed;
-    }
-
-    .view-panel {
-      min-height: 310px;
-    }
-
-    .table-scroll {
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      text-align: left;
-    }
-
-    th {
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .empty-state {
-      display: grid;
-      min-height: 250px;
-      align-content: center;
-      justify-items: center;
-      padding: 32px;
-      text-align: center;
-    }
-
-    .empty-icon {
-      display: grid;
-      width: 44px;
-      height: 44px;
-      margin-bottom: 16px;
-      place-items: center;
-      border: 1px solid var(--line);
-      border-radius: 50%;
-      color: var(--muted);
-      font-size: 20px;
-    }
-
-    .empty-state h2 {
-      margin: 0 0 8px;
-      font-size: 18px;
-      font-weight: 500;
-      line-height: 24px;
-    }
-
-    .empty-state p {
-      max-width: 480px;
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 20px;
-    }
-
-    .board-columns {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(180px, 1fr));
-      gap: 12px;
-      padding: 16px;
-    }
-
-    .board-column {
-      min-height: 250px;
-      overflow: hidden;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface-subtle);
-    }
-
-    .board-column h2 {
-      margin: 0;
-      padding: 12px;
-      border-bottom: 1px solid var(--line);
-      font-size: 14px;
-      font-weight: 500;
-    }
-
-    .board-placeholder {
-      padding: 20px 12px;
-      color: var(--muted);
-      font-size: 13px;
-      text-align: center;
-    }
-
-    .timeline {
-      overflow-x: auto;
-      padding: 20px 16px;
-    }
-
-    .timeline-head {
-      display: grid;
-      min-width: 640px;
-      grid-template-columns: 220px repeat(5, minmax(80px, 1fr));
-    }
-
-    .timeline-head span {
-      min-height: 48px;
-      padding: 14px 10px;
-      border-bottom: 1px solid var(--line);
-      color: var(--muted);
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    [hidden] {
-      display: none !important;
-    }
-
-    .page-footer {
-      margin: 20px 0 0;
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 18px;
-    }
-
-    @media (max-width: 760px) {
-      .page {
-        padding: 16px;
-      }
-
-      .header-note {
-        display: none;
-      }
-
-      .page-heading {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .metrics {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
-
-      .workspace-header,
-      .toolbar {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .toolbar-group,
-      .search {
-        width: 100%;
-      }
-
-      .board-columns {
-        grid-template-columns: 1fr;
-      }
-
-      .empty-state {
-        min-height: 220px;
-        padding: 24px 16px;
+    function safeParseStorageItem(key, fallback) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return (parsed && typeof parsed === 'object') ? parsed : fallback;
+      } catch (e) {
+        try { localStorage.removeItem(key); } catch (inner) {}
+        return fallback;
       }
     }
 
-    @media (max-width: 420px) {
-      .brand {
-        gap: 8px;
-      }
+    // Shared helper for included scripts
+    window.getStoredProjectHubUser = function() {
+      return safeParseStorageItem('projectHubUser', {});
+    };
 
-      .brand-name {
-        font-size: 16px;
-      }
+    function injectDeferredAssetHtml(html) {
+      var container = document.createElement('div');
+      container.innerHTML = html;
+      Array.prototype.slice.call(container.childNodes).forEach(function(node) {
+        if (node.nodeType !== 1) return;
 
-      .preview-label {
-        font-size: 11px;
-      }
+        if (node.tagName === 'SCRIPT') {
+          var script = document.createElement('script');
+          if (node.src) {
+            script.src = node.src;
+          } else {
+            script.text = node.textContent || '';
+          }
+          document.body.appendChild(script);
+        } else if (node.tagName === 'STYLE') {
+          document.head.appendChild(node.cloneNode(true));
+        }
+      });
     }
-  </style>
+
+    function loadDeferredDashboardAsset(filename) {
+      if (window.__deferredDashboardAssets[filename]) {
+        return window.__deferredDashboardAssets[filename];
+      }
+
+      var user = window.getStoredProjectHubUser();
+      if (!user || !user.token) {
+        return Promise.reject(new Error('Missing auth token'));
+      }
+
+      window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+        google.script.run
+          .withSuccessHandler(function(html) {
+            try {
+              injectDeferredAssetHtml(html);
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          })
+          .withFailureHandler(function(error) {
+            reject(error);
+          })
+          .getDeferredAsset(user.token, filename);
+      });
+
+      return window.__deferredDashboardAssets[filename];
+    }
+    
+    // Early authentication check - redirect to login if not authenticated
+    (function() {
+      const user = window.getStoredProjectHubUser();
+      if (!user.token) {
+        // User is not authenticated, redirect to login page
+        window.location.href = SCRIPT_URL + "?page=login";
+      }
+    })();
+  </script>
+  <?!= include('Gantt.css'); ?>
+  <?!= include('Dashboard.css'); ?>
+  <?!= include('Config.css'); ?>
 </head>
 <body>
-  <div class="page">
-    <header class="header">
-      <div class="brand">
-        <div class="brand-mark" aria-hidden="true">P</div>
-        <p class="brand-name">ProjectHub</p>
-        <span class="preview-label">Static preview</span>
+  <div class="app" role="application">
+    <!-- Impersonation Banner -->
+    <div id="impersonation-banner" class="hidden bg-orange-500 text-white px-4 py-2 text-center text-sm font-bold flex justify-center items-center gap-4 shadow-md w-full flex-shrink-0">
+        <span id="impersonation-text">You are viewing as: User</span>
+        <button id="stop-impersonation-btn" class="bg-white text-orange-600 px-3 py-1 rounded hover:bg-orange-50 transition-colors text-xs uppercase tracking-wide">
+            Stop Impersonating
+        </button>
+    </div>
+
+    <!-- Loading indicator -->
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading project data...</div>
+    </div>
+    
+    <header class="app-header">
+  <div class="header-row">
+    <div class="flex items-center gap-4">
+      <div class="brand" aria-label="ProjectHub">
+        <img class="logo" src="https://cdn-icons-png.flaticon.com/512/9757/9757813.png" alt="ProjectHub Logo" />
+        <div class="flex items-center gap-2">
+            ProjectHub
+            <span class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded border border-blue-400">4.0</span>
+        </div>
       </div>
-      <a class="button" href="./excel.html">Excel tracker</a>
-    </header>
+      
+      <!-- Workspace Selector (Hidden by default, shown for QA/View Only) -->
+      <div id="workspace-selector-container" class="hidden">
+        <select id="workspace-select" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+          <option value="" disabled selected>Select Workspace</option>
+        </select>
+      </div>
 
-    <main>
-      <section class="page-heading" aria-labelledby="page-title">
-        <div>
-          <p class="eyebrow">Workspace</p>
-          <h1 id="page-title">Project tracker</h1>
-          <p class="intro">
-            Track project status, delivery progress, and team tasks in one place.
-            This preview contains no project records.
-          </p>
+      <div class="search-container">
+        <div class="search-icon">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
         </div>
-        <button class="button button-primary" type="button" disabled title="Connect a backend to enable this action">+ New task</button>
-      </section>
+        <input id="q" class="input-search" placeholder="Search tasks, Jira IDs, or people..." aria-label="Search tasks" autocomplete="off" spellcheck="false" data-lpignore="true" />
+      </div>
+    </div>
 
-      <section class="metrics" aria-label="Project overview">
-        <article class="metric"><span class="metric-label">Current sprint</span><strong class="metric-value" aria-label="No data">—</strong></article>
-        <article class="metric"><span class="metric-label">Past due</span><strong class="metric-value" aria-label="No data">—</strong></article>
-        <article class="metric"><span class="metric-label">Needs review</span><strong class="metric-value" aria-label="No data">—</strong></article>
-        <article class="metric"><span class="metric-label">Out of sync</span><strong class="metric-value" aria-label="No data">—</strong></article>
-      </section>
+    <div class="view-switcher">
+        <button data-view="table" class="view-btn active">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+            <line x1="15" y1="3" x2="15" y2="21"></line>
+          </svg>
+          Table
+        </button>
+        <button data-view="board" class="view-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+          Board
+        </button>
+        <button data-view="gantt" class="view-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="8" y1="6" x2="21" y2="6"></line>
+            <line x1="8" y1="12" x2="21" y2="12"></line>
+            <line x1="8" y1="18" x2="21" y2="18"></line>
+            <line x1="3" y1="6" x2="3.01" y2="6"></line>
+            <line x1="3" y1="12" x2="3.01" y2="12"></line>
+            <line x1="3" y1="18" x2="3.01" y2="18"></line>
+          </svg>
+          Gantt
+        </button>
+        <button data-view="tasks" class="view-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 11l3 3L22 4"></path>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+          </svg>
+          My Tasks
+        </button>
+    </div>
 
-      <section class="workspace" aria-label="Project workspace">
-        <div class="workspace-header">
-          <nav class="view-tabs" role="tablist" aria-label="Workspace views">
-            <button class="view-tab" id="tab-table" type="button" role="tab" aria-selected="true" aria-controls="panel-table" data-view="table">Table</button>
-            <button class="view-tab" id="tab-board" type="button" role="tab" aria-selected="false" aria-controls="panel-board" data-view="board" tabindex="-1">Board</button>
-            <button class="view-tab" id="tab-timeline" type="button" role="tab" aria-selected="false" aria-controls="panel-timeline" data-view="timeline" tabindex="-1">Timeline</button>
-            <button class="view-tab" id="tab-tasks" type="button" role="tab" aria-selected="false" aria-controls="panel-tasks" data-view="tasks" tabindex="-1">My tasks</button>
-          </nav>
-          <span class="preview-label">No records loaded</span>
-        </div>
-
-        <div class="toolbar">
-          <div class="toolbar-group">
-            <input class="search" type="search" aria-label="Search projects" placeholder="Search projects" disabled>
-            <button class="button" type="button" disabled title="Connect a backend to enable filters">Filters</button>
+    <div class="flex items-center gap-3">
+      <div id="links-container" class="dropdown">
+          <button id="links-toggle-btn" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            Links
+          </button>
+          <div id="links-popup" class="dropdown-menu">
+              <!-- Links will be populated dynamically -->
           </div>
-          <div class="toolbar-group">
-            <button class="button" type="button" disabled title="Connect a backend to import data">Import</button>
-            <button class="button" type="button" disabled title="Connect a backend to refresh data">Refresh</button>
-          </div>
-        </div>
+      </div>
 
-        <section class="view-panel" id="panel-table" role="tabpanel" aria-labelledby="tab-table">
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Jira ID</th>
-                  <th scope="col">Summary</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Assignee</th>
-                  <th scope="col">Sprint</th>
-                  <th scope="col">Project stage</th>
-                  <th scope="col">Target date</th>
-                </tr>
-              </thead>
-            </table>
+      <div id="actions-container" class="dropdown">
+          <button id="actions-toggle-btn" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            Actions
+          </button>
+          <div id="actions-popup" class="dropdown-menu">
+              <a href="#" id="forceRefreshBtn" class="dropdown-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+                  <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+                </svg>
+                Force Refresh
+              </a>
+              <a href="#" id="importBtn" class="dropdown-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Import CSV
+              </a>
+              <a href="#" id="rollbackBtn" class="dropdown-item text-warning" style="display: none;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 7v6h6"></path>
+                  <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path>
+                </svg>
+                Rollback Last Upload
+              </a>
+              <div class="dropdown-divider"></div>
+              <a href="#" id="configBtn" class="dropdown-item">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3"></circle>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+                Configuration
+              </a>
           </div>
-          <div class="empty-state">
-            <div class="empty-icon" aria-hidden="true">+</div>
-            <h2>No project data yet</h2>
-            <p>This preview has no live Jira records or user information. Add fictional sample data when it is ready.</p>
+      </div>
+      <div id="user-container" class="dropdown">
+          <button id="user-toggle-btn" class="btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <span id="currentUserDisplay">User</span>
+          </button>
+          <div id="user-popup" class="dropdown-menu">
+              <div class="px-4 py-2 text-xs text-gray-500 border-b border-gray-100">
+                  Signed in as <br>
+                  <strong id="currentUserEmail" class="text-gray-900">user@example.com</strong>
+              </div>
+              <a href="#" id="logoutBtn" class="dropdown-item text-red-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                  <polyline points="16 17 21 12 16 7"></polyline>
+                  <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+                Sign Out
+              </a>
           </div>
-        </section>
+      </div>
+      <button id="newBtn" class="btn primary">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        New Task
+      </button>
+    </div>
+  </div>
+</header>
+     <!-- Quick Links Bar Removed - Moved to Table Controls -->
 
-        <section class="view-panel" id="panel-board" role="tabpanel" aria-labelledby="tab-board" hidden>
-          <div class="board-columns">
-            <article class="board-column"><h2>Not started</h2><p class="board-placeholder">No sample items</p></article>
-            <article class="board-column"><h2>In progress</h2><p class="board-placeholder">No sample items</p></article>
-            <article class="board-column"><h2>Done</h2><p class="board-placeholder">No sample items</p></article>
-          </div>
-        </section>
-
-        <section class="view-panel" id="panel-timeline" role="tabpanel" aria-labelledby="tab-timeline" hidden>
-          <div class="timeline" aria-label="Empty project timeline">
-            <div class="timeline-head" aria-hidden="true">
-              <span>Project</span><span>Month 1</span><span>Month 2</span><span>Month 3</span><span>Month 4</span><span>Month 5</span>
+    <div class="kpi-container" role="region" aria-label="Key Performance Indicators">
+      
+      <!-- Sprints Group -->
+      <div class="kpi-group">
+        <div class="kpi-group-header">Sprints</div>
+        <div class="kpi-group-cards">
+          <!-- Current Sprint (with Progress) -->
+          <div class="stat-card clickable" id="current-sprint-card" data-filter="current-sprint">
+            <div class="stat-icon bg-blue-100 text-blue-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
             </div>
-            <div class="empty-state">
-              <div class="empty-icon" aria-hidden="true">—</div>
-              <h2>No timeline data yet</h2>
-              <p>Project dates will appear here after sample data is connected.</p>
+            <div class="stat-content">
+                <div class="stat-label">Current Sprint <span id="current-sprint-number"></span></div>
+                <div class="stat-value-row">
+                    <span class="stat-value" id="current-sprint-count">-</span>
+                    <span class="stat-subtext">items</span>
+                </div>
+                <div class="stat-progress-bar">
+                    <div class="stat-progress-fill" id="current-sprint-progress" style="width: 0%"></div>
+                </div>
+                <div id="current-sprint-date" class="text-xs text-gray-500 mt-1" style="font-size: 0.7rem;"></div>
             </div>
           </div>
-        </section>
 
-        <section class="view-panel" id="panel-tasks" role="tabpanel" aria-labelledby="tab-tasks" hidden>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th scope="col">Task</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Priority</th>
-                  <th scope="col">Due date</th>
-                  <th scope="col">Project</th>
-                </tr>
-              </thead>
-            </table>
+          <!-- Past Sprint -->
+          <div class="stat-card clickable" id="past-sprint-card" data-filter="past-sprint">
+            <div class="stat-icon bg-gray-100 text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 11 12 14 22 4"></polyline>
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Past Sprint</div>
+                <div class="stat-value" id="past-sprint-count">-</div>
+            </div>
           </div>
-          <div class="empty-state">
-            <div class="empty-icon" aria-hidden="true">+</div>
-            <h2>No tasks yet</h2>
-            <p>This preview does not connect to Google Tasks or any task database.</p>
+        </div>
+      </div>
+
+      <div class="kpi-divider"></div>
+
+      <!-- Validation Group -->
+      <div class="kpi-group">
+        <div class="kpi-group-header">Validation</div>
+        <div class="kpi-group-cards">
+          <!-- Past Due -->
+          <div class="stat-card clickable" id="past-due-card" data-filter="past-due">
+            <div class="stat-icon bg-red-100 text-red-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Past Due</div>
+                <div class="stat-value text-red-600" id="past-due-count">-</div>
+            </div>
           </div>
-        </section>
-      </section>
-      <p class="page-footer">Static UI preview. Actions that require a backend are intentionally unavailable.</p>
+
+          <!-- Stale -->
+          <div class="stat-card clickable" id="stale-card" data-filter="stale">
+            <div class="stat-icon bg-orange-100 text-orange-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Stale</div>
+                <div class="stat-value text-orange-600" id="stale-count">-</div>
+            </div>
+          </div>
+
+          <!-- Needs Review -->
+          <div class="stat-card clickable" id="needs-review-card" data-filter="needs-review">
+            <div class="stat-icon bg-yellow-100 text-yellow-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Needs Review</div>
+                <div class="stat-value" id="needs-review-count">-</div>
+            </div>
+          </div>
+
+          <!-- Out of Sync -->
+          <div class="stat-card clickable" id="out-of-sync-card" data-filter="out-of-sync">
+            <div class="stat-icon bg-red-100 text-red-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                  <line x1="12" y1="9" x2="12" y2="13"></line>
+                  <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Out of Sync</div>
+                <div class="stat-value text-red-600" id="out-of-sync-count">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-divider"></div>
+
+      <!-- Project Stage Group -->
+      <div class="kpi-group" id="project-stage-kpi-group" style="display: none;">
+        <div class="kpi-group-header">Project Stage</div>
+        <div class="kpi-group-cards" id="project-stage-kpi-cards">
+           <!-- Dynamic cards will be inserted here -->
+        </div>
+      </div>
+
+      <div class="kpi-divider" id="project-stage-divider" style="display: none;"></div>
+
+      <!-- Status Group -->
+      <div class="kpi-group">
+        <div class="kpi-group-header">Status</div>
+        <div class="kpi-group-cards">
+          <!-- UAT -->
+          <div class="stat-card clickable" id="uat-card" data-filter="uat">
+            <div class="stat-icon bg-purple-100 text-purple-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="9" cy="7" r="4"></circle>
+                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">UAT</div>
+                <div class="stat-value text-purple-600" id="uat-count">-</div>
+            </div>
+          </div>
+
+          <!-- Retest -->
+          <div class="stat-card clickable" id="retest-card" data-filter="retest">
+            <div class="stat-icon bg-pink-100 text-pink-600">
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 4v6h-6"></path>
+                  <path d="M1 20v-6h6"></path>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path>
+                  <path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path>
+                </svg>
+            </div>
+            <div class="stat-content">
+                <div class="stat-label">Retest</div>
+                <div class="stat-value text-pink-600" id="retest-count">-</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main class="main">
+      <div id="table-controls" class="table-controls-bar" style="display: none;">
+    <div class="flex items-center justify-between w-full">
+      <div class="flex items-center gap-3">
+        <!-- View Toggles (Moved from Quick Links) -->
+        <div class="flex items-center gap-2 border-r pr-3 border-gray-200">
+           <button class="filter-toggle active" id="filter-toggle-stories" title="Show/Hide Stories">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              Stories
+           </button>
+           <button class="filter-toggle active" id="filter-toggle-bugs" title="Show/Hide Bugs">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+              Bugs
+           </button>
+           
+           <!-- Nest Bugs Toggle -->
+           <div class="flex items-center gap-2 px-2">
+              <label class="flex items-center cursor-pointer relative" title="Toggle nested view for Bugs">
+                  <input type="checkbox" id="toggle-nest-bugs" class="sr-only peer" checked>
+                  <div class="w-7 h-4 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                  <span class="ml-2 text-xs font-medium text-gray-600">Nest</span>
+              </label>
+           </div>
+        </div>
+
+        <div class="flex items-center gap-2 border-r pr-3 border-gray-200">
+           <button class="filter-toggle" id="filter-toggle-closed" title="Show/Hide Closed Items">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 11 12 14 22 4"></polyline>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path>
+              </svg>
+              Closed
+           </button>
+           <button class="filter-toggle active" id="filter-toggle-in-progress" title="Show Only In Progress Items">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+              </svg>
+              In Progress
+           </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="expandAllBtn" class="btn" title="Expand All Epics">
+            <span>📂</span> Expand All
+          </button>
+          <button id="collapseAllBtn" class="btn" title="Collapse All Epics">
+            <span>📁</span> Collapse All
+          </button>
+        </div>
+        
+        <div class="flex items-center gap-2">
+          <div id="filter-container" class="relative">
+            <button id="filter-toggle-btn" class="btn">Filters</button>
+            <div id="filter-popup" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg p-4 border border-gray-200 z-50">
+              <h4 class="font-semibold mb-2">Filter by</h4>
+              <div class="space-y-3">
+                <!-- Multi-select dropdowns with checkboxes -->
+                <div class="filter-dropdown" data-filter="status">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Statuses</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+                
+                <div class="filter-dropdown" data-filter="sprint">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Sprints</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+                
+                
+                
+                <div class="filter-dropdown" data-filter="validation">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Validations</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+                
+                <div class="filter-dropdown" data-filter="projectStage">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Project Stages</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+
+                <div class="filter-dropdown" data-filter="uatStatus">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All UAT Statuses</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+
+                <div class="filter-dropdown" data-filter="fixVersion">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Fix Versions</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+                
+                <div class="filter-dropdown" data-filter="assignedPM">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All PMs</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+                
+                <div class="filter-dropdown" data-filter="assignedDev">
+                  <button class="filter-dropdown-toggle w-full text-left select">
+                    <span class="filter-label">All Devs</span>
+                    <span class="dropdown-arrow">▼</span>
+                  </button>
+                  <div class="filter-dropdown-content hidden">
+                    <div class="filter-options-list"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Quick filters dropdown removed -->
+          
+          <button id="clearFiltersBtn" class="btn btn-sm btn-danger" style="display: none;">
+            Clear Filters
+          </button>
+          
+          <div id="activeFiltersIndicator" class="active-filters-indicator" style="display: none;">
+            <span class="filter-badge">Filters Active</span>
+          </div>
+        </div>
+      </div>
+      
+      <div id="count" class="text-sm text-gray-600" style="min-width: 120px; text-align: right;"></div>
+    </div>
+      </div>
+      <div id="content-wrapper" class="content-wrapper">
+        <div id="no-matches-indicator" class="no-matches-indicator hidden">
+          <div class="no-matches-content">
+            <div class="no-matches-icon">🔍</div>
+            <div class="no-matches-text">No items match your filter selection</div>
+            <div class="no-matches-subtext">Try adjusting your filters or clearing them to see more results</div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- My Tasks View -->
+      <div id="view-tasks" class="view-container" style="display: none;">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-center mb-4 px-4 pt-4">
+            <div class="flex items-center gap-3">
+                <h2 class="text-xl font-bold text-gray-800">Task Hub</h2>
+                <span id="tasks-total-count" class="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">0 tasks</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <select id="tasks-filter-status" class="select text-sm" style="min-width:90px">
+                    <option value="open">Open</option>
+                    <option value="done">Done</option>
+                    <option value="all">All</option>
+                </select>
+                <button id="refresh-tasks-btn" class="btn btn-sm" title="Sync latest Google tasks and reload Task Hub">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"></path><path d="M20.49 15a9 9 0 0 1-14.85 3.36L1 14"></path></svg>
+                  Refresh
+                </button>
+                <button id="add-task-btn" class="btn btn-sm primary">+ New Task</button>
+            </div>
+        </div>
+
+        <!-- Quick-Add Bar (hidden by default) -->
+        <div id="quick-add-bar" class="hidden mx-4 mb-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div class="flex flex-wrap items-end gap-2">
+                <div class="flex-1 min-w-[200px]">
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Title</label>
+                    <input id="quick-add-title" type="text" class="input w-full" placeholder="Task title..." />
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Due</label>
+                    <input id="quick-add-due" type="date" class="input" />
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Priority</label>
+                    <select id="quick-add-priority" class="select"><option value="Low">Low</option><option value="Medium" selected>Medium</option><option value="High">High</option><option value="Critical">Critical</option></select>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Recurrence</label>
+                    <select id="quick-add-recurrence" class="select"><option value="">None</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select>
+                </div>
+                <div>
+                    <label class="text-xs font-medium text-gray-600 mb-1 block">Task list</label>
+                    <select id="quick-add-list" class="select"><option value="">Local only</option></select>
+                </div>
+                <button id="quick-add-save" class="btn btn-sm primary">Add</button>
+                <button id="quick-add-cancel" class="btn btn-sm">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Collapsible Google Tasks Sync Bar -->
+        <div class="mx-4 mb-4 bg-white border border-gray-200 rounded-lg">
+            <button id="toggle-sync-bar" class="w-full flex items-center justify-between p-3 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-lg">
+            <span>Google Task Lists</span>
+                <svg id="sync-bar-chevron" class="w-4 h-4 text-gray-400 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </button>
+            <div id="sync-bar-content" class="hidden px-3 pb-3">
+          <p class="text-xs text-gray-500 mb-2">Task list options used by Quick Add load here.</p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <select id="google-task-list-select" class="select min-w-[260px]"><option value="">Loading lists...</option></select>
+                </div>
+                <p id="google-tasks-sync-status" class="text-xs text-gray-500 mt-2"></p>
+            </div>
+        </div>
+
+        <!-- Task Table -->
+        <div class="px-4 pb-4">
+            <div id="tasks-table-container" class="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th class="w-8 px-3 py-2"></th>
+                            <th class="px-3 py-2">Task</th>
+                            <th class="px-3 py-2 w-20">Priority</th>
+                            <th class="px-3 py-2 w-24">Due</th>
+                            <th class="px-3 py-2 w-20">Source</th>
+                            <th class="px-3 py-2 w-20">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tasks-table-body">
+                        <tr><td colspan="6" class="text-center text-gray-400 py-8">Loading tasks...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Task Detail Drawer -->
+        <div id="task-detail-drawer" class="hidden fixed inset-0 z-50">
+            <div id="task-drawer-overlay" class="absolute inset-0 bg-black bg-opacity-30"></div>
+            <div class="absolute right-0 top-0 h-full w-full max-w-md bg-white shadow-xl flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-gray-200">
+                    <h3 id="drawer-title" class="text-lg font-semibold text-gray-800">Task Details</h3>
+                    <button id="drawer-close-btn" class="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Title</label><input id="drawer-task-title" class="input w-full" /></div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Status</label><select id="drawer-task-status" class="select w-full"><option value="Open">Open</option><option value="In Progress">In Progress</option><option value="Done">Done</option></select></div>
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Priority</label><select id="drawer-task-priority" class="select w-full"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option><option value="Critical">Critical</option></select></div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Due date</label><input id="drawer-task-due" type="date" class="input w-full" /></div>
+                        <div><label class="text-xs font-medium text-gray-600 block mb-1">Recurrence</label><select id="drawer-task-recurrence" class="select w-full"><option value="">None</option><option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="yearly">Yearly</option></select></div>
+                    </div>
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Project</label><input id="drawer-task-project" class="input w-full" /></div>
+                    <div><label class="text-xs font-medium text-gray-600 block mb-1">Tags</label><input id="drawer-task-tags" class="input w-full" placeholder="comma-separated" /></div>
+                    <div>
+                      <div class="flex items-center justify-between mb-1">
+                        <label class="text-xs font-medium text-gray-600 block">Description</label>
+                        <button type="button" id="drawer-task-desc-toggle" class="text-xs font-medium text-blue-600 hover:text-blue-700">Edit</button>
+                      </div>
+                      <div id="drawer-task-desc-preview" class="drawer-task-desc-preview rich-text"></div>
+                      <textarea id="drawer-task-desc" class="input w-full hidden" rows="4"></textarea>
+                    </div>
+                    <p id="drawer-task-meta" class="text-xs text-gray-400 pt-2 border-t border-gray-100"></p>
+                </div>
+                <div class="flex items-center justify-between p-4 border-t border-gray-200">
+                    <button id="drawer-delete-btn" class="btn btn-sm text-red-600 hover:bg-red-50">Delete</button>
+                    <button id="drawer-save-btn" class="btn btn-sm primary">Save changes</button>
+                </div>
+            </div>
+        </div>
+      </div>
     </main>
   </div>
+
+  <div id="modalHost" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal" role="document">
+      <header>
+        <strong id="modalTitle">New Task</strong>
+        <div>
+          <button id="modalClose" class="btn" aria-label="Close">Close</button>
+          <button id="modalSave" class="btn primary">Save</button>
+        </div>
+      </header>
+      <div class="content">
+        <div class="grid">
+          <div class="field"><label class="label" for="t-title">Title</label><input id="t-title" class="input" /></div>
+          <div class="field"><label class="label" for="t-assignee">Assignee</label><input id="t-assignee" class="input" /></div>
+          <div class="field"><label class="label" for="t-status">Status</label><select id="t-status" class="select"></select></div>
+          <div class="field"><label class="label" for="t-priority">Priority</label><select id="t-priority" class="select"><option>High</option><option>Medium</option><option>Low</option></select></div>
+          <div class="field"><label class="label" for="t-due">Due date</label><input id="t-due" class="input" type="date" /></div>
+          <div class="field"><label class="label" for="t-project">Project</label><input id="t-project" class="input" /></div>
+          <div class="field" style="grid-column:1/-1"><label class="label" for="t-tags">Tags (comma‑separated)</label><input id="t-tags" class="input" /></div>
+          <div class="field" style="grid-column:1/-1"><label class="label" for="t-desc">Description</label><textarea id="t-desc" class="input"></textarea></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div id="importModalHost" class="modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="modal" role="document">
+      <header>
+        <strong>Import Jira CSV</strong>
+        <button id="importModalClose" class="btn" aria-label="Close">Close</button>
+      </header>
+      <div class="content">
+        <div class="field">
+          <label class="label" for="csvFile">Select Data File</label>
+          <input id="csvFile" type="file" accept=".csv,.xls,.xlsx" class="input" />
+          <p class="text-xs text-gray-500 mt-1">Please select a .csv, .xls, or .xlsx file. Excel files will be automatically converted to CSV format.</p>
+        </div>
+        
+        <div class="field">
+          <label class="checkbox-container">
+            <input type="checkbox" id="archiveMissing" checked>
+            <span class="checkmark"></span>
+            Archive items not in upload (uncheck for partial/filtered exports)
+          </label>
+          <p class="text-xs text-gray-500 mt-1">When checked, items not found in the CSV will be marked as archived. Uncheck if you're uploading a filtered subset of your Jira data.</p>
+        </div>
+        
+        <div id="uploadProgress" class="mt-4" style="display: none;">
+          <div class="progress-bar-container">
+            <div class="progress-bar">
+              <div id="progressBarFill" class="progress-bar-fill"></div>
+            </div>
+            <div id="progressText" class="progress-text">Preparing upload...</div>
+          </div>
+        </div>
+        
+        <div id="uploadResults" class="mt-4" style="display: none;">
+          <div class="upload-results">
+            <h4 class="font-semibold mb-2">Upload Results</h4>
+            <div id="resultsSummary" class="results-summary"></div>
+            <div id="resultsDetails" class="results-details mt-2"></div>
+          </div>
+        </div>
+        
+        <div class="flex justify-end mt-4">
+                    <button id="uploadBtn" type="button" class="btn btn-primary">Upload and Replace Data</button>
+          <button id="cancelUploadBtn" class="btn btn-outline ml-2" style="display: none;">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="side-panel-container" class="side-panel-container">
+    <div id="side-panel" class="side-panel">
+        <div class="side-panel-header">
+            <h3 id="side-panel-title">Story Details</h3>
+            <button id="side-panel-close" class="btn">&times;</button>
+        </div>
+        <div class="side-panel-content">
+            <div class="detail-group">
+                <div class="detail-label">Summary</div>
+                <div id="panel-summary" class="detail-value"></div>
+            </div>
+            <div class="detail-group">
+                <div class="detail-label">Status</div>
+                <div id="panel-status" class="detail-value"></div>
+            </div>
+            <div class="detail-group">
+                <div class="detail-label">Assignee</div>
+                <div id="panel-assignee" class="detail-value"></div>
+            </div>
+            <div class="detail-group">
+                <div class="detail-label">Sprint</div>
+                <div id="panel-sprint" class="detail-value"></div>
+            </div>
+            <div class="detail-group">
+                <div class="detail-label">Drive Link</div>
+                <div id="panel-drive-link-view" class="drive-link-view">
+                    <a id="panel-drive-link" href="#" target="_blank"></a>
+                    <button id="panel-drive-link-edit" class="btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/></svg>
+                    </button>
+                </div>
+                <div id="panel-drive-link-edit-view" class="drive-link-edit-view" style="display: none;">
+                    <input id="panel-drive-link-input" class="input" placeholder="Paste Google Drive link here...">
+                    <button id="panel-drive-link-save" class="btn primary">Save</button>
+                    <button id="panel-drive-link-cancel" class="btn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite">Saved</div>
+
+  <div id="storyInfoModal" class="story-info-modal-backdrop" role="dialog" aria-modal="true" aria-hidden="true">
+    <div class="story-info-modal" role="document">
+      <div class="story-info-header">
+        <h3 id="storyInfoTitle">Story Details</h3>
+        <button id="storyInfoClose" class="btn-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="story-info-content">
+        <div class="story-info-section">
+          <div class="story-info-label">Jira #</div>
+          <div id="storyInfoJiraNumber" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Summary</div>
+          <div id="storyInfoSummary" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Description</div>
+          <div id="storyInfoDescription" class="story-info-value rich-text"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Status</div>
+          <div id="storyInfoStatus" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Issue Type</div>
+          <div id="storyInfoType" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Priority</div>
+          <div id="storyInfoPriority" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Assignee</div>
+          <div id="storyInfoAssignee" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Sprint</div>
+          <div id="storyInfoSprint" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Story Points</div>
+          <div id="storyInfoStoryPoints" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section full-width" id="storyInfoLabelsSection">
+          <div class="story-info-label">Labels</div>
+          <div id="storyInfoLabels" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Acceptance Criteria</div>
+          <div id="storyInfoAcceptanceCriteria" class="story-info-value preformatted"></div>
+        </div>
+        <div class="story-info-section full-width">
+          <div class="story-info-label">Links</div>
+          <div class="story-info-links">
+            <div class="story-info-link-item">
+              <div id="storyInfoDriveLinkView" class="story-info-link-view">
+                <a id="storyInfoDriveLink" href="#" target="_blank" class="story-info-link-clickable">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M.5 3l.04.87a1.99 1.99 0 0 0 .342 1.311l.637.637L7.086 8l-5.12 5.12-.637.637a1.99 1.99 0 0 0-.342 1.311L.5 16H2a1 1 0 0 0 .707-.293l2.414-2.414a1 1 0 0 0 .293-.707v-1.172h3.793a1 1 0 0 0 .707-.293L15.043 8 9.207 2.157A1 1 0 0 0 8.5 2H4.707v-1.172a1 1 0 0 0-.293-.707L2.707.293A1 1 0 0 0 2 0H.5zM2 1l1 1v1.172A1 1 0 0 0 4.172 4H8.5a1 1 0 0 0 .707-.293L13.854 8l-4.647 4.646a1 1 0 0 0-.707.293H4.172A1 1 0 0 0 3 13.828V14l-1 1H2z"/>
+                  </svg>
+                  <span id="storyInfoDriveLinkText">Drive Link</span>
+                </a>
+                <button id="storyInfoDriveLinkEdit" class="btn-icon-small" title="Edit Drive Link">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
+                    <path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
+                  </svg>
+                </button>
+              </div>
+              <div id="storyInfoDriveLinkEditView" class="story-info-link-edit-view" style="display: none;">
+                <input id="storyInfoDriveLinkInput" class="input input-sm" placeholder="Paste Google Drive link here..." />
+                <div class="story-info-link-edit-actions">
+                  <button id="storyInfoDriveLinkSave" class="btn btn-sm primary">Save</button>
+                  <button id="storyInfoDriveLinkCancel" class="btn btn-sm">Cancel</button>
+                </div>
+              </div>
+              <div id="storyInfoDrivePreview" class="story-info-media-preview" style="display: none;"></div>
+            </div>
+          </div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Created</div>
+          <div id="storyInfoCreated" class="story-info-value"></div>
+        </div>
+        <div class="story-info-section">
+          <div class="story-info-label">Updated</div>
+          <div id="storyInfoUpdated" class="story-info-value"></div>
+        </div>
+
+        <!-- Project Artifacts Checklist (Epics only) -->
+        <div id="storyInfoArtifactsSection" class="story-info-section full-width" style="display:none;">
+          <div class="story-info-label" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Project Artifacts</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="artifactsReadiness" class="text-xs font-normal px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"></span>
+              <button id="createProjectFolderBtn" onclick="createProjectFolderUI_()" class="text-xs px-3 py-1 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700 font-medium" style="white-space:nowrap;" title="Create or repair project folder in Google Drive">
+                📁 Create folder
+              </button>
+            </div>
+          </div>
+          <div id="projectFolderStatus" style="display:none;padding:4px 8px;margin-bottom:4px;border-radius:6px;font-size:0.78em;"></div>
+          <div class="story-info-value" style="padding:0;">
+            <table id="artifactsTable" style="width:100%;border-collapse:collapse;font-size:0.85em;">
+              <thead>
+                <tr style="border-bottom:2px solid #e5e7eb;text-align:left;">
+                  <th style="padding:6px 8px;width:28px;"></th>
+                  <th style="padding:6px 8px;">Artifact</th>
+                  <th style="padding:6px 8px;width:110px;">Status</th>
+                  <th style="padding:6px 8px;">Link / Notes</th>
+                </tr>
+              </thead>
+              <tbody id="artifactsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIGURATION MODAL (In-App) -->
+  <div id="config-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <!-- Background overlay -->
+      <div class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" id="config-modal-overlay"></div>
+
+      <!-- Modal panel -->
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full">
+        
+        <!-- Header -->
+        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4 border-b border-gray-200">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg leading-6 font-medium text-gray-900" id="modal-title">Configuration <span class="text-xs text-gray-400 font-normal ml-2">v3.0</span></h3>
+            <button type="button" id="closeConfigBtn" class="bg-white rounded-md text-gray-400 hover:text-gray-500 focus:outline-none">
+              <span class="sr-only">Close</span>
+              <svg class="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <!-- Tabs -->
+          <div class="mt-4">
+            <nav class="flex gap-4 border-b border-gray-200" role="tablist">
+                <button class="tab-btn active" data-target="#tab-dropdowns" role="tab" aria-selected="true">Dropdowns</button>
+                <button class="tab-btn" data-target="#tab-mappings" role="tab" aria-selected="false">Mappings</button>
+                <button class="tab-btn" data-target="#tab-links" role="tab" aria-selected="false">Links</button>
+                <button class="tab-btn hidden" id="tab-users-btn" data-target="#tab-users" role="tab" aria-selected="false">Users</button>
+                <button class="tab-btn" data-target="#tab-maintenance" role="tab" aria-selected="false">Maintenance</button>
+            </nav>
+          </div>
+        </div>
+
+        <!-- Content -->
+        <div class="bg-gray-50 px-4 py-5 sm:p-6 h-[70vh] overflow-y-auto">
+            <!-- Dropdowns Panel -->
+            <section id="tab-dropdowns" class="tab-panel">
+                <p class="text-sm text-gray-600 mb-4">Manage list options shown in the app. One value per line. Use the per-type project stage lists to override the global list.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-gray-700">KPI Project Stages</label>
+                        </div>
+                        <div id="kpiStageSelector" class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm p-2 h-60 overflow-y-auto bg-white">
+                            <p class="text-xs text-gray-500 p-2">Loading options...</p>
+                        </div>
+                        <p class="mt-1 text-xs text-gray-500">Select which Project Stages to display as KPI cards.</p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="actPctOptions" class="block text-sm font-medium text-gray-700">ACT/PCT Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="actPctOptions">Clean</button>
+                        </div>
+                        <textarea id="actPctOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="ACT\nPCT"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="planningStageOptions" class="block text-sm font-medium text-gray-700">Planning Stage Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="planningStageOptions">Clean</button>
+                        </div>
+                        <textarea id="planningStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="projectStageOptions" class="block text-sm font-medium text-gray-700">Project Stage Options (Global)</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="projectStageOptions">Clean</button>
+                        </div>
+                        <textarea id="projectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="epicProjectStageOptions" class="block text-sm font-medium text-gray-700">Epic Project Stage Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="epicProjectStageOptions">Clean</button>
+                        </div>
+                        <textarea id="epicProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="storyProjectStageOptions" class="block text-sm font-medium text-gray-700">Story Project Stage Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="storyProjectStageOptions">Clean</button>
+                        </div>
+                        <textarea id="storyProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="bugProjectStageOptions" class="block text-sm font-medium text-gray-700">Bug Project Stage Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="bugProjectStageOptions">Clean</button>
+                        </div>
+                        <textarea id="bugProjectStageOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="priorityOptions" class="block text-sm font-medium text-gray-700">Priority Options</label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="priorityOptions">Clean</button>
+                        </div>
+                        <textarea id="priorityOptions" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Critical\nHigh\nMedium\nLow"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">One priority per line, ordered from highest to lowest priority for sorting.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Mappings Panel -->
+            <section id="tab-mappings" class="tab-panel hidden">
+                <p class="text-sm text-gray-600 mb-4">Configure what is considered “Closed”. Only Project Stage determines if an item is closed. This impacts: Validation (shows Closed when Project Stage matches), Filters (Show Closed toggle), and the Status ↔ Project Stage sync indicator (for mismatch detection only).</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="closedProjectStages" class="block text-sm font-medium text-gray-700">
+                                Closed Project Stages
+                                <span class="inline-flex align-middle ml-1 text-blue-600" title="Any Project Stage equal to these values (case-insensitive) is treated as Closed. Only Project Stage drives closed logic. Affects: Validation (shows Closed), Filters (Show Closed), and the Status–Project Stage sync check.">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                </span>
+                            </label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="closedProjectStages">Clean</button>
+                        </div>
+                        <textarea id="closedProjectStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Done\nIn Production\nProduction\nProd\nFixed\nCanceled"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">Matches the Project Stage dropdown exactly (case-insensitive). One value per line.</p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="pastSprintClosedStages" class="block text-sm font-medium text-gray-700">
+                                Past Sprint Closed Project Stages
+                                <span class="inline-flex align-middle ml-1 text-blue-600" title="Only used when counting Past Sprint Open items. Treat items with these Project Stages as Closed for past sprint metrics. This does not affect filters or validation.">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                </span>
+                            </label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="pastSprintClosedStages">Clean</button>
+                        </div>
+                        <textarea id="pastSprintClosedStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g. Released\nReady for Prod"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">Optional. One value per line. Case-insensitive match to the Project Stage dropdown.</p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="pastDueExemptStages" class="block text-sm font-medium text-gray-700">
+                                Past Due Exempt Stages
+                                <span class="inline-flex align-middle ml-1 text-blue-600" title="Items in these Project Stages will NOT be marked as 'Past Due' even if the target date has passed.">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                </span>
+                            </label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="pastDueExemptStages">Clean</button>
+                        </div>
+                        <textarea id="pastDueExemptStages" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g. On Hold\nBlocked"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">Optional. One value per line. Case-insensitive match to the Project Stage dropdown.</p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between">
+                            <label for="inProgressStatuses" class="block text-sm font-medium text-gray-700">
+                              Not In Progress Statuses
+                              <span class="inline-flex align-middle ml-1 text-blue-600" title="Statuses considered NOT in progress for the dashboard filter. Any status not listed here is treated as in progress.">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 20a8 8 0 110-16 8 8 0 010 16z"/></svg>
+                                </span>
+                            </label>
+                            <button class="text-xs text-blue-600 hover:underline" data-clean-for="inProgressStatuses">Clean</button>
+                        </div>
+                        <textarea id="inProgressStatuses" rows="10" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="Closed\nDone\nCanceled\nOn Hold"></textarea>
+                        <p class="mt-1 text-xs text-gray-500">One value per line. Used for the 'Show Only In Progress' filter as an exclusion list.</p>
+                    </div>
+                </div>
+
+                <!-- Stage ↔ Status Mapping -->
+                <div class="mt-8">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-800">Status ↔ Project Stage Mapping</h3>
+                        <div class="flex items-center gap-4">
+                            <div id="refreshDataStatus" class="text-sm"></div>
+                            <button type="button" id="refreshMappingDataBtn" class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">
+                                Refresh Data
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <p class="text-sm text-gray-600 mb-4">
+                        Select a Status on the left, then click Project Stages on the right to map multiple stages to that status. Configure separately for each item type.
+                    </p>
+                    
+                    <!-- Tabs for item types -->
+                    <div class="mb-4">
+                        <div class="flex border-b">
+                            <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-type="epic">
+                                Epics
+                            </button>
+                            <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:border-gray-300" data-type="story">
+                                Stories
+                            </button>
+                            <button type="button" class="mapping-tab-btn px-4 py-2 text-sm font-medium border-b-2 border-transparent hover:border-gray-300" data-type="bug">
+                                Bugs
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Mapping interface for each type -->
+                    <div id="epicMappingPanel" class="mapping-panel">
+                        <h4 class="text-md font-medium text-gray-700 mb-3">Epic Status ↔ Project Stage Mapping</h4>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                                <div id="epicStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Epic Project Stages</h5>
+                                <div id="epicProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Select a status first</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Current Epic Mappings</h5>
+                                <div id="epicCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">No mappings yet</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="storyMappingPanel" class="mapping-panel hidden">
+                        <h4 class="text-md font-medium text-gray-700 mb-3">Story Status ↔ Project Stage Mapping</h4>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                                <div id="storyStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Story Project Stages</h5>
+                                <div id="storyProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Select a status first</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Current Story Mappings</h5>
+                                <div id="storyCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">No mappings yet</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="bugMappingPanel" class="mapping-panel hidden">
+                        <h4 class="text-md font-medium text-gray-700 mb-3">Bug Status ↔ Project Stage Mapping</h4>
+                        <div class="grid grid-cols-3 gap-4">
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Available Status Values</h5>
+                                <div id="bugStatusValuesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Click "Refresh Data" to load status values</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Bug Project Stages</h5>
+                                <div id="bugProjectStagesList" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">Select a status first</p>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-700 mb-2">Current Bug Mappings</h5>
+                                <div id="bugCurrentMappings" class="border rounded p-2 h-48 overflow-y-auto bg-gray-50">
+                                    <p class="text-xs text-gray-500">No mappings yet</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                            
+                    <div class="mt-4 p-3 bg-blue-50 rounded-md">
+                        <p class="text-sm text-blue-800">
+                            <strong>How to use:</strong> 
+                            1) Click "Refresh Data" to load current Project Stages and Status values from your data
+                            2) Click a Project Stage on the left to select it
+                            3) Click Status values in the middle to map them to the selected stage
+                            4) Review mappings on the right
+                            5) Click "Save Configuration" to apply changes
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Links Panel -->
+            <section id="tab-links" class="tab-panel hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                    <div>
+                        <label for="newLinkTitle" class="block text-sm font-medium text-gray-700">Link Title</label>
+                        <input type="text" id="newLinkTitle" placeholder="Project Brief" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="newLinkUrl" class="block text-sm font-medium text-gray-700">Link URL</label>
+                        <input type="url" id="newLinkUrl" placeholder="https://docs.google.com/..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="flex justify-between items-center mt-3">
+                    <p class="text-xs text-gray-500">Links show in the Dashboard’s Links menu.</p>
+                    <button id="addLinkBtn" class="px-3 py-1.5 bg-gray-200 text-sm text-gray-800 rounded-md hover:bg-gray-300">Add Link</button>
+                </div>
+                <div id="linksList" class="mt-4 space-y-2"></div>
+            </section>
+
+            <!-- Users Panel -->
+            <section id="tab-users" class="tab-panel hidden">
+                <div class="space-y-4">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-lg font-medium text-gray-900">User Management</h3>
+                        <button id="addUserBtn" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">Add User</button>
+                    </div>
+                    <div id="global-sheet-link-bar" class="flex items-center gap-2 px-4 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-600">
+                        <svg class="w-4 h-4 text-green-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7"/></svg>
+                        <span class="font-medium text-gray-700">Global sheet:</span>
+                        <a id="global-sheet-link" href="#" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline truncate">Loading...</a>
+                    </div>
+                    <div class="overflow-x-auto border rounded-md">
+                        <table class="min-w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Username</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Data Sheet</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body" class="bg-white divide-y divide-gray-200">
+                                <!-- Users will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Maintenance Panel -->
+            <section id="tab-maintenance" class="tab-panel hidden">
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+                        <h3 class="text-lg font-medium text-gray-900 mb-2">Database Health Check</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Scans the database structure (Sheets and Headers) and automatically fixes missing elements.
+                            Useful when deploying updates or fixing corrupted sheets.
+                        </p>
+                        
+                        <div class="flex items-end gap-4">
+                            <div class="flex-1">
+                                <label for="maintenanceTargetId" class="block text-sm font-medium text-gray-700">Target Spreadsheet ID (Optional)</label>
+                                <input type="text" id="maintenanceTargetId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Leave blank to check Global Database">
+                            </div>
+                            <button id="runMaintenanceBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                Fix Headers & Sheets
+                            </button>
+                        </div>
+                        
+                        <div id="maintenanceLogs" class="mt-4 p-3 bg-gray-50 rounded-md border border-gray-200 text-xs font-mono text-gray-600 h-32 overflow-y-auto hidden">
+                            <!-- Logs go here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-200">
+          <button id="saveConfigBtn" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+            Save Configuration
+          </button>
+          <button id="closeConfigBtnFooter" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+            Cancel
+          </button>
+          <div class="flex-grow flex items-center">
+             <p id="configStatus" class="text-sm text-gray-500 ml-2"></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Management Modal -->
+  <div id="user-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div class="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+      <div id="user-modal-overlay" class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true"></div>
+      <span class="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+      <div class="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <div class="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+          <div class="sm:flex sm:items-start">
+            <div class="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left w-full">
+              <h3 class="text-lg leading-6 font-medium text-gray-900" id="user-modal-title">Add User</h3>
+              <div class="mt-4 space-y-4">
+                <input type="hidden" id="userId">
+                <div>
+                  <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+                  <input type="text" id="username" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                </div>
+                <div>
+                  <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
+                  <input type="email" id="email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                </div>
+                <div>
+                  <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
+                  <select id="role" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm">
+                    <option value="project_manager">Project Manager</option>
+                    <option value="qa_tester">QA Tester</option>
+                    <option value="view_only">View Only</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <div class="flex items-center">
+                  <input type="checkbox" id="isActive" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                  <label for="isActive" class="ml-2 block text-sm text-gray-900">Active</label>
+                </div>
+                <div>
+                  <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+                  <input type="password" id="password" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Leave blank to keep unchanged">
+                </div>
+                <div>
+                  <label for="dataSheetId" class="block text-sm font-medium text-gray-700">Data Sheet ID</label>
+                  <input type="text" id="dataSheetId" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm" placeholder="Spreadsheet ID for Project Data">
+                  <p class="mt-1 text-xs text-gray-500">Leave blank to use the Global Spreadsheet.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+          <button id="saveUserBtn" type="button" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm">
+            Save
+          </button>
+          <button id="closeUserModalBtn" type="button" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <?!= include('constants.js.html'); ?>
+  <?!= include('TimerManager.js.html'); ?>
+  <?!= include('EventManager.js.html'); ?>
+  <?!= include('AppCleanup.js.html'); ?>
+  <?!= include('state.js.html'); ?>
+  <?!= include('utils.js.html'); ?>
+  <?!= include('ui.js.html'); ?>
+  <?!= include('api.js.html'); ?>
+  <?!= include('events.js.html'); ?>
+  <?!= include('Dashboard.js.html'); ?>
+  
   <script>
-    (function() {
-      var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"][data-view]'));
+    // Config Modal Logic
+    document.addEventListener('DOMContentLoaded', function() {
+        const configBtn = document.getElementById('configBtn');
+        const configModal = document.getElementById('config-modal');
+        const closeConfigBtn = document.getElementById('closeConfigBtn');
+        const closeConfigBtnFooter = document.getElementById('closeConfigBtnFooter');
+        const overlay = document.getElementById('config-modal-overlay');
 
-      function activateTab(tab, moveFocus) {
-        tabs.forEach(function(item) {
-          var selected = item === tab;
-          item.setAttribute('aria-selected', String(selected));
-          item.tabIndex = selected ? 0 : -1;
-          document.getElementById(item.getAttribute('aria-controls')).hidden = !selected;
-        });
-        if (moveFocus) tab.focus();
-      }
+        function openConfig() {
+            configModal.classList.remove('hidden');
+          loadDeferredDashboardAsset('Config.js.html')
+            .then(function() {
+              if (typeof loadConfigData === 'function') {
+                loadConfigData();
+              }
+            })
+            .catch(function(error) {
+              alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
+            });
+        }
 
-      tabs.forEach(function(tab, index) {
-        tab.addEventListener('click', function() {
-          activateTab(tab, false);
+        function closeConfig() {
+            configModal.classList.add('hidden');
+        }
+
+        if (configBtn) configBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openConfig();
         });
-        tab.addEventListener('keydown', function(event) {
-          var nextIndex = index;
-          if (event.key === 'ArrowRight') nextIndex = (index + 1) % tabs.length;
-          else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + tabs.length) % tabs.length;
-          else if (event.key === 'Home') nextIndex = 0;
-          else if (event.key === 'End') nextIndex = tabs.length - 1;
-          else return;
-          event.preventDefault();
-          activateTab(tabs[nextIndex], true);
-        });
-      });
-    }());
+
+        if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
+        if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
+        if (overlay) overlay.addEventListener('click', closeConfig);
+    });
   </script>
 </body>
 </html>

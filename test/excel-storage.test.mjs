@@ -87,7 +87,9 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
           assert.ok(sheet, 'header writes must target an existing worksheet');
           assert.equal(sheet.actualRowCount, 0, 'setup must not overwrite existing rows');
           assert.equal(range[2], body.values[0].length === 1 ? 'A1' : `A1:${sheet.getColumn(body.values[0].length).letter}1`);
-          sheet.getRow(1).values = body.values[0];
+          body.values[0].forEach((value, index) => {
+            sheet.getCell(1, index + 1).value = value;
+          });
         } else {
           assert.equal(operation, 'worksheets/_ProjectHub');
           assert.equal(body.visibility, 'VeryHidden');

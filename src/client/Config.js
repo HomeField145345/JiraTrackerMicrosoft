@@ -1,19 +1,3 @@
-    // --- AUTHENTICATION ---
-    // (Redundant in Dashboard context, but kept for safety)
-    function getToken() {
-            const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
-      return user.token;
-    }
-
-    function checkAuth() {
-        const token = getToken();
-        if (!token) {
-            alert('Session expired or not logged in.');
-            return null;
-        }
-        return token;
-    }
-
     // --- Place this function near the top of the <script> tag ---
     function renderLinks(links) {
         var listEl = document.getElementById('linksList');
@@ -42,7 +26,7 @@
         });
     }
 
-    function handleFailure(error) {
+    function handleConfigFailure_(error) {
         var statusEl = document.getElementById('configStatus');
         if (statusEl) {
             statusEl.textContent = 'Error: ' + error.message;
@@ -171,12 +155,12 @@
                                 console.warn('Config saved, but refresh failed:', refreshError);
                             }
                         } else {
-                            handleFailure(new Error(response.message));
+                            handleConfigFailure_(new Error(response.message));
                         }
                         saveBtn.disabled = false;
                         saveBtn.textContent = 'Save Configuration';
                         setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
-                    }, handleFailure);
+                    }, handleConfigFailure_);
             });
         }
 
@@ -236,7 +220,7 @@
         var statusEl = document.getElementById('configStatus');
         if (statusEl) statusEl.textContent = 'Loading configuration...';
 
-        callServer('getConfigData', []).then(onConfigDataLoaded, handleFailure);
+        callServer('getConfigData', []).then(onConfigDataLoaded, handleConfigFailure_);
     };
 
     function renderKpiStageSelector(groupedStages, selectedStages) {
@@ -305,7 +289,7 @@
             }
         } catch (e) { /* no-op */ }
         if (!data || !data.config) {
-            handleFailure({ message: "Could not load config data." });
+            handleConfigFailure_({ message: "Could not load config data." });
             return;
         }
         
@@ -812,333 +796,4 @@
         } catch (e) {
             
         }
-        
-        // Try to trigger refresh via Google Apps Script
-        try {
-            callServer('updateSyncIndicators', [currentMappings]).then(function(result) {
-                    
-                }, function(error) {
-                    
-                });
-        } catch (e) {
-            
-        }
     }
-    // --- User Management Logic ---
-    
-    var allUsers = [];
-    var editingUserId = null;
-
-    function initUserManagement() {
-        const user = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
-        // Check for admin role (case-insensitive)
-        const role = (user.role || '').toLowerCase().trim();
-        
-        if (role === 'admin') {
-            const usersTabBtn = document.getElementById('tab-users-btn');
-            if (usersTabBtn) {
-                usersTabBtn.classList.remove('hidden');
-                usersTabBtn.addEventListener('click', loadUsersList);
-            }
-        }
-
-        // User Modal Event Listeners
-        const addUserBtn = document.getElementById('addUserBtn');
-        if (addUserBtn) addUserBtn.addEventListener('click', openUserModal);
-
-        const closeUserModalBtn = document.getElementById('closeUserModalBtn');
-        if (closeUserModalBtn) closeUserModalBtn.addEventListener('click', closeUserModal);
-
-        const saveUserBtn = document.getElementById('saveUserBtn');
-        if (saveUserBtn) saveUserBtn.addEventListener('click', saveUser);
-        
-        const overlay = document.getElementById('user-modal-overlay');
-        if (overlay) overlay.addEventListener('click', closeUserModal);
-    }
-
-    function loadUsersList() {
-        const token = getToken();
-        if (!token) return;
-
-        const tbody = document.getElementById('users-table-body');
-        if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">Loading users...</td></tr>';
-
-        callServer('getUsersList', []).then(renderUsersTable, function(error) {
-                const tbody = document.getElementById('users-table-body');
-                if (tbody) tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-red-500">Error loading users: ' + error.message + '</td></tr>';
-            });
-
-        callServer('getGlobalSheetUrl', []).then(function(url) {
-                const linkEl = document.getElementById('global-sheet-link');
-                if (linkEl && url) {
-                    linkEl.href = url;
-                    linkEl.textContent = 'Open global spreadsheet ↗';
-                }
-            }, function() {});
-    }
-
-    function formatRole(role) {
-        const roles = {
-            'project_manager': 'Project Manager',
-            'qa_tester': 'QA Tester',
-            'view_only': 'View Only',
-            'admin': 'Admin',
-            'user': 'User' // Legacy support
-        };
-        return roles[role] || role;
-    }
-
-    function renderUsersTable(users) {
-        allUsers = users || [];
-        const tbody = document.getElementById('users-table-body');
-        if (!tbody) return;
-
-        tbody.innerHTML = '';
-        if (allUsers.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No users found.</td></tr>';
-            return;
-        }
-
-        allUsers.forEach(function(user) {
-            const tr = document.createElement('tr');
-            tr.innerHTML = 
-                '<td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">' + user.username + '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + user.email + '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + formatRole(user.role) + '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + 
-                    (user.dataSheetId 
-                        ? '<a href="https://docs.google.com/spreadsheets/d/' + user.dataSheetId + '" target="_blank" class="text-blue-600 hover:text-blue-800 hover:underline font-mono text-xs" title="' + user.dataSheetId + '">Personal sheet ↗</a>' 
-                        : '<span class="text-gray-400 italic">Global</span>') + 
-                '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">' + 
-                    (user.isActive ? '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">Active</span>' : '<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Inactive</span>') + 
-                '</td>' +
-                '<td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">' +
-                    '<button class="text-indigo-600 hover:text-indigo-900 mr-3" onclick="editUser(\'' + user.id + '\')">Edit</button>' +
-                    (!user.dataSheetId ? '<button class="text-orange-600 hover:text-orange-900 mr-3" onclick="migrateUser(\'' + user.id + '\')">Migrate</button>' : '') +
-                    '<button class="text-green-600 hover:text-green-900 mr-3" onclick="loginAsUser(\'' + user.id + '\')">Login As</button>' +
-                    '<button class="text-red-600 hover:text-red-900" onclick="deleteUser(\'' + user.id + '\')">Delete</button>' +
-                '</td>';
-            tbody.appendChild(tr);
-        });
-    }
-
-    window.migrateUser = function(userId) {
-        const user = allUsers.find(u => u.id === userId);
-        if (!user) return;
-        
-        if (!confirm('Are you sure you want to migrate ' + user.username + ' to a personal database? This will create a new spreadsheet and copy all current data to it.')) return;
-
-        const token = getToken();
-        if (!token) return;
-
-        // Show loading state
-        const tbody = document.getElementById('users-table-body');
-        tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-blue-600 animate-pulse">Migrating user data... This may take a minute...</td></tr>';
-
-        callServer('migrateUserToPersonalDatabase', [userId]).then(function(response) {
-                if (response.success) {
-                    alert('Migration Successful!\nNew Sheet URL: ' + response.newSheetUrl);
-                    loadUsersList(); // Reload list to show new ID
-                } else {
-                    alert('Migration Failed: ' + response.message);
-                    loadUsersList(); // Reload to restore table
-                }
-            }, function(error) {
-                alert('Migration Error: ' + error.message);
-                loadUsersList();
-            });
-    };
-
-    window.loginAsUser = function(userId) {
-        if (!confirm('Are you sure you want to log in as this user?')) return;
-
-        const token = getToken();
-        if (!token) return;
-
-        // Save current admin if not already saved
-        const currentUser = (typeof getStoredProjectHubUser === 'function') ? getStoredProjectHubUser() : {};
-        if (!localStorage.getItem('originalAdmin')) {
-            localStorage.setItem('originalAdmin', JSON.stringify(currentUser));
-        }
-
-        callServer('impersonateUser', [userId]).then(function(response) {
-                if (response.success) {
-                    // Update local storage with new user session
-                    const user = response.user;
-                    user.token = response.token;
-                    localStorage.setItem('projectHubUser', JSON.stringify(user));
-                    
-                    // Show success modal to trigger safe redirect
-                    showImpersonationSuccessModal(user.username);
-                } else {
-                    alert('Error logging in as user: ' + response.message);
-                }
-            }, function(error) {
-                alert('Error logging in as user: ' + error.message);
-            });
-    };
-
-    function showImpersonationSuccessModal(username) {
-        let modal = document.getElementById('impersonation-success-modal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'impersonation-success-modal';
-            modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-75';
-            modal.innerHTML = `
-                <div class="bg-white rounded-lg shadow-xl p-6 max-w-sm w-full text-center">
-                    <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
-                        <svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                        </svg>
-                    </div>
-                    <h3 class="text-lg font-medium text-gray-900 mb-2">Impersonation Successful</h3>
-                    <p class="text-sm text-gray-500 mb-6">You are now logged in as <strong>${username}</strong>.</p>
-                    <button id="impersonation-continue-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:text-sm">
-                        Continue to Dashboard
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(modal);
-        }
-        
-        // Update username
-        modal.querySelector('strong').textContent = username;
-        
-        // Set click handler
-        document.getElementById('impersonation-continue-btn').onclick = function() {
-            if (typeof SCRIPT_URL !== 'undefined' && SCRIPT_URL) {
-                window.top.location.href = SCRIPT_URL + "?page=dashboard";
-            } else {
-                window.location.reload();
-            }
-        };
-        
-        modal.classList.remove('hidden');
-    }    function openUserModal() {
-        editingUserId = null;
-        document.getElementById('user-modal-title').textContent = 'Add User';
-        document.getElementById('userId').value = '';
-        document.getElementById('username').value = '';
-        document.getElementById('email').value = '';
-        document.getElementById('role').value = 'view_only';
-        document.getElementById('isActive').checked = true;
-        document.getElementById('password').value = '';
-        document.getElementById('dataSheetId').value = '';
-        document.getElementById('user-modal').classList.remove('hidden');
-    }
-
-    window.editUser = function(userId) {
-        const user = allUsers.find(u => u.id === userId);
-        if (!user) return;
-
-        editingUserId = userId;
-        document.getElementById('user-modal-title').textContent = 'Edit User';
-        document.getElementById('userId').value = user.id;
-        document.getElementById('username').value = user.username;
-        document.getElementById('email').value = user.email;
-        document.getElementById('role').value = user.role;
-        document.getElementById('isActive').checked = user.isActive;
-        document.getElementById('password').value = ''; // Don't show password
-        document.getElementById('dataSheetId').value = user.dataSheetId || '';
-        document.getElementById('user-modal').classList.remove('hidden');
-    };
-
-    function closeUserModal() {
-        document.getElementById('user-modal').classList.add('hidden');
-    }
-
-    function saveUser() {
-        const token = getToken();
-        if (!token) return;
-
-        const userData = {
-            id: editingUserId,
-            username: document.getElementById('username').value,
-            email: document.getElementById('email').value,
-            role: document.getElementById('role').value,
-            isActive: document.getElementById('isActive').checked,
-            password: document.getElementById('password').value,
-            dataSheetId: document.getElementById('dataSheetId').value
-        };
-
-        if (!userData.username || !userData.email) {
-            alert('Username and Email are required.');
-            return;
-        }
-
-        const saveBtn = document.getElementById('saveUserBtn');
-        const originalText = saveBtn.textContent;
-        saveBtn.textContent = 'Saving...';
-        saveBtn.disabled = true;
-
-        callServer('saveUser', [userData]).then(function(response) {
-                saveBtn.textContent = originalText;
-                saveBtn.disabled = false;
-                if (response.success) {
-                    closeUserModal();
-                    loadUsersList();
-                } else {
-                    alert('Error saving user: ' + response.message);
-                }
-            }, function(error) {
-                saveBtn.textContent = originalText;
-                saveBtn.disabled = false;
-                alert('Error saving user: ' + error.message);
-            });
-    }
-
-    window.deleteUser = function(userId) {
-        if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) return;
-
-        const token = getToken();
-        if (!token) return;
-
-        callServer('deleteUser', [userId]).then(function(response) {
-                if (response.success) {
-                    loadUsersList();
-                } else {
-                    alert('Error deleting user: ' + response.message);
-                }
-            }, function(error) {
-                alert('Error deleting user: ' + error.message);
-            });
-    };
-
-    // Initialize user management when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
-        initUserManagement();
-        
-        // Maintenance Logic
-        const runMaintenanceBtn = document.getElementById('runMaintenanceBtn');
-        if (runMaintenanceBtn) {
-            runMaintenanceBtn.addEventListener('click', function() {
-                const token = getToken();
-                if (!token) return;
-                
-                const targetId = document.getElementById('maintenanceTargetId').value.trim();
-                const logsDiv = document.getElementById('maintenanceLogs');
-                
-                runMaintenanceBtn.disabled = true;
-                runMaintenanceBtn.textContent = 'Running...';
-                logsDiv.classList.remove('hidden');
-                logsDiv.textContent = 'Starting maintenance check...';
-                
-                callServer('runDatabaseMaintenance', [targetId]).then(function(response) {
-                        runMaintenanceBtn.disabled = false;
-                        runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
-                        
-                        if (response.success) {
-                            logsDiv.innerHTML = response.logs.map(l => `<div>> ${l}</div>`).join('');
-                        } else {
-                            logsDiv.textContent = 'Error: ' + response.message;
-                        }
-                    }, function(error) {
-                        runMaintenanceBtn.disabled = false;
-                        runMaintenanceBtn.textContent = 'Fix Headers & Sheets';
-                        logsDiv.textContent = 'Error: ' + error.message;
-                    });
-            });
-        }
-    });
-

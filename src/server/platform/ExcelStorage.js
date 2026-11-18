@@ -92,24 +92,36 @@ class ExcelStorage {
     this.check(session, 'start saving the workbook');
     const url = this.httpsUrl((await session.json()).uploadUrl, 'upload');
     const transfer = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
-    const fragment = await this.request(url, {
-      ...transfer,
-      method: 'PUT',
-      headers: { 'Content-Range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}` },
-      body: bytes
-    });
-    this.check(fragment, 'upload the workbook');
-    // Recheck after sending bytes, before committing the replacement.
-    if (eTag) {
-      const current = await this.graph(`${path}?$select=eTag`);
-      this.check(current, 'check the workbook revision');
-      if ((await current.json()).eTag !== eTag) this.conflict();
+    try {
+      const fragment = await this.request(url, {
+        ...transfer,
+        method: 'PUT',
+        headers: { 'Content-Range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}` },
+        body: bytes
+      });
+      this.check(fragment, 'upload the workbook');
+      // Recheck after sending bytes, before committing the replacement.
+      if (eTag) {
+        const current = await this.graph(`${path}?$select=eTag`, { cache: 'no-store' });
+        this.check(current, 'check the workbook revision');
+        if ((await current.json()).eTag !== eTag) this.conflict();
+      }
+      const commit = await this.request(url, { ...transfer, method: 'POST', body: '' });
+      this.check(commit, 'commit the workbook');
+      const item = await commit.json();
+      if (!item.id) throw new Error('Microsoft did not confirm the workbook ID. Reconnect before retrying.');
+      return item;
+    } catch (error) {
+      try {
+        const cancelled = await this.request(url, { ...transfer, method: 'DELETE' });
+        if (cancelled.status !== 404 && cancelled.status !== 410) {
+          this.check(cancelled, 'cancel the unfinished upload');
+        }
+      } catch {
+        throw new Error(`${error.message} The unfinished upload could not be cancelled. Wait for Microsoft to release it before retrying.`, { cause: error });
+      }
+      throw error;
     }
-    const commit = await this.request(url, { ...transfer, method: 'POST' });
-    this.check(commit, 'commit the workbook');
-    const item = await commit.json();
-    if (!item.id) throw new Error('Microsoft did not confirm the workbook ID. Reconnect before retrying.');
-    return item;
   }
 
   async encode(data) {
@@ -176,6 +188,9 @@ class ExcelStorage {
   }
 
   check(response, action) {
+    if (response.status === 423) {
+      throw new Error(`Could not ${action} (Microsoft HTTP 423). The workbook is locked or another upload is pending. Close Excel and other tracker tabs, wait for the lock to clear, then refresh before retrying.`);
+    }
     if (response.status === 409 || response.status === 412) this.conflict();
     if (!response.ok) throw new Error(`Could not ${action} (Microsoft HTTP ${response.status}).`);
   }

@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl } = {}) {
+function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204 } = {}) {
   const transfer = 'https://storage.example.test';
   const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
   const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
@@ -14,6 +14,7 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
   let bytes = foreignWorkbook;
   let pending;
   let commits = 0;
+  let cancellations = 0;
   let interfere = false;
   const json = (value, status = 200) => Response.json(value, { status });
   const graphFetch = async (input, init = {}) => {
@@ -22,6 +23,11 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       assert.equal(init.headers?.Authorization, undefined);
       if (url.pathname === '/read') return new Response(bytes);
       assert.equal(url.pathname, '/upload');
+      if (init.method === 'DELETE') {
+        cancellations++;
+        if (cancelStatus === 204) pending = undefined;
+        return new Response(null, { status: cancelStatus });
+      }
       if (init.method === 'PUT') {
         pending = init.body;
         assert.equal(init.headers['Content-Range'], `bytes 0-${pending.byteLength - 1}/${pending.byteLength}`);
@@ -29,6 +35,8 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
         return json({}, 202);
       }
       assert.equal(init.method, 'POST');
+      assert.equal(init.body, '', 'deferred commit must send zero-length content');
+      if (commitStatus) return json({ error: { code: 'nameAlreadyExists' } }, commitStatus);
       bytes = pending;
       item.eTag = `"${++commits + 1}"`;
       return json(item);
@@ -80,6 +88,7 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
     }),
     revision: () => commits,
+    cancellations: () => cancellations,
     workbook: async () => {
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(bytes);
@@ -95,6 +104,7 @@ test('provisions Excel once in SharePoint, then persists Jira imports and tasks'
   assert.equal(connected.created, true);
   assert.equal((await graph.run('connect')).created, false);
   assert.equal(graph.revision(), 1);
+  assert.equal(graph.cancellations(), 0);
   const workbook = await graph.workbook();
   for (const [sheet, header] of Object.entries({
     JiraData: 'Sync Status', ManualData: 'Jira #', OptionsList: 'ACT/PCT Options',
@@ -187,5 +197,29 @@ test('does not commit when the workbook changes during upload', async () => {
   graph.interfere();
   await assert.rejects(graph.run('addTask', itemId, 'Conflicting task'), /file changed/);
   assert.equal(graph.revision(), 1);
+  assert.equal(graph.cancellations(), 1);
   assert.equal((await graph.run('refresh', itemId)).projects.independentTasks.length, 0);
+});
+
+test('cancels a locked upload without replacing the workbook', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  const graph = harness({
+    fileName: 'Existing.xlsx',
+    foreignWorkbook: await workbook.xlsx.writeBuffer(),
+    commitStatus: 423
+  });
+  const { itemId } = await graph.run('connect');
+  await assert.rejects(graph.run('configure', itemId), /Microsoft HTTP 423/);
+  assert.equal(graph.cancellations(), 1);
+  assert.equal(graph.revision(), 0);
+  assert.equal((await graph.workbook()).getWorksheet('Sheet1').getCell('A1').value, null);
+});
+
+test('reports cleanup failure along with the original commit failure', async () => {
+  const graph = harness({ commitStatus: 423, cancelStatus: 503 });
+  await assert.rejects(graph.run('connect'), error =>
+    /Microsoft HTTP 423/.test(error.message) && /upload.*could not be cancelled/i.test(error.message));
+  assert.equal(graph.cancellations(), 1);
+  assert.equal(graph.revision(), 0);
 });

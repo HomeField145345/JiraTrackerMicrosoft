@@ -26,3 +26,9 @@ The static preview is separate from the private Excel tracker. The Excel tracker
 Use the workbook as an app-managed file: keep its name, tabs and headers unchanged, and close Excel before saving changes from the tracker. If you want custom formulas or formatting, use a copy. Writes replace the workbook and check its Microsoft revision before committing; the tracker is intended for one writer, not simultaneous Excel editing or concurrent use across devices. The Excel workbook limit is 20 MiB.
 
 Run `npm test` to check workbook provisioning and persistence with a simulated Microsoft Graph service.
+
+## Deploy to GitHub Pages
+
+In the repository's **Settings > Pages**, set **Build and deployment > Source** to **GitHub Actions**. The **Deploy ProjectHub to GitHub Pages** workflow builds the site and publishes `dist/` on pushes to `main`. You can also run it from the **Actions** tab after switching the source. Publishing directly from the branch skips the build, so the Excel page's JavaScript files return 404.
+
+To enable Microsoft sign-in on Pages, register `https://homefield145345.github.io/JiraTrackerMicrosoft/excel-auth.html` as a **Single-page application** redirect URI in Entra. Set the repository Actions variable `EXCEL_CONFIG` to the same JSON format as `excel-config.json` above, then rerun the workflow. The deployed configuration is public: never include credentials, tokens, or other sensitive values. If the identifiers cannot be published, leave the variable unset and use a private host for the Excel tracker.

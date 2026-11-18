@@ -94,7 +94,7 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
       }
       
       // --- Add missing columns to Users if missing ---
-      if (seedLocalAdmin && sheetName === USERS_SHEET) {
+      if (sheetName === USERS_SHEET) {
          const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
          if (headers.indexOf('Data Sheet ID') === -1) {
              sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
@@ -104,7 +104,7 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
     }
     
     // Create default admin user if Users sheet is empty
-    if (sheetName === USERS_SHEET) {
+    if (seedLocalAdmin && sheetName === USERS_SHEET) {
       const userSheet = ss.getSheetByName(USERS_SHEET);
       if (userSheet && userSheet.getLastRow() === 1) {
         // No password is stored: the browser build signs in with a local profile (see Auth.js).

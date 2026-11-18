@@ -31,6 +31,8 @@ Use the workbook as an app-managed file: keep its name, tabs and headers unchang
 Run `npm test` to check workbook provisioning and persistence with a simulated Microsoft Graph service. The storage tests also verify that requests use `fetch` with the worker's global context, as browsers require.
 If setup fails, open the browser developer console before selecting **Sign in**. Filter for `[Excel tracker]` to see the requested scope and whether authentication, owner verification, or the workbook operation failed. Authentication errors may include an MSAL error code, an AADSTS code, and a correlation ID; workbook errors may include an HTTP status. A Microsoft permission prompt that remains open has not yet returned an error to the app. Diagnostics do not print account IDs, tokens, file contents, or raw authentication error messages. Do not share tokens, account details, or other sensitive information when sharing logs.
 
+If Microsoft does not return a secure workbook download URL, try downloading the workbook in OneDrive or SharePoint using the same account. If it is blocked there as well, check with your Microsoft 365 administrator. Do not share download URLs from the Network panel; they can grant temporary access to the workbook.
+
 ## Deploy to GitHub Pages
 
 In the repository's **Settings > Pages**, set **Build and deployment > Source** to **GitHub Actions**. The **Deploy ProjectHub to GitHub Pages** workflow builds the site and publishes `dist/` on pushes to `main`. You can also run it from the **Actions** tab after switching the source. Publishing directly from the branch skips the build, so the Excel page's JavaScript files return 404.

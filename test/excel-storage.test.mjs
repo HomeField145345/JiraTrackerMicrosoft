@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup } = {}) {
+function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl } = {}) {
   const transfer = 'https://storage.example.test';
   const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
   const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
@@ -37,7 +37,14 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     assert.equal(init.headers.Authorization, 'Bearer simulated');
     const path = url.pathname.replace('/v1.0', '');
     if (path === lookup || path === itemPath) {
-      return bytes ? json({ ...item, '@microsoft.graph.downloadUrl': `${transfer}/read` }) : json({}, 404);
+      if (!bytes) return json({}, 404);
+      if (url.searchParams.get('select') === 'id,@microsoft.graph.downloadUrl') {
+        assert.equal(path, itemPath, 'download URL lookup must use the resolved item ID');
+        return json(omitItemDownloadUrl ? { id: item.id } : {
+          id: item.id, '@microsoft.graph.downloadUrl': `${transfer}/read`
+        });
+      }
+      return json(omitMetadataDownloadUrl ? item : { ...item, '@microsoft.graph.downloadUrl': `${transfer}/read` });
     }
     if (path === folder) return json({ id: 'folder', folder: {} });
     if (path === `${destinationPath}:/ProjectHub.xlsx:/createUploadSession`) {
@@ -124,7 +131,8 @@ test('opens a file in a OneDrive subfolder without writing, then sets it up in p
     foreignWorkbook: await workbook.xlsx.writeBuffer(),
     folderPath: 'Documents/Team #1',
     fileName: 'Tracker.xlsx',
-    expectedLookup: '/me/drive/root:/Documents/Team%20%231/Tracker.xlsx'
+    expectedLookup: '/me/drive/root:/Documents/Team%20%231/Tracker.xlsx',
+    omitMetadataDownloadUrl: true
   });
   const { itemId, needsSetup, created } = await graph.run('connect');
   assert.equal(needsSetup, true);
@@ -148,6 +156,19 @@ test('opens a file in a OneDrive subfolder without writing, then sets it up in p
 test('does not create an explicitly selected workbook when it is missing', async () => {
   const graph = harness({ fileName: 'Missing.xlsx' });
   await assert.rejects(graph.run('connect'), /could not find the configured workbook/i);
+  assert.equal(graph.revision(), 0);
+});
+
+test('reports when Graph does not provide a download URL and makes no workbook changes', async () => {
+  const workbook = new ExcelJS.Workbook();
+  workbook.addWorksheet('Sheet1');
+  const graph = harness({
+    fileName: 'Existing.xlsx',
+    foreignWorkbook: await workbook.xlsx.writeBuffer(),
+    omitMetadataDownloadUrl: true,
+    omitItemDownloadUrl: true
+  });
+  await assert.rejects(graph.run('connect'), /did not return a secure workbook download URL/);
   assert.equal(graph.revision(), 0);
 });
 

@@ -33,7 +33,7 @@ class ExcelStorage {
   async open(action, itemId) {
     const workbookPath = [...this.folderSegments, this.fileName ?? EXCEL_FILE_NAME].map(encodeURIComponent).join('/');
     const path = itemId ? this.itemPath(itemId) : `${this.folder}:/${workbookPath}`;
-    const response = await this.graph(`${path}?$select=id,eTag,file,size,webUrl,@microsoft.graph.downloadUrl`);
+    const response = await this.graph(`${path}?$select=id,eTag,file,size,webUrl,@microsoft.graph.downloadUrl`, { cache: 'no-store' });
     if (response.status === 404 && action === 'connect' && !itemId && this.fileName === undefined) {
       WorkbookService.replaceAll([]);
       setupSheets(WorkbookService.getActiveWorkbook(), false);
@@ -52,7 +52,14 @@ class ExcelStorage {
     const item = await response.json();
     if (!item.id || !item.file || !item.eTag) throw new Error('The destination is not a valid Excel file.');
     if (item.size > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
-    const url = this.httpsUrl(item['@microsoft.graph.downloadUrl']);
+    let downloadUrl = item['@microsoft.graph.downloadUrl'];
+    if (downloadUrl == null || downloadUrl === '') {
+      // Use Graph's direct item lookup when the metadata response omits the download annotation.
+      const lookup = await this.graph(`${this.itemPath(item.id)}?select=id,@microsoft.graph.downloadUrl`, { cache: 'no-store' });
+      this.check(lookup, 'get a workbook download URL');
+      downloadUrl = (await lookup.json())['@microsoft.graph.downloadUrl'];
+    }
+    const url = this.httpsUrl(downloadUrl, 'download');
     const download = await this.request(url, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
     this.check(download, 'download the workbook');
     const bytes = await download.arrayBuffer();
@@ -83,7 +90,7 @@ class ExcelStorage {
       })
     });
     this.check(session, 'start saving the workbook');
-    const url = this.httpsUrl((await session.json()).uploadUrl);
+    const url = this.httpsUrl((await session.json()).uploadUrl, 'upload');
     const transfer = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
     const fragment = await this.request(url, {
       ...transfer,
@@ -161,9 +168,9 @@ class ExcelStorage {
     return { id: PRIMARY_WORKBOOK_ID, name: this.fileName ?? EXCEL_FILE_NAME, sheets };
   }
 
-  httpsUrl(value) {
+  httpsUrl(value, operation) {
     if (typeof value !== 'string' || !value.startsWith('https://')) {
-      throw new Error('Microsoft did not return a secure transfer URL.');
+      throw new Error(`Microsoft did not return a secure workbook ${operation} URL.`);
     }
     return value;
   }

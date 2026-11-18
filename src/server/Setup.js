@@ -10,16 +10,8 @@
  * setupSheets() repairs missing worksheets and columns.
  */
 
-/**
- * Creates the required sheets and adds headers if they don't exist.
- * @param {Workbook} [targetSpreadsheet] - Optional workbook to set up. Defaults to the primary workbook.
- * @returns {string[]} Log of actions performed.
- */
-function setupSheets(targetSpreadsheet) {
-  const ss = targetSpreadsheet || WorkbookService.getActiveWorkbook();
-  const logs = [];
-  
-  const sheets = {
+function trackerSheetSchema() {
+  return {
     [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links', 'Labels', 'Description'],
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
@@ -28,6 +20,18 @@ function setupSheets(targetSpreadsheet) {
     [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration', 'UserID'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']
   };
+}
+
+/**
+ * Creates or repairs tracker sheets. Cloud storage authenticates externally and needs no local admin.
+ * @param {Workbook} [targetSpreadsheet] Defaults to the primary workbook.
+ * @param {boolean} [seedLocalAdmin] Whether to create the browser-only admin profile.
+ * @returns {string[]} Log of actions performed.
+ */
+function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
+  const ss = targetSpreadsheet || WorkbookService.getActiveWorkbook();
+  const logs = [];
+  const sheets = trackerSheetSchema();
 
   for (const sheetName in sheets) {
     let sheet = ss.getSheetByName(sheetName);
@@ -90,7 +94,7 @@ function setupSheets(targetSpreadsheet) {
       }
       
       // --- Add missing columns to Users if missing ---
-      if (sheetName === USERS_SHEET) {
+      if (seedLocalAdmin && sheetName === USERS_SHEET) {
          const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
          if (headers.indexOf('Data Sheet ID') === -1) {
              sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');

@@ -1,0 +1,163 @@
+const EXCEL_FILE_NAME = 'ProjectHub.xlsx';
+const EXCEL_SCHEMA_SHEET = '_ProjectHub';
+const EXCEL_SCHEMA_VERSION = 'ProjectHub/1';
+const EXCEL_MAX_BYTES = 20 * 1024 * 1024;
+const GRAPH_ROOT = 'https://graph.microsoft.com/v1.0';
+
+class ExcelStorage {
+  constructor(accessToken, target = {}, request = fetch) {
+    this.accessToken = accessToken;
+    this.request = request;
+    if (Boolean(target.driveId) !== Boolean(target.folderId)) {
+      throw new Error('Provide both the SharePoint drive ID and folder ID.');
+    }
+    this.drive = target.driveId ? `/drives/${encodeURIComponent(target.driveId)}` : '/me/drive';
+    this.folder = target.folderId ? `/items/${encodeURIComponent(target.folderId)}` : '/root';
+  }
+
+  async graph(path, init = {}) {
+    const response = await this.request(`${GRAPH_ROOT}${this.drive}${path}`, {
+      ...init,
+      redirect: 'error',
+      headers: { ...init.headers, Authorization: `Bearer ${this.accessToken}` }
+    });
+    return response;
+  }
+
+  itemPath(id) {
+    return `/items/${encodeURIComponent(id)}`;
+  }
+
+  async open(allowCreate, itemId) {
+    const path = itemId ? this.itemPath(itemId) : `${this.folder}:/${EXCEL_FILE_NAME}`;
+    const response = await this.graph(`${path}?$select=id,eTag,file,size,webUrl,@microsoft.graph.downloadUrl`);
+    if (response.status === 404 && allowCreate && !itemId) {
+      WorkbookService.replaceAll([]);
+      setupSheets(WorkbookService.getActiveWorkbook(), false);
+      const { upserts: [data] } = WorkbookService.takeChanges();
+      const folder = await this.graph(`${this.folder}?$select=id,folder`);
+      this.check(folder, 'open the destination folder');
+      const destination = await folder.json();
+      if (!destination.id || !destination.folder) throw new Error('The configured destination is not a folder.');
+      const item = await this.upload(data, `${this.itemPath(destination.id)}:/${EXCEL_FILE_NAME}:`);
+      return { item, data, created: true };
+    }
+    this.check(response, 'open the workbook');
+    const item = await response.json();
+    const url = this.httpsUrl(item['@microsoft.graph.downloadUrl']);
+    if (!item.id || !item.file || !item.eTag) throw new Error('The destination is not a valid Excel file.');
+    if (item.size > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
+    const download = await this.request(url, { credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer' });
+    this.check(download, 'download the workbook');
+    const bytes = await download.arrayBuffer();
+    if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
+    return { item, data: await this.decode(bytes), created: false };
+  }
+
+  async save(data, item) {
+    return this.upload(data, this.itemPath(item.id), item.eTag);
+  }
+
+  async upload(data, path, eTag) {
+    const bytes = await this.encode(data);
+    if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
+    const session = await this.graph(`${path}/createUploadSession`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(eTag ? { 'If-Match': eTag } : {}) },
+      body: JSON.stringify({
+        deferCommit: true,
+        item: { '@microsoft.graph.conflictBehavior': eTag ? 'replace' : 'fail' }
+      })
+    });
+    this.check(session, 'start saving the workbook');
+    const url = this.httpsUrl((await session.json()).uploadUrl);
+    const transfer = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
+    const fragment = await this.request(url, {
+      ...transfer,
+      method: 'PUT',
+      headers: { 'Content-Range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}` },
+      body: bytes
+    });
+    this.check(fragment, 'upload the workbook');
+    // Recheck after sending bytes, before committing the replacement.
+    if (eTag) {
+      const current = await this.graph(`${path}?$select=eTag`);
+      this.check(current, 'check the workbook revision');
+      if ((await current.json()).eTag !== eTag) this.conflict();
+    }
+    const commit = await this.request(url, { ...transfer, method: 'POST' });
+    this.check(commit, 'commit the workbook');
+    const item = await commit.json();
+    if (!item.id) throw new Error('Microsoft did not confirm the workbook ID. Reconnect before retrying.');
+    return item;
+  }
+
+  async encode(data) {
+    const workbook = new ExcelJS.Workbook();
+    for (const { name, rows } of data.sheets) {
+      const sheet = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
+      rows.forEach((row, i) => {
+        row.forEach((value, j) => {
+          if (typeof value === 'string' && value.length > 32767) {
+            throw new Error(`${name}, row ${i + 1}, column ${j + 1} exceeds Excel's cell length limit.`);
+          }
+          if (value !== '' && value != null) sheet.getCell(i + 1, j + 1).value = value;
+        });
+      });
+      sheet.getRow(1).font = { bold: true };
+    }
+    workbook.addWorksheet(EXCEL_SCHEMA_SHEET, { state: 'veryHidden' }).getCell('A1').value = EXCEL_SCHEMA_VERSION;
+    return workbook.xlsx.writeBuffer();
+  }
+
+  async decode(bytes) {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(bytes);
+    const marker = workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
+    if (!marker || marker.getCell('A1').value !== EXCEL_SCHEMA_VERSION) {
+      throw new Error(`${EXCEL_FILE_NAME} already exists but is not a compatible tracker workbook. It was not changed.`);
+    }
+    const schema = trackerSheetSchema();
+    if (workbook.worksheets.length !== Object.keys(schema).length + 1) {
+      throw new Error('The tracker workbook has unexpected or missing tabs. It was not changed.');
+    }
+    const sheets = Object.entries(schema).map(([name, headers]) => {
+      const sheet = workbook.getWorksheet(name);
+      if (!sheet || headers.some((header, i) => sheet.getCell(1, i + 1).value !== header) ||
+          sheet.columnCount > headers.length) {
+        throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
+      }
+      const rows = [];
+      sheet.eachRow((row, i) => {
+        const values = Array(headers.length).fill('');
+        row.eachCell((cell, j) => {
+          const value = cell.value;
+          if (typeof value === 'object' && !(value instanceof Date)) {
+            throw new Error(`${name} contains a non-literal cell at ${cell.address}. The workbook was not changed.`);
+          }
+          values[j - 1] = value;
+        });
+        while (rows.length < i - 1) rows.push([]);
+        rows.push(values);
+      });
+      return { name, rows };
+    });
+    return { id: PRIMARY_WORKBOOK_ID, name: EXCEL_FILE_NAME, sheets };
+  }
+
+  httpsUrl(value) {
+    if (typeof value !== 'string' || !value.startsWith('https://')) {
+      throw new Error('Microsoft did not return a secure transfer URL.');
+    }
+    return value;
+  }
+
+  check(response, action) {
+    if (response.status === 409 || response.status === 412) this.conflict();
+    if (!response.ok) throw new Error(`Could not ${action} (Microsoft HTTP ${response.status}).`);
+  }
+
+  conflict() {
+    throw new Error('The Excel file changed or is locked. Close Excel, refresh, and try again.');
+  }
+}

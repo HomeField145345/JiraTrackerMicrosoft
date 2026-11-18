@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ProjectHub | Excel tracker</title>
+  <style>
+    body { font: 16px "Neue Haas Grotesk", sans-serif; color: #000; background: #fff; margin: 0; }
+    main { max-width: 1536px; margin: 0 auto; padding: 32px; }
+    h1 { font-size: 32px; }
+    h2 { font-size: 20px; font-weight: 500; margin: 24px 0 12px; }
+    a { color: inherit; }
+    form, .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0; }
+    input, button { font: inherit; }
+    button, input[type="text"] { border: 1px solid #d8dada; border-radius: 12px; padding: 8px 12px; background: #fff; color: #000; }
+    button { cursor: pointer; min-height: 40px; }
+    #connect { background: #000; color: #fff; }
+    #status { color: #6f7171; }
+    .table-scroll { overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { padding: 12px; border-bottom: 1px solid #d8dada; text-align: left; overflow-wrap: anywhere; }
+    thead { background: #f6f6f6; }
+    @media (max-width: 600px) { main { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <a href="./index.html">ProjectHub</a>
+    <h1>Excel tracker</h1>
+    <p>Save Jira issues and tasks to your private Microsoft 365 workbook.</p>
+    <button id="connect" type="button" hidden>Sign in</button>
+    <p id="status" role="status">Loading Excel setup…</p>
+    <div id="workspace" hidden>
+      <div class="actions">
+        <a id="workbook-link" target="_blank" rel="noopener noreferrer" hidden>Open in Excel</a>
+        <button id="refresh" type="button">Refresh</button>
+      </div>
+      <section aria-labelledby="jira-title">
+        <h2 id="jira-title">Your Jira issues</h2>
+        <form id="import-form">
+          <label for="csv">Jira CSV</label>
+          <input id="csv" type="file" accept=".csv,text/csv" required>
+          <button type="submit">Import CSV</button>
+        </form>
+        <div class="table-scroll"><table aria-labelledby="jira-title">
+          <thead><tr><th scope="col">Jira ID</th><th scope="col">Summary</th><th scope="col">Status</th><th scope="col">Assignee</th></tr></thead>
+          <tbody id="jira"></tbody>
+        </table></div>
+      </section>
+      <section aria-labelledby="tasks-title">
+        <h2 id="tasks-title">Your tracker tasks</h2>
+        <form id="task-form">
+          <label for="title">Task title</label>
+          <input id="title" type="text" maxlength="200" required>
+          <button type="submit">Add task</button>
+        </form>
+        <div class="table-scroll"><table aria-labelledby="tasks-title">
+          <thead><tr><th scope="col">Title</th><th scope="col">Status</th></tr></thead>
+          <tbody id="tasks"></tbody>
+        </table></div>
+      </section>
+    </div>
+  </main>
+  <script type="module" src="./excel-tracker.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "projecthub-excel",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build-excel.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@azure/msal-browser": "^5.0.0",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  }
+}

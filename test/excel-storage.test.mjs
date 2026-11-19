@@ -322,6 +322,19 @@ test('accepts formatted blank columns beyond the Users schema', async () => {
   assert.equal(connected.user.microsoftObjectId, ownerObjectId);
 });
 
+test('treats a textual TRUE value as an active user during owner bootstrap', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').getCell('F2').value = 'TRUE';
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+  assert.equal(connected.user.role, 'admin');
+  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+});
+
 test('filters project data and capacity to the mapped non-admin workbook user', async () => {
   const graph = harness();
   await graph.run('connect');

@@ -15,6 +15,11 @@ function safeIsoDate(value) {
   return date.toISOString();
 }
 
+function isActiveUser_(value) {
+  if (value === true || value === 1) return true;
+  return typeof value === 'string' && ['true', '1'].includes(value.trim().toLowerCase());
+}
+
 function findRowById(sheet, id, idColIndex = 0) {
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
@@ -75,7 +80,7 @@ function getUsers() {
       email: row[2], 
       displayName: row[3], 
       role: row[4], 
-      isActive: row[5], 
+      isActive: isActiveUser_(row[5]), 
       createdAt: safeIsoDate(row[7]), 
       lastLoginAt: safeIsoDate(row[8]),
       dataSheetId: row[9],

@@ -259,6 +259,60 @@ test('persists dashboard edits and reopens workbooks with extended task columns'
   assert.equal(savedWorkbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
 });
 
+test('links the configured owner to the Admin row in a workbook with the legacy Users schema', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').spliceColumns(11, 1);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+  assert.equal(connected.user.role, 'admin');
+  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+  const migrated = await graph.workbook();
+  assert.equal(migrated.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
+  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, ownerObjectId);
+});
+
+test('filters project data and capacity to the mapped non-admin workbook user', async () => {
+  const graph = harness();
+  await graph.run('connect');
+  const workbook = await graph.workbook();
+  const users = workbook.getWorksheet('Users');
+  const issues = workbook.getWorksheet('JiraData');
+  const headers = issues.getRow(1).values.slice(1);
+  const addIssue = (jiraId, owner, developer, points) => {
+    const row = Array(headers.length).fill('');
+    const values = {
+      'Jira #': jiraId,
+      Summary: jiraId,
+      'Issue Type': 'Story',
+      Assignee: developer,
+      'Assigned Dev': developer,
+      Owner: owner,
+      'Story Points': points,
+      sprint: 'Sprint 12'
+    };
+    Object.entries(values).forEach(([header, value]) => { row[headers.indexOf(header)] = value; });
+    issues.addRow(row);
+  };
+  addIssue('TEAM-1', 'pm', 'Avery', 3);
+  addIssue('TEAM-2', 'someone-else', 'Blair', 8);
+  const memberObjectId = '44444444-4444-4444-4444-444444444444';
+  users.addRow([
+    'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
+    '', new Date(), '', '', memberObjectId
+  ]);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
+  assert.deepEqual(memberData.projects.projects.map(issue => issue['Jira #']), ['TEAM-1']);
+  assert.deepEqual(memberData.projects.sprintCapacity.developers, [
+    { developer: 'Avery', issueCount: 1, storyPoints: 3 }
+  ]);
+});
+
 test('does not replace an unrelated file at the OneDrive destination', async () => {
   const workbook = new ExcelJS.Workbook();
   workbook.addWorksheet('Another workbook').getCell('A1').value = 'Keep this';

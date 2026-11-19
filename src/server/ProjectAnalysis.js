@@ -172,6 +172,7 @@ function _getRawProjectData(contextUser) {
       independentTasks: independentTasks, 
       config: config || {},
       sprintStats: sprintStats,
+      sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName),
       users: users
     };
     

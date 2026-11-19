@@ -1191,6 +1191,7 @@ function renderApp() {
     // Handle view container visibility
     var contentWrapper = $('#content-wrapper');
     var tasksView = $('#view-tasks');
+    var capacityView = $('#view-capacity');
     
     if (contentWrapper) {
         contentWrapper.style.display = (APP_STATE.currentView === 'table' || APP_STATE.currentView === 'board') ? 'flex' : 'none';
@@ -1198,6 +1199,10 @@ function renderApp() {
     
     if (tasksView) {
         tasksView.style.display = (APP_STATE.currentView === 'tasks') ? 'block' : 'none';
+    }
+
+    if (capacityView) {
+        capacityView.style.display = (APP_STATE.currentView === 'capacity') ? 'block' : 'none';
     }
 
     if (APP_STATE.currentView === 'table') {
@@ -1227,6 +1232,8 @@ function renderApp() {
         if (typeof renderTasksView === 'function') {
             renderTasksView();
         }
+    } else if (APP_STATE.currentView === 'capacity') {
+        renderCapacityView();
     }
 
     var isGanttView = (APP_STATE.currentView === 'gantt');
@@ -1248,12 +1255,52 @@ function renderApp() {
     // Show/hide KPI container based on view
     var kpiContainer = $('.kpi-container');
     if (kpiContainer) {
-        kpiContainer.style.display = APP_STATE.currentView === 'tasks' ? 'none' : 'flex';
+        kpiContainer.style.display = APP_STATE.currentView === 'tasks' || APP_STATE.currentView === 'capacity' ? 'none' : 'flex';
     }
     
     if (APP_STATE.currentView !== 'gantt') {
         applyFilters();
     }
+}
+
+function renderCapacityView() {
+    var capacity = APP_STATE.allData.sprintCapacity || {
+        sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
+    };
+    var sprintName = document.getElementById('capacity-sprint-name');
+    var totalPoints = document.getElementById('capacity-total-points');
+    var totalIssues = document.getElementById('capacity-total-issues');
+    var body = document.getElementById('capacity-table-body');
+    if (!body) return;
+
+    var numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+    if (sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
+    if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
+    if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
+    body.replaceChildren();
+
+    if (!capacity.developers || capacity.developers.length === 0) {
+        var emptyRow = body.insertRow();
+        var emptyCell = emptyRow.insertCell();
+        emptyCell.colSpan = 3;
+        emptyCell.className = 'px-3 py-8 text-center text-gray-500';
+        emptyCell.textContent = 'No current sprint assignments.';
+        return;
+    }
+
+    capacity.developers.forEach(function(developer) {
+        var row = body.insertRow();
+        row.className = 'border-b border-gray-200';
+        var nameCell = row.insertCell();
+        nameCell.className = 'px-3 py-3 text-gray-900';
+        nameCell.textContent = developer.developer;
+        var issueCell = row.insertCell();
+        issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
+        issueCell.textContent = numberFormat.format(developer.issueCount);
+        var pointsCell = row.insertCell();
+        pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
+        pointsCell.textContent = numberFormat.format(developer.storyPoints);
+    });
 }
 
 function renderKPIs() {

@@ -227,14 +227,27 @@ function analyzeSprintData(items) {
   return stats;
 }
 
-function analyzeSprintCapacity(items, currentSprintName) {
+function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
   var sprintName = String(currentSprintName || '').trim();
   var capacityByDeveloper = new Map();
   var totalIssues = 0;
   var totalStoryPoints = 0;
 
+  // Configured capacity per developer (from the DeveloperCapacity sheet), keyed case-insensitively.
+  var configuredCapacity = new Map();
+  (capacityEntries || []).forEach(function(config) {
+    if (!config || !config.developer) return;
+    var name = String(config.developer).trim();
+    if (!name) return;
+    var points = parseFloat(config.capacity);
+    configuredCapacity.set(name.toLowerCase(), {
+      developer: name,
+      capacity: Number.isFinite(points) ? points : null
+    });
+  });
+
   if (!sprintName || sprintName === 'None' || sprintName === '—') {
-    return { sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: [] };
+    return { sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, totalCapacity: 0, totalRemaining: 0, developers: [] };
   }
 
   (items || []).forEach(function(item) {
@@ -252,10 +265,11 @@ function analyzeSprintCapacity(items, currentSprintName) {
     var points = parseFloat(String(pointsValue == null ? '' : pointsValue).trim());
     if (!Number.isFinite(points)) points = 0;
 
-    var entry = capacityByDeveloper.get(developer);
+    var key = developer.toLowerCase();
+    var entry = capacityByDeveloper.get(key);
     if (!entry) {
       entry = { developer: developer, issueCount: 0, storyPoints: 0 };
-      capacityByDeveloper.set(developer, entry);
+      capacityByDeveloper.set(key, entry);
     }
     entry.issueCount++;
     entry.storyPoints += points;
@@ -263,7 +277,26 @@ function analyzeSprintCapacity(items, currentSprintName) {
     totalStoryPoints += points;
   });
 
-  var developers = Array.from(capacityByDeveloper.values()).sort(function(a, b) {
+  // Include developers with configured capacity even if they have no current sprint assignments.
+  configuredCapacity.forEach(function(config, key) {
+    if (!capacityByDeveloper.has(key)) {
+      capacityByDeveloper.set(key, { developer: config.developer, issueCount: 0, storyPoints: 0 });
+    }
+  });
+
+  var totalCapacity = 0;
+  var totalRemaining = 0;
+  var developers = Array.from(capacityByDeveloper.values()).map(function(entry) {
+    var config = configuredCapacity.get(entry.developer.toLowerCase());
+    var capacity = config && config.capacity != null ? config.capacity : null;
+    entry.capacity = capacity;
+    entry.remaining = capacity == null ? null : capacity - entry.storyPoints;
+    if (capacity != null) {
+      totalCapacity += capacity;
+      totalRemaining += entry.remaining;
+    }
+    return entry;
+  }).sort(function(a, b) {
     return b.storyPoints - a.storyPoints || a.developer.localeCompare(b.developer);
   });
 
@@ -271,6 +304,8 @@ function analyzeSprintCapacity(items, currentSprintName) {
     sprintName: sprintName,
     totalIssues: totalIssues,
     totalStoryPoints: totalStoryPoints,
+    totalCapacity: totalCapacity,
+    totalRemaining: totalRemaining,
     developers: developers
   };
 }

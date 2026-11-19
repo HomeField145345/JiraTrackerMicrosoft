@@ -134,6 +134,68 @@ function saveConfiguration_(optionsData) {
 }
 
 /**
+ * Save developer capacity settings to the DeveloperCapacity sheet
+ * @param {Array<{developer: string, capacity: number|string, notes: string}>} entries
+ * @returns {Object} Result object with status and message
+ */
+function saveDeveloperCapacity_(entries) {
+  var lock = Platform.lock();
+  try {
+    lock.waitLock(30000); // Wait up to 30 seconds
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
+  try {
+    if (!Array.isArray(entries)) {
+      return { status: 'error', message: 'Developer capacity data is invalid.' };
+    }
+
+    // Capacity settings are Global
+    var ss = getGlobalSpreadsheet();
+    var sheet = ss.getSheetByName(DEVELOPER_CAPACITY_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(DEVELOPER_CAPACITY_SHEET);
+      sheet.setFrozenRows(1);
+    }
+
+    var headers = ['Developer', 'Capacity', 'Notes', 'Updated'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
+    sheet.getRange("A2:D" + sheet.getMaxRows()).clearContent();
+
+    var timestamp = Platform.formatDate(new Date(), Platform.timeZone(), 'MM/dd/yyyy HH:mm:ss');
+    var seen = {};
+    var rows = [];
+    entries.forEach(function(entry) {
+      if (!entry) return;
+      var developer = String(entry.developer || '').trim();
+      if (!developer) return;
+      var key = developer.toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      var capacity = parseFloat(entry.capacity);
+      rows.push([
+        developer,
+        Number.isFinite(capacity) && capacity >= 0 ? capacity : '',
+        String(entry.notes || '').trim(),
+        timestamp
+      ]);
+    });
+
+    if (rows.length > 0) {
+      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    }
+
+    clearProjectCache();
+    return { status: 'success', message: 'Developer capacity saved!' };
+  } catch (e) {
+    return { status: 'error', message: 'Failed to save developer capacity: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * Save manual data override for a specific Jira item
  * @param {string} jiraId - The Jira ID
  * @param {string} field - The field name to update

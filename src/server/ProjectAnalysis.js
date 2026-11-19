@@ -104,7 +104,7 @@ function getProjectData_(user, targetUsername) {
     // Skipping ownership filtering
   }
   
-  data.sprintCapacity = analyzeSprintCapacity(data.projects, data.sprintStats.currentSprintName);
+  data.sprintCapacity = analyzeSprintCapacity(data.projects, data.sprintStats.currentSprintName, data.developerCapacity);
   return data;
 }
 
@@ -122,8 +122,8 @@ function _getRawProjectData(contextUser) {
     var cachedData = getCacheInChunks(cache, cacheKey);
     if (cachedData) {
       var parsed = JSON.parse(cachedData);
-      // Validate cached data structure
-      if (parsed && parsed.projects && parsed.independentTasks && parsed.config) {
+      // Validate cached data structure (developerCapacity added later; absence forces a rebuild)
+      if (parsed && parsed.projects && parsed.independentTasks && parsed.config && parsed.developerCapacity) {
         return parsed;
       }
       // If invalid, ignore cache and fetch fresh
@@ -152,6 +152,9 @@ function _getRawProjectData(contextUser) {
     
     // Load configuration options from sheets
     var config = _loadConfigurationCached(configSheet);
+
+    // Developer capacity settings live in the global workbook (sheet may be missing in older workbooks)
+    var developerCapacity = readDeveloperCapacity(globalSS.getSheetByName(DEVELOPER_CAPACITY_SHEET));
     
     // Load all data sources
     var projects = readJiraData(jiraSheet) || [];
@@ -172,7 +175,8 @@ function _getRawProjectData(contextUser) {
       independentTasks: independentTasks, 
       config: config || {},
       sprintStats: sprintStats,
-      sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName),
+      sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName, developerCapacity),
+      developerCapacity: developerCapacity,
       users: users
     };
     

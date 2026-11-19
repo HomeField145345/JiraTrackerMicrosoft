@@ -219,6 +219,41 @@ function readManualData(sheet) {
 }
 
 /**
+ * Reads developer capacity settings from the DeveloperCapacity sheet.
+ * @param {Sheet|null} sheet - The DeveloperCapacity sheet (may be missing in older workbooks)
+ * @returns {Array<{developer: string, capacity: number|null, notes: string}>}
+ */
+function readDeveloperCapacity(sheet) {
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return [];
+
+  const headers = data[0].map(h => (h ? String(h).trim() : ''));
+  const nameIndex = headers.indexOf('Developer');
+  const capacityIndex = headers.indexOf('Capacity');
+  const notesIndex = headers.indexOf('Notes');
+  if (nameIndex === -1) return [];
+
+  const entries = [];
+  const seen = {};
+  data.slice(1).forEach(row => {
+    const developer = String(row[nameIndex] == null ? '' : row[nameIndex]).trim();
+    if (!developer) return;
+    const key = developer.toLowerCase();
+    if (seen[key]) return;
+    seen[key] = true;
+    const rawCapacity = capacityIndex === -1 ? '' : row[capacityIndex];
+    const capacity = parseFloat(String(rawCapacity == null ? '' : rawCapacity).trim());
+    entries.push({
+      developer: developer,
+      capacity: Number.isFinite(capacity) ? capacity : null,
+      notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim()
+    });
+  });
+  return entries;
+}
+
+/**
  * Reads Independent Tasks.
  * @param {Sheet} sheet
  * @returns {Array<Object>}

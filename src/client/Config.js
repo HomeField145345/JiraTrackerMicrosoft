@@ -83,8 +83,8 @@
         }
 
         appendInput('username', user.username, 'text', true, 128);
-        appendInput('email', user.email, 'email', true, 254);
-        appendInput('displayName', user.displayName, 'text', true, 128);
+        appendInput('email', user.email, 'email', !row.dataset.userId, 254);
+        appendInput('displayName', user.displayName, 'text', !row.dataset.userId, 128);
 
         var roleCell = document.createElement('td');
         roleCell.className = 'px-2 py-2';

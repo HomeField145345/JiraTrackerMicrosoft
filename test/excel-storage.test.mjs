@@ -404,6 +404,73 @@ test('resolves the reported Admin row by Microsoft Object ID', async () => {
   assert.equal(connected.user.microsoftObjectId, objectId);
 });
 
+test('allows admins to manage workbook users without exposing passwords or deleting rows', async () => {
+  const graph = harness();
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const initial = await graph.run('connect');
+  await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+
+  const listUsers = () => graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, ownerObjectId, ownerObjectId);
+  const saveUsers = users => graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [users] }, ownerObjectId, ownerObjectId);
+  const listed = JSON.parse(JSON.stringify((await listUsers()).response));
+  assert.equal(listed.length, 1);
+  assert.equal(listed[0].role, 'admin');
+  assert.equal(Object.hasOwn(listed[0], 'password'), false);
+
+  const memberObjectId = '44444444-4444-4444-4444-444444444444';
+  await saveUsers([...listed, {
+    id: '',
+    username: 'member',
+    email: 'member@example.com',
+    displayName: 'Member',
+    role: 'user',
+    isActive: true,
+    microsoftObjectId: memberObjectId
+  }]);
+
+  const workbook = await graph.workbook();
+  const usersSheet = workbook.getWorksheet('Users');
+  assert.equal(usersSheet.getCell('B3').value, 'member');
+  assert.equal(usersSheet.getCell('F3').value, true);
+  assert.equal(usersSheet.getCell('G3').value, '');
+  assert.equal(usersSheet.getCell('K3').value, memberObjectId);
+
+  const afterAdd = JSON.parse(JSON.stringify((await listUsers()).response));
+  await saveUsers(afterAdd.map(user => ({
+    ...user,
+    isActive: user.username === 'member' ? false : user.isActive
+  })));
+  const afterDeactivate = JSON.parse(JSON.stringify((await listUsers()).response));
+  assert.equal(afterDeactivate.length, 2);
+  assert.equal(afterDeactivate.find(user => user.username === 'member').isActive, false);
+
+  await assert.rejects(saveUsers(afterDeactivate.map(user => ({
+    ...user,
+    isActive: user.role === 'admin' ? false : user.isActive
+  }))), /At least one active admin must remain/);
+});
+
+test('restricts workbook user management to admins', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  const memberObjectId = '44444444-4444-4444-4444-444444444444';
+  workbook.getWorksheet('Users').addRow([
+    'user-2', 'member', 'member@example.com', 'Member', 'user', true, '', new Date(), '', '', memberObjectId
+  ]);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+  await graph.run('connect', initial.itemId, undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
+
+  await assert.rejects(
+    graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
+    /Admin rights required/
+  );
+  await assert.rejects(
+    graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [[]] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
+    /Admin rights required/
+  );
+});
+
 test('reports the connected workbook when the signed-in owner has no matching row', async () => {
   const graph = harness();
   const initial = await graph.run('connect');

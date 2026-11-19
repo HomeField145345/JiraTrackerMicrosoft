@@ -204,6 +204,166 @@ function saveDeveloperCapacity_(entries) {
   }
 }
 
+function listWorkbookUsers_() {
+  return getUsers().map(function(user) {
+    return {
+      id: user.id,
+      username: user.username || '',
+      email: user.email || '',
+      displayName: user.displayName || '',
+      role: user.role || 'user',
+      isActive: user.isActive === true,
+      microsoftObjectId: user.microsoftObjectId || ''
+    };
+  });
+}
+
+function saveWorkbookUsers_(entries, currentUser) {
+  var lock = Platform.lock();
+  try {
+    lock.waitLock(30000);
+  } catch (e) {
+    return { status: 'error', message: 'Server is busy. Please try again.' };
+  }
+
+  try {
+    if (!currentUser || String(currentUser.role || '').toLowerCase() !== 'admin') {
+      throw new Error('Admin rights are required to manage users.');
+    }
+    if (!Array.isArray(entries) || entries.length === 0) {
+      throw new Error('At least one user is required.');
+    }
+
+    var sheet = getSheetOrThrow(getGlobalSpreadsheet(), USERS_SHEET);
+    var values = sheet.getDataRange().getValues();
+    var headers = values[0].map(function(header) { return String(header || '').trim(); });
+    var columns = {};
+    ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Microsoft Object ID'].forEach(function(header) {
+      columns[header] = headers.indexOf(header);
+    });
+    if (Object.keys(columns).some(function(header) { return columns[header] === -1; })) {
+      throw new Error('Users worksheet headers are invalid.');
+    }
+
+    var existingById = new Map();
+    values.slice(1).forEach(function(row, index) {
+      var id = String(row[columns.ID] == null ? '' : row[columns.ID]).trim();
+      if (!id) return;
+      if (existingById.has(id)) throw new Error('Users worksheet contains duplicate IDs.');
+      existingById.set(id, {
+        id: id,
+        rowNumber: index + 2,
+        username: String(row[columns.Username] == null ? '' : row[columns.Username]).trim(),
+        email: String(row[columns.Email] == null ? '' : row[columns.Email]).trim(),
+        displayName: String(row[columns['Display Name']] == null ? '' : row[columns['Display Name']]).trim(),
+        role: String(row[columns.Role] == null ? '' : row[columns.Role]).trim().toLowerCase().replace(/\s+/g, '_'),
+        isActive: isActiveUser_(row[columns['Is Active']]),
+        microsoftObjectId: String(row[columns['Microsoft Object ID']] == null ? '' : row[columns['Microsoft Object ID']]).trim()
+      });
+    });
+
+    var nextUsers = new Map(existingById);
+    var updates = [];
+    var submittedIds = new Set();
+    entries.forEach(function(entry) {
+      if (!entry || typeof entry !== 'object') throw new Error('User data is invalid.');
+      var id = String(entry.id == null ? '' : entry.id).trim();
+      var existing = id ? existingById.get(id) : null;
+      if (id && !existing) throw new Error('A user was changed or removed while you were editing. Reload the Users tab and try again.');
+      if (id && submittedIds.has(id)) throw new Error('Users contain duplicate IDs.');
+
+      var username = String(entry.username == null ? '' : entry.username).trim();
+      var email = String(entry.email == null ? '' : entry.email).trim();
+      var displayName = String(entry.displayName == null ? '' : entry.displayName).trim() || username;
+      var role = String(entry.role == null ? '' : entry.role).trim().toLowerCase().replace(/\s+/g, '_');
+      var microsoftObjectId = String(entry.microsoftObjectId == null ? '' : entry.microsoftObjectId).trim();
+      if (!username || username.length > 128) throw new Error('Enter a username up to 128 characters.');
+      if ((!existing && !email) || email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+        throw new Error('Enter a valid email address up to 254 characters.');
+      }
+      if (!displayName || displayName.length > 128) throw new Error('Enter a display name up to 128 characters.');
+      if (!role || role.length > 64 || !/^[a-z][a-z0-9_-]*$/.test(role)) throw new Error('Choose a valid user role.');
+      if (microsoftObjectId && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(microsoftObjectId)) {
+        throw new Error('Enter a valid Microsoft Object ID.');
+      }
+      if (!existing && !microsoftObjectId) throw new Error('New users need a Microsoft Object ID.');
+      if (typeof entry.isActive !== 'boolean') throw new Error('User active status is invalid.');
+
+      if (!id) {
+        do {
+          id = generateId();
+        } while (existingById.has(id) || nextUsers.has(id));
+      }
+      submittedIds.add(id);
+      var updated = {
+        id: id,
+        username: username,
+        email: email,
+        displayName: displayName,
+        role: role,
+        isActive: entry.isActive,
+        microsoftObjectId: microsoftObjectId
+      };
+      nextUsers.set(id, updated);
+      updates.push({ existing: existing, user: updated });
+    });
+
+    var seenUsernames = new Set();
+    var seenEmails = new Set();
+    var seenObjectIds = new Set();
+    var activeAdminCount = 0;
+    nextUsers.forEach(function(user) {
+      var usernameKey = user.username.toLowerCase();
+      var emailKey = user.email.toLowerCase();
+      var objectIdKey = user.microsoftObjectId.toLowerCase();
+      if (usernameKey && seenUsernames.has(usernameKey)) throw new Error('Usernames must be unique.');
+      if (emailKey && seenEmails.has(emailKey)) throw new Error('Email addresses must be unique.');
+      if (objectIdKey && seenObjectIds.has(objectIdKey)) throw new Error('Microsoft Object IDs must be unique.');
+      if (usernameKey) seenUsernames.add(usernameKey);
+      if (emailKey) seenEmails.add(emailKey);
+      if (objectIdKey) seenObjectIds.add(objectIdKey);
+      if (user.isActive && user.role === 'admin') activeAdminCount++;
+    });
+    if (!activeAdminCount) throw new Error('At least one active admin must remain.');
+
+    updates.forEach(function(update) {
+      var user = update.user;
+      if (update.existing) {
+        var oldUsername = update.existing.username;
+        if (oldUsername !== user.username && typeof updateDataOwnership === 'function') {
+          updateDataOwnership(oldUsername, user.username);
+        }
+        sheet.getRange(update.existing.rowNumber, columns.Username + 1).setValue(user.username);
+        sheet.getRange(update.existing.rowNumber, columns.Email + 1).setValue(user.email);
+        sheet.getRange(update.existing.rowNumber, columns['Display Name'] + 1).setValue(user.displayName);
+        sheet.getRange(update.existing.rowNumber, columns.Role + 1).setValue(user.role);
+        sheet.getRange(update.existing.rowNumber, columns['Is Active'] + 1).setValue(user.isActive);
+        sheet.getRange(update.existing.rowNumber, columns['Microsoft Object ID'] + 1).setValue(user.microsoftObjectId);
+      } else {
+        var newRow = Array(headers.length).fill('');
+        newRow[columns.ID] = user.id;
+        newRow[columns.Username] = user.username;
+        newRow[columns.Email] = user.email;
+        newRow[columns['Display Name']] = user.displayName;
+        newRow[columns.Role] = user.role;
+        newRow[columns['Is Active']] = user.isActive;
+        newRow[columns.Password] = '';
+        if (columns['Created At'] > -1) newRow[columns['Created At']] = new Date();
+        newRow[columns['Microsoft Object ID']] = user.microsoftObjectId;
+        sheet.appendRow(newRow);
+      }
+    });
+
+    clearUsersCache();
+    clearProjectCache();
+    return { status: 'success', message: 'Users saved.' };
+  } catch (e) {
+    return { status: 'error', message: 'Failed to save users: ' + e.message };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 /**
  * Save manual data override for a specific Jira item
  * @param {string} jiraId - The Jira ID

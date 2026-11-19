@@ -37,7 +37,7 @@ export function createExcelBridge({
     setStatus(message);
   }
 
-  function runWorker(action, accessToken) {
+  function runWorker(action, accessToken, payload) {
     const task = queue.then(() => new Promise((resolve, reject) => {
       if (!worker) worker = new WorkerClass('./src/server/excel-worker.js');
       worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data.result);
@@ -46,7 +46,7 @@ export function createExcelBridge({
         worker = null;
         reject(new Error('The Excel service could not start. Reload the page and try again.'));
       };
-      worker.postMessage({ action, accessToken, target: config.target, itemId });
+      worker.postMessage({ action, accessToken, target: config.target, itemId, payload });
     }));
     queue = task.catch(() => {});
     return task;
@@ -107,6 +107,23 @@ export function createExcelBridge({
     return useResult(await runWorker('refresh', accessToken));
   }
 
+  async function mutate(method, args) {
+    if (!account) throw new Error('Sign in with Microsoft to update the workbook.');
+    let accessToken;
+    try {
+      accessToken = verifyOwner(await client.acquireTokenSilent({ scopes, account }));
+    } catch (error) {
+      if (error.name === 'InteractionRequiredAuthError') {
+        showSignIn('Your Microsoft session expired. Sign in again to continue.');
+        throw new Error('Your Microsoft session expired. Sign in again to continue.');
+      }
+      throw error;
+    }
+    const result = await runWorker('mutate', accessToken, { method, args, user: user() });
+    pendingData = null;
+    return result.response;
+  }
+
   async function projectData() {
     if (pendingData) {
       const data = pendingData;
@@ -121,11 +138,17 @@ export function createExcelBridge({
     forceGetProjectData: () => { pendingData = null; return refresh(); },
     getConfigData: async () => (await projectData()).config
   };
+  const writers = new Set([
+    'importJiraCsv', 'importJiraFile', 'saveConfiguration', 'saveManualData',
+    'saveIndependentTask', 'updateLastChecked', 'createTaskAndSync',
+    'updateTaskAndSync', 'deleteTaskAndSync', 'toggleTaskComplete'
+  ]);
 
   function call(method, args) {
     const reader = Object.prototype.hasOwnProperty.call(readers, method) ? readers[method] : null;
-    if (!reader) return Promise.reject(new Error(READ_ONLY_MESSAGE));
-    return Promise.resolve().then(() => reader(...(Array.isArray(args) ? args : [])));
+    if (reader) return Promise.resolve().then(() => reader(...(Array.isArray(args) ? args : [])));
+    if (!writers.has(method)) return Promise.reject(new Error(READ_ONLY_MESSAGE));
+    return Promise.resolve().then(() => mutate(method, Array.isArray(args) ? args : []));
   }
 
   function user() {

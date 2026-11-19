@@ -184,6 +184,32 @@ test('provisions Excel once in SharePoint, then persists Jira imports and tasks'
   assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').getCell('B2').type, ExcelJS.ValueType.String);
 });
 
+test('persists dashboard edits and reopens workbooks with extended task columns', async () => {
+  const graph = harness();
+  const { itemId } = await graph.run('connect');
+
+  const fieldUpdate = await graph.run('mutate', itemId, {
+    method: 'saveManualData',
+    args: ['TEST-1', 'Artifacts', '[{"name":"spec"}]'],
+    user: { username: 'owner@example.com', role: 'admin' }
+  });
+  assert.equal(fieldUpdate.response.status, 'success');
+
+  const taskCreate = await graph.run('mutate', itemId, {
+    method: 'createTaskAndSync',
+    args: [{ Title: 'Workbook task', Status: 'Open' }],
+    user: { username: 'owner@example.com', role: 'admin' }
+  });
+  assert.equal(taskCreate.response.status, 'success');
+
+  const reopened = await graph.run('connect', itemId);
+  assert.equal(reopened.projects.independentTasks[0].Title, 'Workbook task');
+  const workbook = await graph.workbook();
+  assert.equal(workbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
+  assert.equal(workbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
+  assert.equal(workbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
+});
+
 test('does not replace an unrelated file at the OneDrive destination', async () => {
   const workbook = new ExcelJS.Workbook();
   workbook.addWorksheet('Another workbook').getCell('A1').value = 'Keep this';

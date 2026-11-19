@@ -13,6 +13,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
   if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
+  let response;
   let message = action === 'configure' ?
     (needsSetup ? 'Workbook set up.' : 'Workbook is already set up.') : undefined;
   if (action === 'import') {
@@ -26,17 +27,37 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
     const result = saveIndependentTask_({ Title: payload.trim(), Status: 'Not started' }, null);
     if (result.status !== 'success') throw new Error(result.message);
     message = 'Task saved.';
+  } else if (action === 'mutate') {
+    const { method, args, user } = payload || {};
+    if (user?.role !== 'admin' || typeof user.username !== 'string' || !Array.isArray(args)) {
+      throw new Error('The workbook update request is invalid.');
+    }
+    const mutations = {
+      importJiraCsv: values => importJiraCsv_(values[0], user),
+      importJiraFile: values => importJiraCsv_(values[0], user),
+      saveConfiguration: values => saveConfiguration_(values[0]),
+      saveManualData: values => saveManualData_(values[0], values[1], values[2], user),
+      saveIndependentTask: values => saveIndependentTask_(values[0], user),
+      updateLastChecked: values => updateLastChecked_(values[0], user),
+      createTaskAndSync: values => createTaskAndSync_(values[0], user),
+      updateTaskAndSync: values => updateTaskAndSync_(values[0], user),
+      deleteTaskAndSync: values => deleteTaskAndSync_(values[0], user),
+      toggleTaskComplete: values => toggleTaskComplete_(values[0], user)
+    };
+    if (!Object.hasOwn(mutations, method)) throw new Error('This workbook update is not supported.');
+    response = mutations[method](args);
+    if (response?.status === 'error') throw new Error(response.message || 'The workbook update failed.');
   }
   const changes = WorkbookService.takeChanges();
   if (changes) await storage.save(changes.upserts[0], item);
   const projects = _getRawProjectData(null);
   if (!projects) throw new Error('Could not read the tracker data from Excel.');
-  return { ...connection, message, projects };
+  return { ...connection, message, response, projects };
 }
 
 self.onmessage = async function ({ data }) {
   try {
-    if (!['connect', 'refresh', 'configure', 'import', 'addTask'].includes(data.action) ||
+    if (!['connect', 'refresh', 'configure', 'import', 'addTask', 'mutate'].includes(data.action) ||
         (data.action !== 'connect' && !data.itemId)) throw new Error('Connect a tracker workbook first.');
     if (!navigator.locks) throw new Error('Excel storage requires a browser with Web Locks support.');
     const result = await navigator.locks.request('projecthub-excel-store', () => runExcelOperation(data));

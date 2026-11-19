@@ -214,8 +214,10 @@ class ExcelStorage {
     const sheets = Object.entries(schema).map(([name, headers]) => {
       const sheet = workbook.getWorksheet(name);
       if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
-      if (!sheet || headers.some((header, i) => sheet.getCell(1, i + 1).value !== header) ||
-          sheet.columnCount > headers.length) {
+      const lastHeaderColumn = sheet ? headers.reduce((last, header, i) =>
+        sheet.getCell(1, i + 1).value !== '' && sheet.getCell(1, i + 1).value != null ? i + 1 : last, 0) : 0;
+      if (!sheet || Array.from({ length: lastHeaderColumn }, (_, i) =>
+        (sheet.getCell(1, i + 1).value ?? '') !== (headers[i] ?? '')).some(Boolean) || sheet.columnCount > headers.length) {
         throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
       }
       const rows = [];

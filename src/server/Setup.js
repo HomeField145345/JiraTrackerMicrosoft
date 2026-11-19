@@ -13,9 +13,9 @@
 function trackerSheetSchema() {
   return {
     [JIRA_DATA_SHEET]: ['Sync Status', 'Jira #', 'Summary', 'Status', 'Issue Type', 'Assignee', 'sprint', 'Epic Link', 'PM Lead', 'Story Points', 'Updated', 'Resolved', 'Created', 'Resolution', 'Acceptance Criteria', 'Target Date', 'Fix Version', 'Owner', 'UAT Status', 'Links', 'Labels', 'Description'],
-    [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority'],
-    [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options'],
-    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner'],
+    [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority', 'Artifacts'],
+    [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options', 'Closed Project Stages', 'Closed Status Keywords', 'Stage→Status (JSON)', 'Stage→Status Keywords', 'Past Sprint Closed Project Stages', 'Priority Options', '', 'Past Due Exempt Stages', 'KPI Project Stages', 'Independent Task Status Options', 'Not In Progress Statuses'],
+    [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner', 'Recurrence', 'TaskListId', 'GoogleTaskId', 'Created', 'Updated', 'CompletedDate'],
     [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At', 'Data Sheet ID'],
     [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration', 'UserID'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']

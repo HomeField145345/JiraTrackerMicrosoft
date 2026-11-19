@@ -32,11 +32,16 @@ function fakeDocument() {
 function setup({ oid = ids.ownerObjectId, connectResult } = {}) {
   const doc = fakeDocument();
   const actions = [];
+  const messages = [];
   class FakeWorker {
     postMessage(message) {
       actions.push(message.action);
+      messages.push(message);
       const result = message.action === 'connect' && connectResult ?
-        connectResult : { itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData };
+        connectResult : {
+          itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData,
+          response: { status: 'success', message: 'Workbook saved.' }
+        };
       queueMicrotask(() => this.onmessage({ data: { result } }));
     }
     terminate() {}
@@ -54,7 +59,7 @@ function setup({ oid = ids.ownerObjectId, connectResult } = {}) {
     Worker: FakeWorker,
     PublicClientApplication: FakeMsal
   });
-  return { bridge, doc, actions };
+  return { bridge, doc, actions, messages };
 }
 
 test('shows the sign-in panel, then loads workbook data after the owner signs in', async () => {
@@ -76,11 +81,19 @@ test('shows the sign-in panel, then loads workbook data after the owner signs in
   assert.deepEqual(await bridge.call('getConfigData', []), dashboardData.config);
 });
 
-test('rejects dashboard edits while the dashboard is read-only', async () => {
-  const { bridge } = setup();
+test('routes allowlisted dashboard edits to the workbook worker', async () => {
+  const { bridge, actions, messages } = setup();
   await bridge.initialize();
   await bridge.signIn();
-  await assert.rejects(bridge.call('saveManualData', ['ABC-1', 'Priority', 'High']), { message: READ_ONLY_MESSAGE });
+  const response = await bridge.call('saveManualData', ['ABC-1', 'Priority', 'High']);
+  assert.deepEqual(response, { status: 'success', message: 'Workbook saved.' });
+  assert.deepEqual(actions, ['connect', 'mutate']);
+  assert.deepEqual(messages[1].payload, {
+    method: 'saveManualData',
+    args: ['ABC-1', 'Priority', 'High'],
+    user: { username: 'owner@example.com', email: 'owner@example.com', displayName: 'Owner', role: 'admin' }
+  });
+  await assert.rejects(bridge.call('saveUser', ['user-1', {}]), { message: READ_ONLY_MESSAGE });
 });
 
 test('keeps the sign-in panel open with a message for a non-owner account', async () => {

@@ -224,7 +224,7 @@ class ExcelStorage {
         const allowedOptionalHeaders = new Set(headers.slice(9));
         const optionalHeadersValid = optionalHeaders.every(header => allowedOptionalHeaders.has(header)) &&
           new Set(optionalHeaders).size === optionalHeaders.length;
-        if (!requiredHeadersMatch || !optionalHeadersValid || sheet.columnCount > headers.length) {
+        if (!requiredHeadersMatch || !optionalHeadersValid) {
           throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
         }
         userColumnMap = actualHeaders.map((header, i) => {

@@ -207,8 +207,6 @@
             });
         });
 
-        // User management
-        initUserManagement();
     }
 
     window.loadConfigData = function() {

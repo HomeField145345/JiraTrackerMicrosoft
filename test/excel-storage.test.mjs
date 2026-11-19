@@ -141,8 +141,9 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
   };
   context.importScripts('excel-worker.js');
   return {
-    run: (action, itemId, payload) => context.runExcelOperation({
+    run: (action, itemId, payload, userObjectId, ownerObjectId) => context.runExcelOperation({
       action, itemId, payload, accessToken: 'simulated',
+      userObjectId, ownerObjectId,
       target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
     }),
     revision: () => commits,
@@ -154,6 +155,10 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(bytes);
       return workbook;
+    },
+    replaceWorkbook: async updatedBytes => {
+      bytes = updatedBytes;
+      item.eTag = '"external-change"';
     },
     interfere: () => { interfere = true; },
     changeOnDownload: () => { changeOnDownload = true; }
@@ -173,7 +178,7 @@ test('provisions Excel once in SharePoint, then persists Jira imports and tasks'
     IndependentTasks: 'ID', Users: 'ID', Sessions: 'Token', AdminConfigs: 'Username'
   })) {
     assert.equal(workbook.getWorksheet(sheet).getCell('A1').value, header);
-    assert.equal(workbook.getWorksheet(sheet).rowCount, 1);
+    assert.equal(workbook.getWorksheet(sheet).rowCount, sheet === 'Users' ? 2 : 1);
   }
   const file = Buffer.from('Issue key,Summary,Status,Assignee\nTEST-1,Example issue,Open,Example\n');
   await graph.run('import', connected.itemId, { fileName: 'jira.csv', base64Data: file.toString('base64') });
@@ -186,28 +191,45 @@ test('provisions Excel once in SharePoint, then persists Jira imports and tasks'
 
 test('persists dashboard edits and reopens workbooks with extended task columns', async () => {
   const graph = harness();
-  const { itemId } = await graph.run('connect');
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const memberObjectId = '44444444-4444-4444-4444-444444444444';
+  const connected = await graph.run('connect', undefined, undefined, ownerObjectId, ownerObjectId);
+  const { itemId } = connected;
+  assert.equal(connected.user.role, 'admin');
+  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').addRow([
+    'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
+    '', new Date(), '', '', memberObjectId
+  ]);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const member = await graph.run('connect', itemId, undefined, memberObjectId, ownerObjectId);
+  assert.equal(member.user.role, 'project_manager');
+  await assert.rejects(graph.run('mutate', itemId, {
+    method: 'saveConfiguration', args: [{}]
+  }, memberObjectId, ownerObjectId), /Admin rights required/);
 
   const fieldUpdate = await graph.run('mutate', itemId, {
     method: 'saveManualData',
-    args: ['TEST-1', 'Artifacts', '[{"name":"spec"}]'],
-    user: { username: 'owner@example.com', role: 'admin' }
-  });
+    args: ['TEST-1', 'Artifacts', '[{"name":"spec"}]']
+  }, ownerObjectId, ownerObjectId);
   assert.equal(fieldUpdate.response.status, 'success');
 
   const taskCreate = await graph.run('mutate', itemId, {
     method: 'createTaskAndSync',
-    args: [{ Title: 'Workbook task', Status: 'Open' }],
-    user: { username: 'owner@example.com', role: 'admin' }
-  });
+    args: [{ Title: 'Workbook task', Status: 'Open' }]
+  }, ownerObjectId, ownerObjectId);
   assert.equal(taskCreate.response.status, 'success');
 
-  const reopened = await graph.run('connect', itemId);
+  const reopened = await graph.run('connect', itemId, undefined, ownerObjectId, ownerObjectId);
   assert.equal(reopened.projects.independentTasks[0].Title, 'Workbook task');
   const workbook = await graph.workbook();
   assert.equal(workbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
   assert.equal(workbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
   assert.equal(workbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
+  assert.equal(workbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
 });
 
 test('does not replace an unrelated file at the OneDrive destination', async () => {

@@ -29,7 +29,7 @@ function fakeDocument() {
   return { getElementById: id => elements[id] || null, elements };
 }
 
-function setup({ oid = ids.ownerObjectId, connectResult } = {}) {
+function setup({ oid = ids.ownerObjectId, connectResult, connectError, userRole = 'admin' } = {}) {
   const doc = fakeDocument();
   const actions = [];
   const messages = [];
@@ -37,10 +37,14 @@ function setup({ oid = ids.ownerObjectId, connectResult } = {}) {
     postMessage(message) {
       actions.push(message.action);
       messages.push(message);
-      const result = message.action === 'connect' && connectResult ?
-        connectResult : {
+      const result = message.action === 'connect' && connectError ?
+        { error: connectError } : message.action === 'connect' && connectResult ? connectResult : {
           itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData,
-          response: { status: 'success', message: 'Workbook saved.' }
+          response: { status: 'success', message: 'Workbook saved.' },
+          user: {
+            id: 'user-1', username: 'owner@example.com', email: 'owner@example.com',
+            displayName: 'Owner', role: userRole, isActive: true, microsoftObjectId: oid
+          }
         };
       queueMicrotask(() => this.onmessage({ data: { result } }));
     }
@@ -62,7 +66,7 @@ function setup({ oid = ids.ownerObjectId, connectResult } = {}) {
   return { bridge, doc, actions, messages };
 }
 
-test('shows the sign-in panel, then loads workbook data after the owner signs in', async () => {
+test('loads the workbook-matched profile after Microsoft sign-in', async () => {
   const { bridge, doc, actions } = setup();
   await bridge.initialize();
   const panel = doc.elements['signin-panel'];
@@ -73,6 +77,8 @@ test('shows the sign-in panel, then loads workbook data after the owner signs in
   await bridge.whenSignedIn();
   assert.equal(panel.classList.contains('hidden'), true);
   assert.equal(bridge.isSignedIn(), true);
+  assert.equal(bridge.user().role, 'admin');
+  assert.equal(bridge.user().microsoftObjectId, ids.ownerObjectId);
 
   assert.deepEqual(await bridge.call('getProjectData', []), dashboardData);
   assert.deepEqual(actions, ['connect']);
@@ -88,21 +94,29 @@ test('routes allowlisted dashboard edits to the workbook worker', async () => {
   const response = await bridge.call('saveManualData', ['ABC-1', 'Priority', 'High']);
   assert.deepEqual(response, { status: 'success', message: 'Workbook saved.' });
   assert.deepEqual(actions, ['connect', 'mutate']);
-  assert.deepEqual(messages[1].payload, {
-    method: 'saveManualData',
-    args: ['ABC-1', 'Priority', 'High'],
-    user: { username: 'owner@example.com', email: 'owner@example.com', displayName: 'Owner', role: 'admin' }
-  });
+  assert.deepEqual(messages[1].payload, { method: 'saveManualData', args: ['ABC-1', 'Priority', 'High'] });
+  assert.equal(messages[1].userObjectId, ids.ownerObjectId);
+  assert.equal(messages[1].ownerObjectId, ids.ownerObjectId);
   await assert.rejects(bridge.call('saveUser', ['user-1', {}]), { message: READ_ONLY_MESSAGE });
 });
 
-test('keeps the sign-in panel open with a message for a non-owner account', async () => {
-  const { bridge, doc } = setup({ oid: '44444444-4444-4444-4444-444444444444' });
+test('applies the workbook role to a Microsoft account other than the configured owner', async () => {
+  const memberObjectId = '44444444-4444-4444-4444-444444444444';
+  const { bridge } = setup({ oid: memberObjectId, userRole: 'project_manager' });
+  await bridge.initialize();
+  await bridge.signIn();
+  assert.equal(bridge.isSignedIn(), true);
+  assert.equal(bridge.user().role, 'project_manager');
+  assert.equal(bridge.user().microsoftObjectId, memberObjectId);
+});
+
+test('keeps sign-in open when the workbook has no active matching user', async () => {
+  const { bridge, doc } = setup({ connectError: 'Your Microsoft account is not assigned an active user in this workbook.' });
   await bridge.initialize();
   await bridge.signIn();
   assert.equal(bridge.isSignedIn(), false);
   assert.equal(doc.elements['signin-panel'].classList.contains('hidden'), false);
-  assert.match(doc.elements['signin-status'].textContent, /tracker owner/);
+  assert.match(doc.elements['signin-status'].textContent, /not assigned an active user/);
 });
 
 test('tells the user when the workbook still needs setup', async () => {

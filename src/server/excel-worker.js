@@ -2,7 +2,7 @@ importScripts('../../vendor/exceljs.min.js', 'manifest.js');
 importScripts.apply(self, SERVER_SCRIPTS);
 importScripts('platform/ExcelStorage.js');
 
-async function runExcelOperation({ action, accessToken, target, itemId, payload }) {
+async function runExcelOperation({ action, accessToken, target, itemId, payload, userObjectId, ownerObjectId }) {
   const storage = new ExcelStorage(accessToken, target);
   if (action === 'configure' && (target?.fileName === undefined || !itemId)) {
     throw new Error('Connect to a specific existing workbook before setting it up.');
@@ -13,6 +13,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
   if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
+  const currentUser = userObjectId ? resolveMicrosoftUser(userObjectId, ownerObjectId) : null;
   let response;
   let message = action === 'configure' ?
     (needsSetup ? 'Workbook set up.' : 'Workbook is already set up.') : undefined;
@@ -28,21 +29,22 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
     if (result.status !== 'success') throw new Error(result.message);
     message = 'Task saved.';
   } else if (action === 'mutate') {
-    const { method, args, user } = payload || {};
-    if (user?.role !== 'admin' || typeof user.username !== 'string' || !Array.isArray(args)) {
-      throw new Error('The workbook update request is invalid.');
+    const { method, args } = payload || {};
+    if (!currentUser || !Array.isArray(args)) throw new Error('The workbook update request is invalid.');
+    if (method === 'saveConfiguration' && currentUser.role !== 'admin') {
+      throw new Error('Access denied: Admin rights required.');
     }
     const mutations = {
-      importJiraCsv: values => importJiraCsv_(values[0], user),
-      importJiraFile: values => importJiraCsv_(values[0], user),
+      importJiraCsv: values => importJiraCsv_(values[0], currentUser),
+      importJiraFile: values => importJiraCsv_(values[0], currentUser),
       saveConfiguration: values => saveConfiguration_(values[0]),
-      saveManualData: values => saveManualData_(values[0], values[1], values[2], user),
-      saveIndependentTask: values => saveIndependentTask_(values[0], user),
-      updateLastChecked: values => updateLastChecked_(values[0], user),
-      createTaskAndSync: values => createTaskAndSync_(values[0], user),
-      updateTaskAndSync: values => updateTaskAndSync_(values[0], user),
-      deleteTaskAndSync: values => deleteTaskAndSync_(values[0], user),
-      toggleTaskComplete: values => toggleTaskComplete_(values[0], user)
+      saveManualData: values => saveManualData_(values[0], values[1], values[2], currentUser),
+      saveIndependentTask: values => saveIndependentTask_(values[0], currentUser),
+      updateLastChecked: values => updateLastChecked_(values[0], currentUser),
+      createTaskAndSync: values => createTaskAndSync_(values[0], currentUser),
+      updateTaskAndSync: values => updateTaskAndSync_(values[0], currentUser),
+      deleteTaskAndSync: values => deleteTaskAndSync_(values[0], currentUser),
+      toggleTaskComplete: values => toggleTaskComplete_(values[0], currentUser)
     };
     if (!Object.hasOwn(mutations, method)) throw new Error('This workbook update is not supported.');
     response = mutations[method](args);
@@ -52,7 +54,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload 
   if (changes) await storage.save(changes.upserts[0], item);
   const projects = _getRawProjectData(null);
   if (!projects) throw new Error('Could not read the tracker data from Excel.');
-  return { ...connection, message, response, projects };
+  return { ...connection, message, response, projects, user: currentUser };
 }
 
 self.onmessage = async function ({ data }) {

@@ -36,7 +36,7 @@ class ExcelStorage {
     const response = await this.graph(`${path}?$select=id,eTag,file,size,webUrl,@microsoft.graph.downloadUrl`, { cache: 'no-store' });
     if (response.status === 404 && action === 'connect' && !itemId && this.fileName === undefined) {
       WorkbookService.replaceAll([]);
-      setupSheets(WorkbookService.getActiveWorkbook(), false);
+      setupSheets(WorkbookService.getActiveWorkbook());
       const { upserts: [data] } = WorkbookService.takeChanges();
       const folder = await this.graph(`${this.folder}?$select=id,folder`);
       this.check(folder, 'open the destination folder');
@@ -233,6 +233,7 @@ class ExcelStorage {
         while (rows.length < i - 1) rows.push([]);
         rows.push(values);
       });
+      rows[0] = headers.slice();
       return { name, rows };
     });
     return { id: PRIMARY_WORKBOOK_ID, name: this.fileName ?? EXCEL_FILE_NAME, sheets };

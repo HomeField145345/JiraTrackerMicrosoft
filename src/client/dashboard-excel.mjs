@@ -18,6 +18,7 @@ export function createExcelBridge({
   let client;
   let scopes;
   let account = null;
+  let profile = null;
   let itemId;
   let workbookUrl = '';
   let worker;
@@ -37,7 +38,7 @@ export function createExcelBridge({
     setStatus(message);
   }
 
-  function runWorker(action, accessToken, payload) {
+  function runWorker(action, accessToken, payload, userObjectId) {
     const task = queue.then(() => new Promise((resolve, reject) => {
       if (!worker) worker = new WorkerClass('./src/server/excel-worker.js');
       worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data.result);
@@ -46,19 +47,20 @@ export function createExcelBridge({
         worker = null;
         reject(new Error('The Excel service could not start. Reload the page and try again.'));
       };
-      worker.postMessage({ action, accessToken, target: config.target, itemId, payload });
+      worker.postMessage({
+        action, accessToken, target: config.target, itemId, payload,
+        userObjectId, ownerObjectId: config.ownerObjectId
+      });
     }));
     queue = task.catch(() => {});
     return task;
   }
 
-  function verifyOwner(auth) {
+  function verifyTenant(auth) {
     const claims = auth.account?.idTokenClaims;
-    if (claims?.oid?.toLowerCase() !== config.ownerObjectId.toLowerCase() ||
-        claims?.tid?.toLowerCase() !== config.tenantId.toLowerCase()) {
-      throw new Error('Sign in with the Microsoft account configured as the tracker owner.');
+    if (!isGuid(claims?.oid) || claims?.tid?.toLowerCase() !== config.tenantId.toLowerCase()) {
+      throw new Error('Sign in with a Microsoft account from the configured organization.');
     }
-    account = auth.account;
     return auth.accessToken;
   }
 
@@ -66,7 +68,11 @@ export function createExcelBridge({
     if (result.needsSetup) {
       throw new Error('This workbook is not set up yet. Set it up in the Excel tracker, then sign in again.');
     }
+    if (!result.user || !result.user.role) {
+      throw new Error('Your Microsoft account is not assigned an active user in this workbook. Contact a workbook admin.');
+    }
     itemId = result.itemId;
+    profile = result.user;
     workbookUrl = typeof result.webUrl === 'string' && result.webUrl.startsWith('https://') ? result.webUrl : '';
     return result.projects;
   }
@@ -78,12 +84,15 @@ export function createExcelBridge({
     setStatus('Connecting to Excel…');
     try {
       const auth = await client.acquireTokenPopup({ scopes, account: account || undefined, prompt: account ? undefined : 'select_account' });
-      const accessToken = verifyOwner(auth);
-      pendingData = useResult(await runWorker('connect', accessToken));
+      const accessToken = verifyTenant(auth);
+      const userObjectId = auth.account.idTokenClaims.oid;
+      pendingData = useResult(await runWorker('connect', accessToken, undefined, userObjectId));
+      account = auth.account;
       element('signin-panel')?.classList.add('hidden');
       resolveSignedIn();
     } catch (error) {
       account = null;
+      profile = null;
       setStatus(error.name === 'BrowserAuthError' && /user_cancelled/.test(error.errorCode || '') ?
         'Sign-in was cancelled.' : error.message);
     } finally {
@@ -96,7 +105,7 @@ export function createExcelBridge({
     if (!account) throw new Error('Sign in with Microsoft to load the workbook.');
     let accessToken;
     try {
-      accessToken = verifyOwner(await client.acquireTokenSilent({ scopes, account }));
+      accessToken = verifyTenant(await client.acquireTokenSilent({ scopes, account }));
     } catch (error) {
       if (error.name === 'InteractionRequiredAuthError') {
         showSignIn('Your Microsoft session expired. Sign in again to continue.');
@@ -104,14 +113,14 @@ export function createExcelBridge({
       }
       throw error;
     }
-    return useResult(await runWorker('refresh', accessToken));
+    return useResult(await runWorker('refresh', accessToken, undefined, account.idTokenClaims?.oid));
   }
 
   async function mutate(method, args) {
     if (!account) throw new Error('Sign in with Microsoft to update the workbook.');
     let accessToken;
     try {
-      accessToken = verifyOwner(await client.acquireTokenSilent({ scopes, account }));
+      accessToken = verifyTenant(await client.acquireTokenSilent({ scopes, account }));
     } catch (error) {
       if (error.name === 'InteractionRequiredAuthError') {
         showSignIn('Your Microsoft session expired. Sign in again to continue.');
@@ -119,7 +128,7 @@ export function createExcelBridge({
       }
       throw error;
     }
-    const result = await runWorker('mutate', accessToken, { method, args, user: user() });
+    const result = await runWorker('mutate', accessToken, { method, args }, account.idTokenClaims?.oid);
     pendingData = null;
     return result.response;
   }
@@ -152,17 +161,12 @@ export function createExcelBridge({
   }
 
   function user() {
-    if (!account) return {};
-    return {
-      username: account.username,
-      email: account.username,
-      displayName: account.name || account.username,
-      role: 'admin'
-    };
+    return profile ? { ...profile } : {};
   }
 
   function signOut() {
     account = null;
+    profile = null;
     pendingData = null;
     worker?.terminate();
     worker = null;
@@ -211,7 +215,7 @@ export function createExcelBridge({
     call,
     user,
     whenSignedIn: () => signedIn,
-    isSignedIn: () => Boolean(account),
+    isSignedIn: () => Boolean(account && profile),
     workbookUrl: () => workbookUrl
   };
 }

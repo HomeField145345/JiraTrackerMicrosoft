@@ -16,7 +16,7 @@ function trackerSheetSchema() {
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority', 'Artifacts'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options', 'Closed Project Stages', 'Closed Status Keywords', 'Stage→Status (JSON)', 'Stage→Status Keywords', 'Past Sprint Closed Project Stages', 'Priority Options', '', 'Past Due Exempt Stages', 'KPI Project Stages', 'Independent Task Status Options', 'Not In Progress Statuses'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner', 'Recurrence', 'TaskListId', 'GoogleTaskId', 'Created', 'Updated', 'CompletedDate'],
-    [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At', 'Data Sheet ID'],
+    [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At', 'Data Sheet ID', 'Microsoft Object ID'],
     [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration', 'UserID'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']
   };
@@ -97,8 +97,13 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
       if (sheetName === USERS_SHEET) {
          const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
          if (headers.indexOf('Data Sheet ID') === -1) {
-             sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
-             logs.push('Added "Data Sheet ID" to Users.');
+           sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
+           headers.push('Data Sheet ID');
+           logs.push('Added "Data Sheet ID" to Users.');
+         }
+         if (headers.indexOf('Microsoft Object ID') === -1) {
+           sheet.getRange(1, headers.length + 1).setValue('Microsoft Object ID').setFontWeight('bold');
+           logs.push('Added "Microsoft Object ID" to Users.');
          }
       }
     }
@@ -108,7 +113,7 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
       const userSheet = ss.getSheetByName(USERS_SHEET);
       if (userSheet && userSheet.getLastRow() === 1) {
         // No password is stored: the browser build signs in with a local profile (see Auth.js).
-        userSheet.appendRow([Platform.uuid(), 'admin', 'admin@example.com', 'Admin', 'admin', true, '', new Date(), '', '']);
+        userSheet.appendRow([Platform.uuid(), 'admin', 'admin@example.com', 'Admin', 'admin', true, '', new Date(), '', '', '']);
         logs.push('Created default admin user.');
       }
     }

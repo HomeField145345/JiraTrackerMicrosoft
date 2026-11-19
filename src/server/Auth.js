@@ -78,7 +78,8 @@ function getUsers() {
       isActive: row[5], 
       createdAt: safeIsoDate(row[7]), 
       lastLoginAt: safeIsoDate(row[8]),
-      dataSheetId: row[9] // New field
+      dataSheetId: row[9],
+      microsoftObjectId: row[10]
     };
   }).filter(Boolean);
 
@@ -89,6 +90,45 @@ function getUsers() {
   }
 
   return users;
+}
+
+function resolveMicrosoftUser(objectId, ownerObjectId) {
+  const normalizedObjectId = String(objectId || '').trim().toLowerCase();
+  if (!normalizedObjectId) throw new Error('Microsoft did not provide an account ID.');
+
+  let matches = getUsers().filter(user =>
+    String(user.microsoftObjectId || '').trim().toLowerCase() === normalizedObjectId
+  );
+  if (matches.length > 1) throw new Error('This Microsoft account is assigned to multiple workbook users.');
+
+  if (matches.length === 0 && normalizedObjectId === String(ownerObjectId || '').trim().toLowerCase()) {
+    const admins = getUsers().filter(user =>
+      user.isActive === true && String(user.role || '').trim().toLowerCase() === 'admin' &&
+      !String(user.microsoftObjectId || '').trim()
+    );
+    if (admins.length === 1) {
+      updateUser(admins[0].id, { microsoftObjectId: objectId });
+      matches = getUsers().filter(user =>
+        String(user.microsoftObjectId || '').trim().toLowerCase() === normalizedObjectId
+      );
+    }
+  }
+
+  const user = matches[0];
+  if (!user || user.isActive !== true) {
+    throw new Error('Your Microsoft account is not assigned an active user in this workbook. Contact a workbook admin.');
+  }
+
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    displayName: user.displayName,
+    role: String(user.role || 'viewer').trim().toLowerCase().replace(/\s+/g, '_'),
+    isActive: true,
+    dataSheetId: user.dataSheetId,
+    microsoftObjectId: user.microsoftObjectId
+  };
 }
 
 /**
@@ -195,7 +235,8 @@ function createUser(user) {
       '', // Password (not used by the browser build)
       new Date(), 
       '',
-      dataSheetId || '' // Store the Spreadsheet ID
+      dataSheetId || '', // Store the Spreadsheet ID
+      user.microsoftObjectId || ''
     ]);
 
     clearUsersCache();
@@ -236,6 +277,7 @@ function updateUser(userId, updates) {
   if (updates.displayName) sheet.getRange(rowIndex, 4).setValue(updates.displayName);
   if (updates.role) sheet.getRange(rowIndex, 5).setValue(updates.role);
   if (updates.isActive !== undefined) sheet.getRange(rowIndex, 6).setValue(updates.isActive);
+  if (updates.microsoftObjectId !== undefined) sheet.getRange(rowIndex, 11).setValue(updates.microsoftObjectId);
   
   // Data Sheet ID Update
   if (updates.dataSheetId !== undefined) {

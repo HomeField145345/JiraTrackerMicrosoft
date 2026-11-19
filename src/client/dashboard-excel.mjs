@@ -161,7 +161,7 @@ export function createExcelBridge({
   const readers = {
     getProjectData: projectData,
     forceGetProjectData: () => { pendingData = null; return refresh(); },
-    getConfigData: async () => (await projectData()).config
+    getConfigData: async () => ({ config: (await projectData()).config })
   };
   const writers = new Set([
     'importJiraCsv', 'importJiraFile', 'saveConfiguration', 'saveManualData',

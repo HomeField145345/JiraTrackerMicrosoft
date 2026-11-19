@@ -85,7 +85,7 @@ test('loads the workbook-matched profile after Microsoft sign-in', async () => {
   assert.deepEqual(actions, ['connect']);
   await bridge.call('getProjectData', []);
   assert.deepEqual(actions, ['connect', 'refresh']);
-  assert.deepEqual(await bridge.call('getConfigData', []), dashboardData.config);
+  assert.deepEqual(await bridge.call('getConfigData', []), { config: dashboardData.config });
 });
 
 test('routes allowlisted dashboard edits to the workbook worker', async () => {

@@ -1379,11 +1379,15 @@ function saveDeveloperCapacity(event) {
         return { developer: input.dataset.developer, capacity: input.value };
     });
     button.disabled = true;
+    inputs.forEach(function(input) { input.disabled = true; });
     status.textContent = 'Saving capacity...';
     status.className = 'text-sm text-gray-600';
-    callServer('saveDeveloperCapacity', [entries]).then(function() {
+    callServer('saveDeveloperCapacity', [entries]).then(function(response) {
+        if (!response || response.status !== 'success') {
+            throw new Error(response && response.message ? response.message : 'Could not save capacity.');
+        }
         return callServer('getProjectData', []).then(function(data) {
-            if (!handleDataLoaded(data)) throw new Error('Refresh failed. Reload the page to see the saved capacity.');
+            if (!handleDataLoaded(data)) throw new Error('Capacity saved, but refresh failed. Reload the page.');
             status.textContent = 'Capacity saved.';
             status.className = 'text-sm text-green-700';
         }, function(error) {
@@ -1394,6 +1398,7 @@ function saveDeveloperCapacity(event) {
         status.className = 'text-sm text-orange-800';
     }).finally(function() {
         button.disabled = false;
+        inputs.forEach(function(input) { input.disabled = false; });
     });
 }
 

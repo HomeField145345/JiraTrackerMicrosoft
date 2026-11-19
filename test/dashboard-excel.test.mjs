@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import { createExcelBridge, READ_ONLY_MESSAGE } from '../src/client/dashboard-excel.mjs';
 
 const ids = {
@@ -142,4 +144,66 @@ test('tells the user when the workbook still needs setup', async () => {
   await bridge.signIn();
   assert.equal(bridge.isSignedIn(), false);
   assert.match(doc.elements['signin-status'].textContent, /not set up yet/);
+});
+
+test('developer configuration renders Jira assignees and saves valid capacity', async () => {
+  class Element {
+    constructor() {
+      this.children = [];
+      this.dataset = {};
+      this.validity = { valid: true };
+      this.value = '';
+    }
+    replaceChildren() { this.children = []; }
+    insertRow() { const row = new Element(); this.children.push(row); return row; }
+    insertCell() { const cell = new Element(); this.children.push(cell); return cell; }
+    appendChild(child) { this.children.push(child); }
+    focus() { this.focused = true; }
+  }
+  const elements = {
+    'developer-capacity-body': new Element(),
+    'developer-capacity-status': new Element(),
+    'save-developer-capacity': new Element()
+  };
+  const inputs = () => elements['developer-capacity-body'].children.flatMap(row =>
+    row.children.flatMap(cell => cell.children.filter(child => child.type === 'number'))
+  );
+  const data = {
+    projects: [{ Assignee: ' Avery ' }, { Assignee: 'avery' }, { Assignee: 'Blair' }, { Assignee: '' }],
+    developerCapacity: [{ developer: 'avery', capacity: 0 }]
+  };
+  const calls = [];
+  const context = vm.createContext({
+    window: { addEventListener() {} },
+    document: {
+      getElementById: id => elements[id],
+      createElement: () => new Element(),
+      querySelectorAll: () => inputs()
+    },
+    APP_STATE: { allData: data },
+    checkAuth: () => 'token',
+    getErrorMessage_: error => error.message,
+    handleDataLoaded: () => true,
+    callServer: async (method, args) => {
+      calls.push({ method, args });
+      return method === 'saveDeveloperCapacity' ? { status: 'success' } : data;
+    }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderDeveloperCapacityConfig();
+  assert.deepEqual(inputs().map(input => [input.dataset.developer, input.value]), [['Avery', '0'], ['Blair', '']]);
+  inputs()[1].validity.valid = false;
+  context.saveDeveloperCapacity({ preventDefault() {} });
+  assert.equal(calls.length, 0);
+  assert.match(elements['developer-capacity-status'].textContent, /non-negative/);
+  inputs()[1].validity.valid = true;
+  inputs()[1].value = '5.5';
+  context.saveDeveloperCapacity({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
+    { method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: '0' }, { developer: 'Blair', capacity: '5.5' }]] },
+    { method: 'getProjectData', args: [] }
+  ]);
+  assert.equal(elements['developer-capacity-status'].textContent, 'Capacity saved.');
+  assert.equal(elements['save-developer-capacity'].disabled, false);
 });

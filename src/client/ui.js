@@ -1201,14 +1201,30 @@ function renderApp() {
     var userRole = typeof userProfile.role === 'string' ? userProfile.role.trim().toLowerCase() : '';
     var isAdmin = userRole === 'admin';
     if (developersButton) developersButton.style.display = isAdmin ? '' : 'none';
+    var menuStyle = developersButton && typeof window.getComputedStyle === 'function' ?
+        window.getComputedStyle(developersButton) : null;
+    var menuRect = developersButton && typeof developersButton.getBoundingClientRect === 'function' ?
+        developersButton.getBoundingClientRect() : null;
     var menuDiagnostic = {
         bridgeAvailable: Boolean(excelBridge),
         signedIn: Boolean(excelBridge && typeof excelBridge.isSignedIn === 'function' && excelBridge.isSignedIn()),
         role: userRole || null,
         isAdmin: isAdmin,
         buttonFound: Boolean(developersButton),
-        computedDisplay: developersButton && typeof window.getComputedStyle === 'function' ?
-            window.getComputedStyle(developersButton).display : null
+        computedDisplay: menuStyle ? menuStyle.display : null,
+        visibility: menuStyle ? menuStyle.visibility : null,
+        opacity: menuStyle ? menuStyle.opacity : null,
+        buttonBounds: menuRect ? {
+            left: Math.round(menuRect.left),
+            right: Math.round(menuRect.right),
+            top: Math.round(menuRect.top),
+            bottom: Math.round(menuRect.bottom),
+            width: Math.round(menuRect.width),
+            height: Math.round(menuRect.height)
+        } : null,
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        intersectsViewport: menuRect ? menuRect.right > 0 && menuRect.left < window.innerWidth &&
+            menuRect.bottom > 0 && menuRect.top < window.innerHeight : null
     };
     var menuDiagnosticState = JSON.stringify(menuDiagnostic);
     if (menuDiagnosticState !== developerMenuDiagnosticState) {

@@ -224,7 +224,13 @@ class ExcelStorage {
         const allowedOptionalHeaders = new Set(headers.slice(9));
         const optionalHeadersValid = optionalHeaders.every(header => allowedOptionalHeaders.has(header)) &&
           new Set(optionalHeaders).size === optionalHeaders.length;
-        if (!requiredHeadersMatch || !optionalHeadersValid) {
+        if (!requiredHeadersMatch) {
+          throw new Error(`Users columns A-I must be ${headers.slice(0, 9).join(' | ')}. Found: ${actualHeaders.slice(0, 9).join(' | ')}.`);
+        }
+        if (!optionalHeadersValid) {
+          throw new Error('Users columns J onward may contain "Data Sheet ID" and "Microsoft Object ID" once each. Check the header names and duplicates.');
+        }
+        if (sheet.columnCount > headers.length && actualHeaders.slice(headers.length).some(Boolean)) {
           throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
         }
         userColumnMap = actualHeaders.map((header, i) => {

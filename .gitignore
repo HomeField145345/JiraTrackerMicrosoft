@@ -5,4 +5,3 @@
 deploy.bat
 node_modules/
 dist/
-excel-config.json

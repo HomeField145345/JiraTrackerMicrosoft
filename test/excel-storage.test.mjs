@@ -335,6 +335,24 @@ test('treats a textual TRUE value as an active user during owner bootstrap', asy
   assert.equal(connected.user.microsoftObjectId, ownerObjectId);
 });
 
+test('resolves the reported Admin row by Microsoft Object ID', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').getRow(2).values = [
+    '1', 'ckrablin', 'ck0779@att.com', 'Chris', 'admin', 'TRUE', '123456', '', '', '',
+    '757e8405-c7eb-4fc6-9add-dc3a4560fa1c'
+  ];
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const objectId = '757e8405-c7eb-4fc6-9add-dc3a4560fa1c';
+  const connected = await graph.run('connect', initial.itemId, undefined, objectId, objectId, 'ck0779@att.com');
+  assert.equal(connected.user.username, 'ckrablin');
+  assert.equal(connected.user.email, 'ck0779@att.com');
+  assert.equal(connected.user.role, 'admin');
+  assert.equal(connected.user.microsoftObjectId, objectId);
+});
+
 test('filters project data and capacity to the mapped non-admin workbook user', async () => {
   const graph = harness();
   await graph.run('connect');

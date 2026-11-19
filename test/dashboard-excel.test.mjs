@@ -11,10 +11,10 @@ const dashboardData = { projects: [{ 'Jira #': 'ABC-1' }], independentTasks: [],
 
 function fakeDocument() {
   const elements = {};
-  for (const id of ['signin-panel', 'signin-status', 'signin-btn']) {
+  for (const id of ['signin-panel', 'signin-status', 'signin-btn', 'signin-workbook-link']) {
     const classes = new Set(id === 'signin-panel' ? ['hidden'] : []);
     elements[id] = {
-      hidden: id === 'signin-btn',
+      hidden: id === 'signin-btn' || id === 'signin-workbook-link',
       textContent: '',
       attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; },
@@ -29,7 +29,7 @@ function fakeDocument() {
   return { getElementById: id => elements[id] || null, elements };
 }
 
-function setup({ oid = ids.ownerObjectId, connectResult, connectError, userRole = 'admin' } = {}) {
+function setup({ oid = ids.ownerObjectId, connectResult, connectError, errorWorkbookUrl, userRole = 'admin' } = {}) {
   const doc = fakeDocument();
   const actions = [];
   const messages = [];
@@ -37,8 +37,7 @@ function setup({ oid = ids.ownerObjectId, connectResult, connectError, userRole 
     postMessage(message) {
       actions.push(message.action);
       messages.push(message);
-      const result = message.action === 'connect' && connectError ?
-        { error: connectError } : message.action === 'connect' && connectResult ? connectResult : {
+      const result = message.action === 'connect' && connectResult ? connectResult : {
           itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData,
           response: { status: 'success', message: 'Workbook saved.' },
           user: {
@@ -46,7 +45,9 @@ function setup({ oid = ids.ownerObjectId, connectResult, connectError, userRole 
             displayName: 'Owner', role: userRole, isActive: true, microsoftObjectId: oid
           }
         };
-      queueMicrotask(() => this.onmessage({ data: { result } }));
+      const data = message.action === 'connect' && connectError ?
+        { error: connectError, workbookUrl: errorWorkbookUrl } : { result };
+      queueMicrotask(() => this.onmessage({ data }));
     }
     terminate() {}
   }
@@ -111,12 +112,24 @@ test('applies the workbook role to a Microsoft account other than the configured
 });
 
 test('keeps sign-in open when the workbook has no active matching user', async () => {
-  const { bridge, doc } = setup({ connectError: 'Your Microsoft account is not assigned an active user in this workbook.' });
+  const { bridge, doc } = setup({
+    connectError: 'Your Microsoft account is not assigned an active user in this workbook.',
+    errorWorkbookUrl: 'https://example.com/book'
+  });
   await bridge.initialize();
   await bridge.signIn();
   assert.equal(bridge.isSignedIn(), false);
   assert.equal(doc.elements['signin-panel'].classList.contains('hidden'), false);
   assert.match(doc.elements['signin-status'].textContent, /not assigned an active user/);
+  assert.equal(doc.elements['signin-workbook-link'].hidden, false);
+  assert.equal(doc.elements['signin-workbook-link'].href, 'https://example.com/book');
+});
+
+test('does not expose an unsafe workbook link on sign-in failure', async () => {
+  const { bridge, doc } = setup({ connectError: 'No matching user.', errorWorkbookUrl: 'javascript:alert(1)' });
+  await bridge.initialize();
+  await bridge.signIn();
+  assert.equal(doc.elements['signin-workbook-link'].hidden, true);
 });
 
 test('tells the user when the workbook still needs setup', async () => {

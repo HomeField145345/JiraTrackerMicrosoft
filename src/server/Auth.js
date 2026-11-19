@@ -123,7 +123,7 @@ function resolveMicrosoftUser(objectId, ownerObjectId, identityEmail) {
         String(user.microsoftObjectId || '').trim().toLowerCase() === normalizedObjectId
       );
     } else if (admins.length === 0) {
-      throw new Error('The configured Microsoft owner has no active Admin row in the Users sheet. Add or activate an Admin user, then sign in again.');
+      throw new Error(`The signed-in Microsoft Object ID ${normalizedObjectId} does not match an active user in this workbook. Check the Users sheet and verify that this is the intended workbook.`);
     } else {
       throw new Error('The configured Microsoft owner matches multiple Admin rows. Add the owner email to exactly one Admin row in the Users sheet, then sign in again.');
     }

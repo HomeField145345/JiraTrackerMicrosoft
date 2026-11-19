@@ -41,7 +41,12 @@ export function createExcelBridge({
   function runWorker(action, accessToken, payload, userObjectId, userEmail) {
     const task = queue.then(() => new Promise((resolve, reject) => {
       if (!worker) worker = new WorkerClass('./src/server/excel-worker.js');
-      worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data.result);
+      worker.onmessage = ({ data }) => {
+        if (!data.error) return resolve(data.result);
+        const error = new Error(data.error);
+        error.workbookUrl = data.workbookUrl;
+        reject(error);
+      };
       worker.onerror = () => {
         worker.terminate();
         worker = null;
@@ -80,6 +85,8 @@ export function createExcelBridge({
   async function signIn() {
     if (!client || busy) return;
     busy = true;
+    const workbookLink = element('signin-workbook-link');
+    if (workbookLink) workbookLink.hidden = true;
     element('signin-btn')?.setAttribute('disabled', '');
     setStatus('Connecting to Excel…');
     try {
@@ -93,6 +100,15 @@ export function createExcelBridge({
     } catch (error) {
       account = null;
       profile = null;
+      if (workbookLink && typeof error.workbookUrl === 'string') {
+        try {
+          const workbook = new URL(error.workbookUrl);
+          if (workbook.protocol === 'https:' && !workbook.username && !workbook.password) {
+            workbookLink.href = workbook.href;
+            workbookLink.hidden = false;
+          }
+        } catch {}
+      }
       setStatus(error.name === 'BrowserAuthError' && /user_cancelled/.test(error.errorCode || '') ?
         'Sign-in was cancelled.' : error.message);
     } finally {

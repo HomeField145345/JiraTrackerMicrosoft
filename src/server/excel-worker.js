@@ -13,7 +13,15 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
   if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
-  const currentUser = userObjectId ? resolveMicrosoftUser(userObjectId, ownerObjectId, userEmail) : null;
+  let currentUser = null;
+  if (userObjectId) {
+    try {
+      currentUser = resolveMicrosoftUser(userObjectId, ownerObjectId, userEmail);
+    } catch (error) {
+      error.workbookUrl = item.webUrl;
+      throw error;
+    }
+  }
   let response;
   let message = action === 'configure' ?
     (needsSetup ? 'Workbook set up.' : 'Workbook is already set up.') : undefined;
@@ -65,6 +73,6 @@ self.onmessage = async function ({ data }) {
     const result = await navigator.locks.request('projecthub-excel-store', () => runExcelOperation(data));
     self.postMessage({ result });
   } catch (error) {
-    self.postMessage({ error: error.message });
+    self.postMessage({ error: error.message, workbookUrl: error.workbookUrl });
   }
 };

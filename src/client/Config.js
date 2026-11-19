@@ -51,6 +51,138 @@
     };
     var availableStatuses = [];
 
+    function appendUserRow(user) {
+        var body = document.getElementById('users-body');
+        if (!body) return;
+        user = user || {};
+
+        var row = document.createElement('tr');
+        row.className = 'border-b border-gray-200';
+        row.dataset.userId = user.id == null ? '' : String(user.id);
+
+        function appendInput(field, value, type, required, maxLength) {
+            var cell = document.createElement('td');
+            cell.className = 'px-2 py-2';
+            var input = document.createElement('input');
+            input.type = type;
+            input.value = value == null ? '' : String(value);
+            input.dataset.field = field;
+            input.setAttribute('aria-label', field);
+            input.required = Boolean(required);
+            if (maxLength) input.maxLength = maxLength;
+            input.className = 'w-full min-w-32 rounded border border-gray-300 px-2 py-1';
+            if (field === 'microsoftObjectId') {
+                input.maxLength = 36;
+                input.pattern = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
+                input.required = !row.dataset.userId;
+                input.title = 'Enter the user’s Microsoft Object ID.';
+            }
+            cell.appendChild(input);
+            row.appendChild(cell);
+            return input;
+        }
+
+        appendInput('username', user.username, 'text', true, 128);
+        appendInput('email', user.email, 'email', true, 254);
+        appendInput('displayName', user.displayName, 'text', true, 128);
+
+        var roleCell = document.createElement('td');
+        roleCell.className = 'px-2 py-2';
+        var roleSelect = document.createElement('select');
+        roleSelect.dataset.field = 'role';
+        roleSelect.setAttribute('aria-label', 'Role');
+        roleSelect.className = 'w-full min-w-28 rounded border border-gray-300 px-2 py-1';
+        var roles = ['user', 'admin'];
+        var existingRole = String(user.role || '').trim().toLowerCase();
+        if (existingRole && !roles.includes(existingRole)) roles.push(existingRole);
+        roles.forEach(function(role) {
+            var option = document.createElement('option');
+            option.value = role;
+            option.textContent = role.replace(/_/g, ' ');
+            roleSelect.appendChild(option);
+        });
+        roleSelect.value = existingRole || 'user';
+        roleCell.appendChild(roleSelect);
+        row.appendChild(roleCell);
+
+        var activeCell = document.createElement('td');
+        activeCell.className = 'px-2 py-2 text-center';
+        var activeInput = document.createElement('input');
+        activeInput.type = 'checkbox';
+        activeInput.dataset.field = 'isActive';
+        activeInput.setAttribute('aria-label', 'Active');
+        activeInput.checked = user.isActive === undefined ? true : user.isActive === true;
+        activeCell.appendChild(activeInput);
+        row.appendChild(activeCell);
+
+        appendInput('microsoftObjectId', user.microsoftObjectId, 'text', false, 36);
+        body.appendChild(row);
+    }
+
+    function renderUsers(users) {
+        var body = document.getElementById('users-body');
+        if (!body) return;
+        body.replaceChildren();
+        users.forEach(appendUserRow);
+    }
+
+    function loadUsers() {
+        var status = document.getElementById('users-status');
+        if (status) status.textContent = 'Loading users…';
+        return callServer('getUsers', []).then(function(users) {
+            if (!Array.isArray(users)) throw new Error('The workbook returned an invalid user list.');
+            renderUsers(users);
+            if (status) status.textContent = users.length + (users.length === 1 ? ' user loaded.' : ' users loaded.');
+        }).catch(function(error) {
+            if (status) status.textContent = 'Could not load users: ' + getErrorMessage_(error);
+        });
+    }
+
+    function saveUsers(event) {
+        event.preventDefault();
+        var body = document.getElementById('users-body');
+        var status = document.getElementById('users-status');
+        var button = document.getElementById('save-users');
+        var invalid = body.querySelector(':invalid');
+        if (invalid) {
+            status.textContent = 'Complete required fields and correct invalid values.';
+            invalid.focus();
+            return;
+        }
+
+        var users = Array.from(body.querySelectorAll('tr')).map(function(row) {
+            function value(field) {
+                var input = row.querySelector('[data-field="' + field + '"]');
+                return input ? input.value.trim() : '';
+            }
+            return {
+                id: row.dataset.userId,
+                username: value('username'),
+                email: value('email'),
+                displayName: value('displayName'),
+                role: value('role'),
+                isActive: row.querySelector('[data-field="isActive"]').checked,
+                microsoftObjectId: value('microsoftObjectId')
+            };
+        });
+
+        button.disabled = true;
+        status.textContent = 'Saving users…';
+        callServer('saveUsers', [users]).then(function(response) {
+            if (!response || response.status !== 'success') {
+                throw new Error(response && response.message ? response.message : 'Could not save users.');
+            }
+            return callServer('getUsers', []).then(function(savedUsers) {
+                renderUsers(savedUsers);
+                status.textContent = 'Users saved.';
+            });
+        }).catch(function(error) {
+            status.textContent = getErrorMessage_(error);
+        }).finally(function() {
+            button.disabled = false;
+        });
+    }
+
     // Expose globally so Dashboard can call it
     var _configUiInitialized = false;
     function _initConfigUI() {
@@ -67,6 +199,13 @@
                 var target = document.querySelector(btn.dataset.target);
                 if (target) target.classList.remove('hidden');
             });
+        });
+
+        var usersForm = document.getElementById('users-form');
+        if (usersForm) usersForm.addEventListener('submit', saveUsers);
+        var addUserButton = document.getElementById('add-user-row');
+        if (addUserButton) addUserButton.addEventListener('click', function() {
+            appendUserRow({ role: 'user', isActive: true });
         });
 
         // Clean buttons: dedupe, trim, sort
@@ -214,6 +353,16 @@
         if (!token) return;
 
         _initConfigUI();
+        var userProfile = window.ProjectHubExcel && window.ProjectHubExcel.user();
+        var isAdmin = Boolean(userProfile && userProfile.role === 'admin');
+        document.querySelectorAll('[data-admin-only]').forEach(function(tab) {
+            tab.hidden = !isAdmin;
+            tab.classList.toggle('hidden', !isAdmin);
+        });
+        if (isAdmin) {
+            if (typeof renderDeveloperCapacityConfig === 'function') renderDeveloperCapacityConfig();
+            loadUsers();
+        }
 
         var statusEl = document.getElementById('configStatus');
         if (statusEl) statusEl.textContent = 'Loading configuration...';

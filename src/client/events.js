@@ -2358,7 +2358,7 @@ function switchView(viewName) {
   // Hide KPI Tracker when in MyTask view, show for all other views
   var kpiContainer = $('.kpi-container');
   if (kpiContainer) {
-        kpiContainer.style.display = viewName === 'tasks' || viewName === 'capacity' || viewName === 'developers' ? 'none' : 'flex';
+        kpiContainer.style.display = viewName === 'tasks' || viewName === 'capacity' ? 'none' : 'flex';
   }
   
   // For Gantt view, we can release some data we don't need

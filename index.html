@@ -125,7 +125,6 @@
           </svg>
           Capacity
         </button>
-        <button data-view="developers" class="view-btn" style="display: none;">Developers</button>
     </div>
 
     <div class="flex items-center gap-3">
@@ -590,28 +589,6 @@
         </div>
       </section>
 
-      <section id="view-developers" class="view-container" style="display: none;" aria-labelledby="developers-title">
-        <div class="px-4 pt-4 pb-4">
-          <h2 id="developers-title" class="text-xl font-normal text-black">Developer capacity</h2>
-          <p class="text-sm text-gray-600 mt-2">Set story points per sprint for assignees in JiraData. Values carry forward until changed; leave blank when capacity is unknown.</p>
-          <form id="developer-capacity-form" class="mt-6" novalidate>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead><tr class="text-left border-b border-gray-200">
-                  <th scope="col" class="px-3 py-2">Developer</th>
-                  <th scope="col" class="px-3 py-2">Capacity</th>
-                </tr></thead>
-                <tbody id="developer-capacity-body"></tbody>
-              </table>
-            </div>
-            <div class="flex flex-wrap items-center gap-4 mt-6">
-              <button type="submit" id="save-developer-capacity" class="px-4 py-2 bg-black text-white rounded-xl">Save capacity</button>
-              <p id="developer-capacity-status" class="text-sm" role="status" aria-live="polite"></p>
-            </div>
-          </form>
-        </div>
-      </section>
-      
       <!-- My Tasks View -->
       <div id="view-tasks" class="view-container" style="display: none;">
         <!-- Top Bar -->
@@ -932,6 +909,8 @@
                 <button class="tab-btn active" data-target="#tab-dropdowns" role="tab" aria-selected="true">Dropdowns</button>
                 <button class="tab-btn" data-target="#tab-mappings" role="tab" aria-selected="false">Mappings</button>
                 <button class="tab-btn" data-target="#tab-links" role="tab" aria-selected="false">Links</button>
+                <button id="developer-capacity-tab" class="tab-btn hidden" data-admin-only data-target="#tab-developer-capacity" role="tab" aria-selected="false">Developer capacity</button>
+                <button id="users-tab" class="tab-btn hidden" data-admin-only data-target="#tab-users" role="tab" aria-selected="false">Users</button>
             </nav>
           </div>
         </div>
@@ -1197,6 +1176,51 @@
                 </div>
                 <div id="linksList" class="mt-4 space-y-2"></div>
             </section>
+
+            <section id="tab-developer-capacity" class="tab-panel hidden" aria-labelledby="developer-capacity-tab">
+                <h4 class="text-lg font-medium text-gray-900">Developer capacity</h4>
+                <p class="text-sm text-gray-600 mt-2">Set story points per sprint for assignees in JiraData. Values carry forward until changed; leave blank when capacity is unknown.</p>
+                <form id="developer-capacity-form" class="mt-6" novalidate>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead><tr class="text-left border-b border-gray-200">
+                                <th scope="col" class="px-3 py-2">Developer</th>
+                                <th scope="col" class="px-3 py-2">Capacity</th>
+                            </tr></thead>
+                            <tbody id="developer-capacity-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4 mt-6">
+                        <button type="submit" id="save-developer-capacity" class="px-4 py-2 bg-black text-white rounded-xl">Save capacity</button>
+                        <p id="developer-capacity-status" class="text-sm" role="status" aria-live="polite"></p>
+                    </div>
+                </form>
+            </section>
+
+            <section id="tab-users" class="tab-panel hidden" aria-labelledby="users-tab">
+                <h4 class="text-lg font-medium text-gray-900">Users</h4>
+                <p class="text-sm text-gray-600 mt-2">Manage who can access this application. Users sign in with Microsoft; passwords are not managed here. Use each person’s Microsoft Object ID.</p>
+                <form id="users-form" class="mt-6" novalidate>
+                    <div class="overflow-x-auto">
+                        <table class="w-full min-w-[980px] text-sm">
+                            <thead><tr class="text-left border-b border-gray-200">
+                                <th scope="col" class="px-2 py-2">Username</th>
+                                <th scope="col" class="px-2 py-2">Email</th>
+                                <th scope="col" class="px-2 py-2">Display name</th>
+                                <th scope="col" class="px-2 py-2">Role</th>
+                                <th scope="col" class="px-2 py-2">Active</th>
+                                <th scope="col" class="px-2 py-2">Microsoft Object ID</th>
+                            </tr></thead>
+                            <tbody id="users-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4 mt-6">
+                        <button type="button" id="add-user-row" class="px-3 py-2 border border-gray-400 rounded-xl">Add user</button>
+                        <button type="submit" id="save-users" class="px-4 py-2 bg-black text-white rounded-xl">Save users</button>
+                        <p id="users-status" class="text-sm" role="status" aria-live="polite"></p>
+                    </div>
+                </form>
+            </section>
         </div>
 
         <!-- Footer -->
@@ -1261,7 +1285,8 @@
         if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
         if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
         if (overlay) overlay.addEventListener('click', closeConfig);
-        document.getElementById('developer-capacity-form').addEventListener('submit', saveDeveloperCapacity);
+        const developerCapacityForm = document.getElementById('developer-capacity-form');
+        if (developerCapacityForm) developerCapacityForm.addEventListener('submit', saveDeveloperCapacity);
     });
   </script>
 </body>

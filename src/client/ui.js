@@ -1142,8 +1142,6 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     return row;
 }
 
-var developerMenuDiagnosticState = null;
-
 function renderApp() {
     // Safety check: ensure config has the required properties
     if (!APP_STATE.allData.config) {
@@ -1194,43 +1192,6 @@ function renderApp() {
     var contentWrapper = $('#content-wrapper');
     var tasksView = $('#view-tasks');
     var capacityView = $('#view-capacity');
-    var developersView = $('#view-developers');
-    var developersButton = $('[data-view="developers"]');
-    var excelBridge = window.ProjectHubExcel;
-    var userProfile = excelBridge && typeof excelBridge.user === 'function' ? excelBridge.user() : {};
-    var userRole = typeof userProfile.role === 'string' ? userProfile.role.trim().toLowerCase() : '';
-    var isAdmin = userRole === 'admin';
-    if (developersButton) developersButton.style.display = isAdmin ? '' : 'none';
-    var menuStyle = developersButton && typeof window.getComputedStyle === 'function' ?
-        window.getComputedStyle(developersButton) : null;
-    var menuRect = developersButton && typeof developersButton.getBoundingClientRect === 'function' ?
-        developersButton.getBoundingClientRect() : null;
-    var menuDiagnostic = {
-        bridgeAvailable: Boolean(excelBridge),
-        signedIn: Boolean(excelBridge && typeof excelBridge.isSignedIn === 'function' && excelBridge.isSignedIn()),
-        role: userRole || null,
-        isAdmin: isAdmin,
-        buttonFound: Boolean(developersButton),
-        computedDisplay: menuStyle ? menuStyle.display : null,
-        visibility: menuStyle ? menuStyle.visibility : null,
-        opacity: menuStyle ? menuStyle.opacity : null,
-        buttonBounds: menuRect ? {
-            left: Math.round(menuRect.left),
-            right: Math.round(menuRect.right),
-            top: Math.round(menuRect.top),
-            bottom: Math.round(menuRect.bottom),
-            width: Math.round(menuRect.width),
-            height: Math.round(menuRect.height)
-        } : null,
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-        intersectsViewport: menuRect ? menuRect.right > 0 && menuRect.left < window.innerWidth &&
-            menuRect.bottom > 0 && menuRect.top < window.innerHeight : null
-    };
-    var menuDiagnosticState = JSON.stringify(menuDiagnostic);
-    if (menuDiagnosticState !== developerMenuDiagnosticState) {
-        console.info('[Excel tracker] Developer menu diagnostic', menuDiagnostic);
-        developerMenuDiagnosticState = menuDiagnosticState;
-    }
     
     if (contentWrapper) {
         contentWrapper.style.display = (APP_STATE.currentView === 'table' || APP_STATE.currentView === 'board') ? 'flex' : 'none';
@@ -1242,9 +1203,6 @@ function renderApp() {
 
     if (capacityView) {
         capacityView.style.display = (APP_STATE.currentView === 'capacity') ? 'block' : 'none';
-    }
-    if (developersView) {
-        developersView.style.display = (APP_STATE.currentView === 'developers' && isAdmin) ? 'block' : 'none';
     }
 
     if (APP_STATE.currentView === 'table') {
@@ -1276,8 +1234,6 @@ function renderApp() {
         }
     } else if (APP_STATE.currentView === 'capacity') {
         renderCapacityView();
-    } else if (APP_STATE.currentView === 'developers' && isAdmin) {
-        renderDeveloperCapacityConfig();
     }
 
     var isGanttView = (APP_STATE.currentView === 'gantt');
@@ -1299,7 +1255,7 @@ function renderApp() {
     // Show/hide KPI container based on view
     var kpiContainer = $('.kpi-container');
     if (kpiContainer) {
-        kpiContainer.style.display = APP_STATE.currentView === 'tasks' || APP_STATE.currentView === 'capacity' || APP_STATE.currentView === 'developers' ? 'none' : 'flex';
+        kpiContainer.style.display = APP_STATE.currentView === 'tasks' || APP_STATE.currentView === 'capacity' ? 'none' : 'flex';
     }
     
     if (APP_STATE.currentView !== 'gantt') {

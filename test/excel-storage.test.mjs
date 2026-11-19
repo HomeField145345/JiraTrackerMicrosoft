@@ -307,8 +307,8 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
   const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
-  assert.deepEqual(memberData.projects.projects.map(issue => issue['Jira #']), ['TEAM-1']);
-  assert.deepEqual(memberData.projects.sprintCapacity.developers, [
+  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1']);
+  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
     { developer: 'Avery', issueCount: 1, storyPoints: 3 }
   ]);
 });

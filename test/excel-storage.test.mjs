@@ -290,8 +290,24 @@ test('matches the configured owner email when multiple unassigned Admin rows exi
   assert.equal(connected.user.username, 'owner');
   assert.equal(connected.user.microsoftObjectId, ownerObjectId);
   const migrated = await graph.workbook();
-  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, '');
+  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, null);
   assert.equal(migrated.getWorksheet('Users').getCell('K3').value, ownerObjectId);
+});
+
+test('reads Microsoft Object ID in column K when legacy Users data lacks Data Sheet ID in column J', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  const users = workbook.getWorksheet('Users');
+  users.spliceColumns(10, 2);
+  users.getCell('K1').value = 'Microsoft Object ID';
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  users.getCell('K2').value = ownerObjectId;
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'admin@example.com');
+  assert.equal(connected.user.role, 'admin');
+  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
 });
 
 test('filters project data and capacity to the mapped non-admin workbook user', async () => {

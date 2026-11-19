@@ -214,10 +214,30 @@ class ExcelStorage {
     const sheets = Object.entries(schema).map(([name, headers]) => {
       const sheet = workbook.getWorksheet(name);
       if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
+      let userColumnMap = null;
+      if (name === USERS_SHEET && sheet) {
+        const actualHeaders = Array.from({ length: sheet.columnCount }, (_, i) =>
+          String(sheet.getCell(1, i + 1).value ?? '').trim()
+        );
+        const requiredHeadersMatch = headers.slice(0, 9).every((header, i) => actualHeaders[i] === header);
+        const optionalHeaders = actualHeaders.slice(9).filter(Boolean);
+        const allowedOptionalHeaders = new Set(headers.slice(9));
+        const optionalHeadersValid = optionalHeaders.every(header => allowedOptionalHeaders.has(header)) &&
+          new Set(optionalHeaders).size === optionalHeaders.length;
+        if (!requiredHeadersMatch || !optionalHeadersValid || sheet.columnCount > headers.length) {
+          throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
+        }
+        userColumnMap = actualHeaders.map((header, i) => {
+          if (i < 9) return i;
+          return header ? headers.indexOf(header) : -1;
+        });
+      }
       const lastHeaderColumn = sheet ? headers.reduce((last, header, i) =>
         sheet.getCell(1, i + 1).value !== '' && sheet.getCell(1, i + 1).value != null ? i + 1 : last, 0) : 0;
-      if (!sheet || Array.from({ length: lastHeaderColumn }, (_, i) =>
-        (sheet.getCell(1, i + 1).value ?? '') !== (headers[i] ?? '')).some(Boolean) || sheet.columnCount > headers.length) {
+      const headerMismatch = Array.from({ length: lastHeaderColumn }, (_, i) =>
+        (sheet?.getCell(1, i + 1).value ?? '') !== (headers[i] ?? '')
+      ).some(Boolean);
+      if (!sheet || (!userColumnMap && headerMismatch) || (!userColumnMap && sheet.columnCount > headers.length)) {
         throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
       }
       const rows = [];
@@ -228,7 +248,14 @@ class ExcelStorage {
           if (typeof value === 'object' && !(value instanceof Date)) {
             throw new Error(`${name} contains a non-literal cell at ${cell.address}. The workbook was not changed.`);
           }
-          values[j - 1] = value;
+          const targetColumn = userColumnMap ? userColumnMap[j - 1] : j - 1;
+          if (targetColumn === undefined || targetColumn < 0) {
+            if (value !== '' && value != null) {
+              throw new Error(`${name} contains data in an unrecognized column. The workbook was not changed.`);
+            }
+            return;
+          }
+          values[targetColumn] = value;
         });
         while (rows.length < i - 1) rows.push([]);
         rows.push(values);

@@ -353,6 +353,26 @@ test('resolves the reported Admin row by Microsoft Object ID', async () => {
   assert.equal(connected.user.microsoftObjectId, objectId);
 });
 
+test('reports the connected workbook when the signed-in owner has no matching row', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').getCell('K2').value = '44444444-4444-4444-4444-444444444444';
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+  const revision = graph.revision();
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+
+  await assert.rejects(
+    graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId),
+    error => {
+      assert.match(error.message, /does not match an active user/);
+      assert.equal(error.workbookUrl, 'https://storage.example.test/excel');
+      return true;
+    }
+  );
+  assert.equal(graph.revision(), revision);
+});
+
 test('filters project data and capacity to the mapped non-admin workbook user', async () => {
   const graph = harness();
   await graph.run('connect');

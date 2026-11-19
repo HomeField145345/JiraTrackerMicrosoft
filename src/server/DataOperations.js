@@ -147,44 +147,53 @@ function saveDeveloperCapacity_(entries) {
   }
 
   try {
-    if (!Array.isArray(entries)) {
-      return { status: 'error', message: 'Developer capacity data is invalid.' };
-    }
-
-    // Capacity settings are Global
+    if (!Array.isArray(entries)) throw new Error('Developer capacity data is invalid.');
     var ss = getGlobalSpreadsheet();
     var sheet = ss.getSheetByName(DEVELOPER_CAPACITY_SHEET);
-    if (!sheet) {
-      sheet = ss.insertSheet(DEVELOPER_CAPACITY_SHEET);
-      sheet.setFrozenRows(1);
-    }
-
-    var headers = ['Developer', 'Capacity', 'Notes', 'Updated'];
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight('bold');
-    sheet.getRange("A2:D" + sheet.getMaxRows()).clearContent();
-
+    var existing = sheet ? readDeveloperCapacity(sheet) : [];
+    var existingByName = new Map(existing.map(function(entry) {
+      return [entry.developer.toLowerCase(), entry];
+    }));
+    var seen = new Set();
     var timestamp = Platform.formatDate(new Date(), Platform.timeZone(), 'MM/dd/yyyy HH:mm:ss');
-    var seen = {};
-    var rows = [];
-    entries.forEach(function(entry) {
-      if (!entry) return;
-      var developer = String(entry.developer || '').trim();
-      if (!developer) return;
+    var updates = entries.map(function(entry) {
+      if (!entry || typeof entry.developer !== 'string' || !entry.developer.trim()) {
+        throw new Error('Developer name is required.');
+      }
+      var developer = entry.developer.trim();
       var key = developer.toLowerCase();
-      if (seen[key]) return;
-      seen[key] = true;
-      var capacity = parseFloat(entry.capacity);
-      rows.push([
-        developer,
-        Number.isFinite(capacity) && capacity >= 0 ? capacity : '',
-        String(entry.notes || '').trim(),
-        timestamp
-      ]);
+      if (seen.has(key)) throw new Error('Developer names must be unique.');
+      seen.add(key);
+      var raw = entry.capacity;
+      if (raw !== null && typeof raw !== 'string' && typeof raw !== 'number') {
+        throw new Error('Capacity must be a non-negative number or blank.');
+      }
+      var text = raw === null ? '' : String(raw).trim();
+      var capacity = text === '' ? null : Number(text);
+      if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
+        throw new Error('Capacity must be a non-negative number or blank.');
+      }
+      return { developer: developer, capacity: capacity, key: key };
     });
 
-    if (rows.length > 0) {
-      sheet.getRange(2, 1, rows.length, headers.length).setValues(rows);
+    if (!sheet) {
+      sheet = ss.insertSheet(DEVELOPER_CAPACITY_SHEET);
+      sheet.getRange(1, 1, 1, 4).setValues([trackerSheetSchema()[DEVELOPER_CAPACITY_SHEET]]).setFontWeight('bold');
+      sheet.setFrozenRows(1);
     }
+    var data = sheet.getDataRange().getValues();
+    var rowByName = new Map();
+    data.slice(1).forEach(function(row, index) {
+      var name = String(row[0] == null ? '' : row[0]).trim();
+      if (name) rowByName.set(name.toLowerCase(), index + 2);
+    });
+    updates.forEach(function(update) {
+      var row = rowByName.get(update.key);
+      var old = existingByName.get(update.key);
+      var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp];
+      if (row) sheet.getRange(row, 1, 1, 4).setValues([values]);
+      else sheet.appendRow(values);
+    });
 
     clearProjectCache();
     return { status: 'success', message: 'Developer capacity saved!' };

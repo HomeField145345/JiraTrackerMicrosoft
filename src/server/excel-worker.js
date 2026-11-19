@@ -39,13 +39,14 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
   } else if (action === 'mutate') {
     const { method, args } = payload || {};
     if (!currentUser || !Array.isArray(args)) throw new Error('The workbook update request is invalid.');
-    if (method === 'saveConfiguration' && currentUser.role !== 'admin') {
+    if ((method === 'saveConfiguration' || method === 'saveDeveloperCapacity') && currentUser.role !== 'admin') {
       throw new Error('Access denied: Admin rights required.');
     }
     const mutations = {
       importJiraCsv: values => importJiraCsv_(values[0], currentUser),
       importJiraFile: values => importJiraCsv_(values[0], currentUser),
       saveConfiguration: values => saveConfiguration_(values[0]),
+      saveDeveloperCapacity: values => saveDeveloperCapacity_(values[0]),
       saveManualData: values => saveManualData_(values[0], values[1], values[2], currentUser),
       saveIndependentTask: values => saveIndependentTask_(values[0], currentUser),
       updateLastChecked: values => updateLastChecked_(values[0], currentUser),

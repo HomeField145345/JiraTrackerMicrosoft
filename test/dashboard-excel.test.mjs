@@ -98,6 +98,10 @@ test('routes allowlisted dashboard edits to the workbook worker', async () => {
   assert.deepEqual(messages[1].payload, { method: 'saveManualData', args: ['ABC-1', 'Priority', 'High'] });
   assert.equal(messages[1].userObjectId, ids.ownerObjectId);
   assert.equal(messages[1].ownerObjectId, ids.ownerObjectId);
+  await bridge.call('saveDeveloperCapacity', [[{ developer: 'Avery', capacity: 5 }]]);
+  assert.deepEqual(messages[2].payload, {
+    method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: 5 }]]
+  });
   await assert.rejects(bridge.call('saveUser', ['user-1', {}]), { message: READ_ONLY_MESSAGE });
 });
 

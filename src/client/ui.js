@@ -1192,6 +1192,10 @@ function renderApp() {
     var contentWrapper = $('#content-wrapper');
     var tasksView = $('#view-tasks');
     var capacityView = $('#view-capacity');
+    var developersView = $('#view-developers');
+    var developersButton = $('[data-view="developers"]');
+    var isAdmin = window.ProjectHubExcel && window.ProjectHubExcel.user().role === 'admin';
+    if (developersButton) developersButton.style.display = isAdmin ? '' : 'none';
     
     if (contentWrapper) {
         contentWrapper.style.display = (APP_STATE.currentView === 'table' || APP_STATE.currentView === 'board') ? 'flex' : 'none';
@@ -1203,6 +1207,9 @@ function renderApp() {
 
     if (capacityView) {
         capacityView.style.display = (APP_STATE.currentView === 'capacity') ? 'block' : 'none';
+    }
+    if (developersView) {
+        developersView.style.display = (APP_STATE.currentView === 'developers' && isAdmin) ? 'block' : 'none';
     }
 
     if (APP_STATE.currentView === 'table') {
@@ -1234,6 +1241,8 @@ function renderApp() {
         }
     } else if (APP_STATE.currentView === 'capacity') {
         renderCapacityView();
+    } else if (APP_STATE.currentView === 'developers' && isAdmin) {
+        renderDeveloperCapacityConfig();
     }
 
     var isGanttView = (APP_STATE.currentView === 'gantt');
@@ -1255,7 +1264,7 @@ function renderApp() {
     // Show/hide KPI container based on view
     var kpiContainer = $('.kpi-container');
     if (kpiContainer) {
-        kpiContainer.style.display = APP_STATE.currentView === 'tasks' || APP_STATE.currentView === 'capacity' ? 'none' : 'flex';
+        kpiContainer.style.display = APP_STATE.currentView === 'tasks' || APP_STATE.currentView === 'capacity' || APP_STATE.currentView === 'developers' ? 'none' : 'flex';
     }
     
     if (APP_STATE.currentView !== 'gantt') {
@@ -1282,9 +1291,9 @@ function renderCapacityView() {
     if (!capacity.developers || capacity.developers.length === 0) {
         var emptyRow = body.insertRow();
         var emptyCell = emptyRow.insertCell();
-        emptyCell.colSpan = 3;
+        emptyCell.colSpan = 5;
         emptyCell.className = 'px-3 py-8 text-center text-gray-500';
-        emptyCell.textContent = 'No current sprint assignments.';
+        emptyCell.textContent = 'No developers found.';
         return;
     }
 
@@ -1300,6 +1309,91 @@ function renderCapacityView() {
         var pointsCell = row.insertCell();
         pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
         pointsCell.textContent = numberFormat.format(developer.storyPoints);
+        [developer.capacity, developer.remaining].forEach(function(value) {
+            var cell = row.insertCell();
+            cell.className = 'px-3 py-3 text-right tabular-nums text-gray-900';
+            cell.textContent = value == null ? '—' : numberFormat.format(value);
+        });
+    });
+}
+
+function renderDeveloperCapacityConfig() {
+    var body = document.getElementById('developer-capacity-body');
+    if (!body) return;
+    body.replaceChildren();
+    var names = new Map();
+    (APP_STATE.allData.projects || []).forEach(function(project) {
+        var name = String(project.Assignee || '').trim();
+        if (name && name.toLowerCase() !== 'unassigned' && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    });
+    var capacities = new Map((APP_STATE.allData.developerCapacity || []).map(function(entry) {
+        return [entry.developer.toLowerCase(), entry.capacity];
+    }));
+    var developers = Array.from(names.values()).sort(function(a, b) { return a.localeCompare(b); });
+    if (!developers.length) {
+        var empty = body.insertRow().insertCell();
+        empty.colSpan = 2;
+        empty.className = 'px-3 py-8 text-gray-600';
+        empty.textContent = 'No Jira assignees found.';
+    }
+    developers.forEach(function(name, index) {
+        var row = body.insertRow();
+        row.className = 'border-b border-gray-200';
+        var nameCell = row.insertCell();
+        nameCell.className = 'px-3 py-3';
+        var label = document.createElement('label');
+        label.htmlFor = 'developer-capacity-' + index;
+        label.textContent = name;
+        nameCell.appendChild(label);
+        var cell = row.insertCell();
+        cell.className = 'px-3 py-3';
+        var input = document.createElement('input');
+        input.id = label.htmlFor;
+        input.type = 'number';
+        input.min = '0';
+        input.step = 'any';
+        input.dataset.developer = name;
+        input.className = 'border border-gray-400 rounded-xl px-3 py-2 w-32';
+        var capacity = capacities.get(name.toLowerCase());
+        input.value = capacity == null ? '' : String(capacity);
+        cell.appendChild(input);
+    });
+}
+
+function saveDeveloperCapacity(event) {
+    event.preventDefault();
+    if (!checkAuth()) return;
+    var status = document.getElementById('developer-capacity-status');
+    var button = document.getElementById('save-developer-capacity');
+    var inputs = Array.from(document.querySelectorAll('#developer-capacity-body input'));
+    var invalid = inputs.find(function(input) {
+        return !input.validity.valid || (input.value !== '' && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0));
+    });
+    if (invalid) {
+        status.textContent = 'Enter a non-negative number or leave capacity blank.';
+        status.className = 'text-sm text-orange-800';
+        invalid.focus();
+        return;
+    }
+    var entries = inputs.map(function(input) {
+        return { developer: input.dataset.developer, capacity: input.value };
+    });
+    button.disabled = true;
+    status.textContent = 'Saving capacity...';
+    status.className = 'text-sm text-gray-600';
+    callServer('saveDeveloperCapacity', [entries]).then(function() {
+        return callServer('getProjectData', []).then(function(data) {
+            if (!handleDataLoaded(data)) throw new Error('Refresh failed. Reload the page to see the saved capacity.');
+            status.textContent = 'Capacity saved.';
+            status.className = 'text-sm text-green-700';
+        }, function(error) {
+            throw new Error('Capacity saved, but refresh failed: ' + getErrorMessage_(error));
+        });
+    }).catch(function(error) {
+        status.textContent = getErrorMessage_(error);
+        status.className = 'text-sm text-orange-800';
+    }).finally(function() {
+        button.disabled = false;
     });
 }
 

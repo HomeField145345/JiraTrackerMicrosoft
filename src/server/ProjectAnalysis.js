@@ -104,6 +104,14 @@ function getProjectData_(user, targetUsername) {
     // Skipping ownership filtering
   }
   
+  if (shouldFilter && filterUser) {
+    var visibleDevelopers = new Set(data.projects.map(function(project) {
+      return String(project.Assignee || '').trim().toLowerCase();
+    }));
+    data.developerCapacity = data.developerCapacity.filter(function(entry) {
+      return visibleDevelopers.has(entry.developer.toLowerCase());
+    });
+  }
   data.sprintCapacity = analyzeSprintCapacity(data.projects, data.sprintStats.currentSprintName, data.developerCapacity);
   return data;
 }

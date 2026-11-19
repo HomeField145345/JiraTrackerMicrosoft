@@ -125,6 +125,7 @@
           </svg>
           Capacity
         </button>
+        <button data-view="developers" class="view-btn" style="display: none;">Developers</button>
     </div>
 
     <div class="flex items-center gap-3">
@@ -564,6 +565,7 @@
           <div>
             <h2 id="capacity-title" class="text-xl font-semibold text-gray-900">Sprint capacity</h2>
             <p id="capacity-sprint-name" class="text-sm text-gray-600 mt-1">Current sprint</p>
+            <p class="text-sm text-gray-600 mt-2">Remaining is capacity minus assigned story points, including completed issues.</p>
           </div>
           <div class="flex items-baseline gap-6" aria-live="polite">
             <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-points">0</span><span class="text-sm text-gray-600 ml-2">story points</span></div>
@@ -577,12 +579,36 @@
                 <th scope="col" class="px-3 py-2">Developer</th>
                 <th scope="col" class="px-3 py-2 text-right">Issues</th>
                 <th scope="col" class="px-3 py-2 text-right">Story points</th>
+                <th scope="col" class="px-3 py-2 text-right">Capacity</th>
+                <th scope="col" class="px-3 py-2 text-right">Remaining</th>
               </tr>
             </thead>
             <tbody id="capacity-table-body">
-              <tr><td colspan="3" class="px-3 py-8 text-center text-gray-500">No current sprint assignments.</td></tr>
+              <tr><td colspan="5" class="px-3 py-8 text-gray-500">No developers found.</td></tr>
             </tbody>
           </table>
+        </div>
+      </section>
+
+      <section id="view-developers" class="view-container" style="display: none;" aria-labelledby="developers-title">
+        <div class="px-4 pt-4 pb-4">
+          <h2 id="developers-title" class="text-xl font-normal text-black">Developer capacity</h2>
+          <p class="text-sm text-gray-600 mt-2">Set story points per sprint for assignees in JiraData. Values carry forward until changed; leave blank when capacity is unknown.</p>
+          <form id="developer-capacity-form" class="mt-6" novalidate>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead><tr class="text-left border-b border-gray-200">
+                  <th scope="col" class="px-3 py-2">Developer</th>
+                  <th scope="col" class="px-3 py-2">Capacity (points)</th>
+                </tr></thead>
+                <tbody id="developer-capacity-body"></tbody>
+              </table>
+            </div>
+            <div class="flex flex-wrap items-center gap-4 mt-6">
+              <button type="submit" id="save-developer-capacity" class="px-4 py-2 bg-black text-white rounded-xl">Save capacity</button>
+              <p id="developer-capacity-status" class="text-sm" role="status" aria-live="polite"></p>
+            </div>
+          </form>
         </div>
       </section>
       
@@ -1235,6 +1261,7 @@
         if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
         if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
         if (overlay) overlay.addEventListener('click', closeConfig);
+        document.getElementById('developer-capacity-form').addEventListener('submit', saveDeveloperCapacity);
     });
   </script>
 </body>

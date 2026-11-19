@@ -160,12 +160,14 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       bytes = updatedBytes;
       item.eTag = '"external-change"';
     },
-    analyzeCapacity: (items, sprintName) => context.analyzeSprintCapacity(items, sprintName),
+    analyzeCapacity: (items, sprintName, entries) => context.analyzeSprintCapacity(items, sprintName, entries),
     interfere: () => { interfere = true; },
     changeOnDownload: () => { changeOnDownload = true; }
   };
 
-  test('aggregates current-sprint story points by developer without double-counting multi-sprint issues', () => {
+}
+
+test('aggregates sprint assignments and remaining capacity for Jira assignees', () => {
     const graph = harness();
     const capacity = graph.analyzeCapacity([
       { 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
@@ -174,23 +176,72 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
       { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
       { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' }
-    ], 'Sprint 12');
+    ], 'Sprint 12', [
+      { developer: 'avery', capacity: 4 },
+      { developer: 'Casey', capacity: 7 },
+      { developer: 'Former developer', capacity: 5 }
+    ]);
 
     assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
       sprintName: 'Sprint 12',
       totalIssues: 4,
       totalStoryPoints: 10,
       developers: [
-        { developer: 'Avery', issueCount: 2, storyPoints: 5 },
-        { developer: 'Blair', issueCount: 1, storyPoints: 5 },
-        { developer: 'Unassigned', issueCount: 1, storyPoints: 0 }
+        { developer: 'Avery', issueCount: 2, storyPoints: 5, capacity: 4, remaining: -1 },
+        { developer: 'Blair', issueCount: 1, storyPoints: 5, capacity: null, remaining: null },
+        { developer: 'Casey', issueCount: 0, storyPoints: 0, capacity: 7, remaining: 7 },
+        { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null }
       ]
     });
     assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
       sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
     });
-  });
-}
+    const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
+    assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
+      { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: 0, remaining: null }
+    ]);
+});
+
+test('upgrades an older workbook when an admin saves developer capacity', async () => {
+  const graph = harness();
+  const owner = '33333333-3333-3333-3333-333333333333';
+  const member = '44444444-4444-4444-4444-444444444444';
+  await graph.run('connect', undefined, undefined, owner, owner);
+  const workbook = await graph.workbook();
+  workbook.removeWorksheet(workbook.getWorksheet('DeveloperCapacity').id);
+  const issues = workbook.getWorksheet('JiraData');
+  const headers = issues.getRow(1).values.slice(1);
+  const row = Array(headers.length).fill('');
+  Object.entries({ 'Jira #': 'ABC-1', 'Issue Type': 'Story', Assignee: 'Avery', sprint: 'Sprint 12', 'Story Points': 3 })
+    .forEach(([key, value]) => { row[headers.indexOf(key)] = value; });
+  issues.addRow(row);
+  workbook.getWorksheet('Users').addRow(['user-2', 'pm', 'pm@example.com', 'PM', 'project_manager', true, '', '', '', '', member]);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const read = await graph.run('connect', 'file', undefined, owner, owner);
+  assert.equal(read.projects.sprintCapacity.developers[0].capacity, null);
+  assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
+  const save = entries => graph.run('mutate', 'file', { method: 'saveDeveloperCapacity', args: [entries] }, owner, owner);
+  await assert.rejects(graph.run('mutate', 'file', {
+    method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: 10 }]]
+  }, member, owner), /Admin rights required/);
+  await assert.rejects(save([{ developer: 'Avery', capacity: '5bad' }]), /non-negative/);
+  assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
+  await save([{ developer: 'Avery', capacity: 5 }]);
+  let saved = await graph.workbook();
+  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('A2').value, 'Avery');
+  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 5);
+  saved.getWorksheet('DeveloperCapacity').addRow(['Former', 8, 'Keep note', 'old']);
+  await graph.replaceWorkbook(await saved.xlsx.writeBuffer());
+  await save([{ developer: 'avery', capacity: 0 }]);
+  saved = await graph.workbook();
+  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 0);
+  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('C3').value, 'Keep note');
+  const reopened = await graph.run('refresh', 'file', undefined, owner, owner);
+  assert.equal(reopened.projects.sprintCapacity.developers[0].remaining, -3);
+  await save([{ developer: 'Avery', capacity: '' }]);
+  assert.equal((await graph.run('refresh', 'file', undefined, owner, owner)).projects.sprintCapacity.developers[0].remaining, null);
+});
 
 test('provisions Excel once in SharePoint, then persists Jira imports and tasks', async () => {
   const graph = harness({ sharepoint: true });
@@ -202,7 +253,7 @@ test('provisions Excel once in SharePoint, then persists Jira imports and tasks'
   const workbook = await graph.workbook();
   for (const [sheet, header] of Object.entries({
     JiraData: 'Sync Status', ManualData: 'Jira #', OptionsList: 'ACT/PCT Options',
-    IndependentTasks: 'ID', Users: 'ID', Sessions: 'Token', AdminConfigs: 'Username'
+    IndependentTasks: 'ID', DeveloperCapacity: 'Developer', Users: 'ID', Sessions: 'Token', AdminConfigs: 'Username'
   })) {
     assert.equal(workbook.getWorksheet(sheet).getCell('A1').value, header);
     assert.equal(workbook.getWorksheet(sheet).rowCount, sheet === 'Users' ? 2 : 1);
@@ -407,7 +458,7 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1']);
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
-    { developer: 'Avery', issueCount: 1, storyPoints: 3 }
+    { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: null, remaining: null }
   ]);
 });
 

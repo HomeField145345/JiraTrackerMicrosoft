@@ -164,7 +164,7 @@ export function createExcelBridge({
     getConfigData: async () => ({ config: (await projectData()).config })
   };
   const writers = new Set([
-    'importJiraCsv', 'importJiraFile', 'saveConfiguration', 'saveManualData',
+    'importJiraCsv', 'importJiraFile', 'saveConfiguration', 'saveDeveloperCapacity', 'saveManualData',
     'saveIndependentTask', 'updateLastChecked', 'createTaskAndSync',
     'updateTaskAndSync', 'deleteTaskAndSync', 'toggleTaskComplete'
   ]);

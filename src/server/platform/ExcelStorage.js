@@ -213,6 +213,8 @@ class ExcelStorage {
     }
     const sheets = Object.entries(schema).map(([name, headers]) => {
       const sheet = workbook.getWorksheet(name);
+      // Older tracker workbooks gain this sheet on their next successful save.
+      if (!sheet && name === DEVELOPER_CAPACITY_SHEET) return { name, rows: [headers] };
       if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
       let userColumnMap = null;
       if (name === USERS_SHEET && sheet) {

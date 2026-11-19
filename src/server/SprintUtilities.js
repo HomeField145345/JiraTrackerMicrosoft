@@ -232,6 +232,7 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
   var capacityByDeveloper = new Map();
   var totalIssues = 0;
   var totalStoryPoints = 0;
+  var hasSprint = Boolean(sprintName && sprintName !== 'None' && sprintName !== '—');
 
   // Configured capacity per developer (from the DeveloperCapacity sheet), keyed case-insensitively.
   var configuredCapacity = new Map();
@@ -239,18 +240,19 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     if (!config || !config.developer) return;
     var name = String(config.developer).trim();
     if (!name) return;
-    var points = parseFloat(config.capacity);
+    var points = config.capacity;
     configuredCapacity.set(name.toLowerCase(), {
       developer: name,
-      capacity: Number.isFinite(points) ? points : null
+      capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null
     });
   });
 
-  if (!sprintName || sprintName === 'None' || sprintName === '—') {
-    return { sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, totalCapacity: 0, totalRemaining: 0, developers: [] };
-  }
-
   (items || []).forEach(function(item) {
+    var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+    if (developer && developer.toLowerCase() !== 'unassigned' && !capacityByDeveloper.has(developer.toLowerCase())) {
+      capacityByDeveloper.set(developer.toLowerCase(), { developer: developer, issueCount: 0, storyPoints: 0 });
+    }
+    if (!hasSprint) return;
     if (String(item['Issue Type'] || '').trim().toLowerCase() === 'epic') return;
 
     var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
@@ -260,7 +262,7 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     });
     if (!belongsToCurrentSprint) return;
 
-    var developer = String(item['Assigned Dev'] || item.Assignee || item.assignee || '').trim() || 'Unassigned';
+    developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
     var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
     var points = parseFloat(String(pointsValue == null ? '' : pointsValue).trim());
     if (!Number.isFinite(points)) points = 0;
@@ -277,35 +279,20 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     totalStoryPoints += points;
   });
 
-  // Include developers with configured capacity even if they have no current sprint assignments.
-  configuredCapacity.forEach(function(config, key) {
-    if (!capacityByDeveloper.has(key)) {
-      capacityByDeveloper.set(key, { developer: config.developer, issueCount: 0, storyPoints: 0 });
-    }
-  });
-
-  var totalCapacity = 0;
-  var totalRemaining = 0;
   var developers = Array.from(capacityByDeveloper.values()).map(function(entry) {
-    var config = configuredCapacity.get(entry.developer.toLowerCase());
+    var config = entry.developer === 'Unassigned' ? null : configuredCapacity.get(entry.developer.toLowerCase());
     var capacity = config && config.capacity != null ? config.capacity : null;
     entry.capacity = capacity;
-    entry.remaining = capacity == null ? null : capacity - entry.storyPoints;
-    if (capacity != null) {
-      totalCapacity += capacity;
-      totalRemaining += entry.remaining;
-    }
+    entry.remaining = capacity == null || !hasSprint ? null : capacity - entry.storyPoints;
     return entry;
   }).sort(function(a, b) {
     return b.storyPoints - a.storyPoints || a.developer.localeCompare(b.developer);
   });
 
   return {
-    sprintName: sprintName,
+    sprintName: hasSprint ? sprintName : 'None',
     totalIssues: totalIssues,
     totalStoryPoints: totalStoryPoints,
-    totalCapacity: totalCapacity,
-    totalRemaining: totalRemaining,
     developers: developers
   };
 }

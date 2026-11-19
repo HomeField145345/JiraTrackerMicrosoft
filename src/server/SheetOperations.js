@@ -232,21 +232,24 @@ function readDeveloperCapacity(sheet) {
   const nameIndex = headers.indexOf('Developer');
   const capacityIndex = headers.indexOf('Capacity');
   const notesIndex = headers.indexOf('Notes');
-  if (nameIndex === -1) return [];
+  if (nameIndex === -1 || capacityIndex === -1) throw new Error('DeveloperCapacity headers are invalid.');
 
   const entries = [];
-  const seen = {};
+  const seen = new Set();
   data.slice(1).forEach(row => {
     const developer = String(row[nameIndex] == null ? '' : row[nameIndex]).trim();
     if (!developer) return;
     const key = developer.toLowerCase();
-    if (seen[key]) return;
-    seen[key] = true;
-    const rawCapacity = capacityIndex === -1 ? '' : row[capacityIndex];
-    const capacity = parseFloat(String(rawCapacity == null ? '' : rawCapacity).trim());
+    if (seen.has(key)) throw new Error('DeveloperCapacity contains duplicate developer names.');
+    seen.add(key);
+    const rawCapacity = String(row[capacityIndex] == null ? '' : row[capacityIndex]).trim();
+    const capacity = rawCapacity === '' ? null : Number(rawCapacity);
+    if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
+      throw new Error('DeveloperCapacity contains an invalid capacity.');
+    }
     entries.push({
       developer: developer,
-      capacity: Number.isFinite(capacity) ? capacity : null,
+      capacity: capacity,
       notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim()
     });
   });

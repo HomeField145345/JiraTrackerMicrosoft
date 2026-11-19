@@ -1142,6 +1142,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
     return row;
 }
 
+var developerMenuDiagnosticState = null;
+
 function renderApp() {
     // Safety check: ensure config has the required properties
     if (!APP_STATE.allData.config) {
@@ -1194,8 +1196,25 @@ function renderApp() {
     var capacityView = $('#view-capacity');
     var developersView = $('#view-developers');
     var developersButton = $('[data-view="developers"]');
-    var isAdmin = window.ProjectHubExcel && window.ProjectHubExcel.user().role === 'admin';
+    var excelBridge = window.ProjectHubExcel;
+    var userProfile = excelBridge && typeof excelBridge.user === 'function' ? excelBridge.user() : {};
+    var userRole = typeof userProfile.role === 'string' ? userProfile.role.trim().toLowerCase() : '';
+    var isAdmin = userRole === 'admin';
     if (developersButton) developersButton.style.display = isAdmin ? '' : 'none';
+    var menuDiagnostic = {
+        bridgeAvailable: Boolean(excelBridge),
+        signedIn: Boolean(excelBridge && typeof excelBridge.isSignedIn === 'function' && excelBridge.isSignedIn()),
+        role: userRole || null,
+        isAdmin: isAdmin,
+        buttonFound: Boolean(developersButton),
+        computedDisplay: developersButton && typeof window.getComputedStyle === 'function' ?
+            window.getComputedStyle(developersButton).display : null
+    };
+    var menuDiagnosticState = JSON.stringify(menuDiagnostic);
+    if (menuDiagnosticState !== developerMenuDiagnosticState) {
+        console.info('[Excel tracker] Developer menu diagnostic', menuDiagnostic);
+        developerMenuDiagnosticState = menuDiagnosticState;
+    }
     
     if (contentWrapper) {
         contentWrapper.style.display = (APP_STATE.currentView === 'table' || APP_STATE.currentView === 'board') ? 'flex' : 'none';

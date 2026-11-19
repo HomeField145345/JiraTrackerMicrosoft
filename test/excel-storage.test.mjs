@@ -225,11 +225,11 @@ test('persists dashboard edits and reopens workbooks with extended task columns'
 
   const reopened = await graph.run('connect', itemId, undefined, ownerObjectId, ownerObjectId);
   assert.equal(reopened.projects.independentTasks[0].Title, 'Workbook task');
-  const workbook = await graph.workbook();
-  assert.equal(workbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
-  assert.equal(workbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
-  assert.equal(workbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
-  assert.equal(workbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
+  const savedWorkbook = await graph.workbook();
+  assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
+  assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
+  assert.equal(savedWorkbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
+  assert.equal(savedWorkbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
 });
 
 test('does not replace an unrelated file at the OneDrive destination', async () => {

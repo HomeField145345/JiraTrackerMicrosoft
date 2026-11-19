@@ -226,3 +226,51 @@ function analyzeSprintData(items) {
 
   return stats;
 }
+
+function analyzeSprintCapacity(items, currentSprintName) {
+  var sprintName = String(currentSprintName || '').trim();
+  var capacityByDeveloper = new Map();
+  var totalIssues = 0;
+  var totalStoryPoints = 0;
+
+  if (!sprintName || sprintName === 'None' || sprintName === '—') {
+    return { sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: [] };
+  }
+
+  (items || []).forEach(function(item) {
+    if (String(item['Issue Type'] || '').trim().toLowerCase() === 'epic') return;
+
+    var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
+    var belongsToCurrentSprint = sprintEntries.some(function(entry) {
+      var entryName = formatSprint(entry.name);
+      return (entryName === '—' ? entry.name : entryName).toLowerCase() === sprintName.toLowerCase();
+    });
+    if (!belongsToCurrentSprint) return;
+
+    var developer = String(item['Assigned Dev'] || item.Assignee || item.assignee || '').trim() || 'Unassigned';
+    var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+    var points = parseFloat(String(pointsValue == null ? '' : pointsValue).trim());
+    if (!Number.isFinite(points)) points = 0;
+
+    var entry = capacityByDeveloper.get(developer);
+    if (!entry) {
+      entry = { developer: developer, issueCount: 0, storyPoints: 0 };
+      capacityByDeveloper.set(developer, entry);
+    }
+    entry.issueCount++;
+    entry.storyPoints += points;
+    totalIssues++;
+    totalStoryPoints += points;
+  });
+
+  var developers = Array.from(capacityByDeveloper.values()).sort(function(a, b) {
+    return b.storyPoints - a.storyPoints || a.developer.localeCompare(b.developer);
+  });
+
+  return {
+    sprintName: sprintName,
+    totalIssues: totalIssues,
+    totalStoryPoints: totalStoryPoints,
+    developers: developers
+  };
+}

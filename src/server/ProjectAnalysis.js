@@ -104,6 +104,7 @@ function getProjectData_(user, targetUsername) {
     // Skipping ownership filtering
   }
   
+  data.sprintCapacity = analyzeSprintCapacity(data.projects, data.sprintStats.currentSprintName);
   return data;
 }
 

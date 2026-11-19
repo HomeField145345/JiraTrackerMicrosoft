@@ -160,9 +160,36 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       bytes = updatedBytes;
       item.eTag = '"external-change"';
     },
+    analyzeCapacity: (items, sprintName) => context.analyzeSprintCapacity(items, sprintName),
     interfere: () => { interfere = true; },
     changeOnDownload: () => { changeOnDownload = true; }
   };
+
+  test('aggregates current-sprint story points by developer without double-counting multi-sprint issues', () => {
+    const graph = harness();
+    const capacity = graph.analyzeCapacity([
+      { 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
+      { 'Issue Type': 'Bug', Assignee: 'Avery', 'Story Points': 2, sprint: 'Sprint 12' },
+      { 'Issue Type': 'Story', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
+      { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
+      { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
+      { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' }
+    ], 'Sprint 12');
+
+    assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
+      sprintName: 'Sprint 12',
+      totalIssues: 4,
+      totalStoryPoints: 10,
+      developers: [
+        { developer: 'Avery', issueCount: 2, storyPoints: 5 },
+        { developer: 'Blair', issueCount: 1, storyPoints: 5 },
+        { developer: 'Unassigned', issueCount: 1, storyPoints: 0 }
+      ]
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
+      sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
+    });
+  });
 }
 
 test('provisions Excel once in SharePoint, then persists Jira imports and tasks', async () => {

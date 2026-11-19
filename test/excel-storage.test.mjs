@@ -432,10 +432,15 @@ test('allows admins to manage workbook users without exposing passwords or delet
   const usersSheet = workbook.getWorksheet('Users');
   assert.equal(usersSheet.getCell('B3').value, 'member');
   assert.equal(usersSheet.getCell('F3').value, true);
-  assert.equal(usersSheet.getCell('G3').value, '');
+  assert.equal(usersSheet.getCell('G3').value ?? '', '');
   assert.equal(usersSheet.getCell('K3').value, memberObjectId);
 
   const afterAdd = JSON.parse(JSON.stringify((await listUsers()).response));
+  await assert.rejects(saveUsers(afterAdd.map(user => ({
+    ...user,
+    role: user.username === 'member' ? 'admin' : user.role,
+    isActive: user.username === 'member' ? user.isActive : false
+  }))), /cannot deactivate or demote your own admin account/);
   await saveUsers(afterAdd.map(user => ({
     ...user,
     isActive: user.username === 'member' ? false : user.isActive

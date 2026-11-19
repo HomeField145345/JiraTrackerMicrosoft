@@ -325,15 +325,19 @@ function saveWorkbookUsers_(entries, currentUser) {
       if (user.isActive && user.role === 'admin') activeAdminCount++;
     });
     if (!activeAdminCount) throw new Error('At least one active admin must remain.');
+    var signedInAdmin = nextUsers.get(String(currentUser.id));
+    if (!signedInAdmin || !signedInAdmin.isActive || signedInAdmin.role !== 'admin') {
+      throw new Error('You cannot deactivate or demote your own admin account. Use another active admin account.');
+    }
 
     updates.forEach(function(update) {
       var user = update.user;
       if (update.existing) {
         var oldUsername = update.existing.username;
+        sheet.getRange(update.existing.rowNumber, columns.Username + 1).setValue(user.username);
         if (oldUsername !== user.username && typeof updateDataOwnership === 'function') {
           updateDataOwnership(oldUsername, user.username);
         }
-        sheet.getRange(update.existing.rowNumber, columns.Username + 1).setValue(user.username);
         sheet.getRange(update.existing.rowNumber, columns.Email + 1).setValue(user.email);
         sheet.getRange(update.existing.rowNumber, columns['Display Name'] + 1).setValue(user.displayName);
         sheet.getRange(update.existing.rowNumber, columns.Role + 1).setValue(user.role);

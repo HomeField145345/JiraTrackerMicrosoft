@@ -38,7 +38,7 @@ export function createExcelBridge({
     setStatus(message);
   }
 
-  function runWorker(action, accessToken, payload, userObjectId) {
+  function runWorker(action, accessToken, payload, userObjectId, userEmail) {
     const task = queue.then(() => new Promise((resolve, reject) => {
       if (!worker) worker = new WorkerClass('./src/server/excel-worker.js');
       worker.onmessage = ({ data }) => data.error ? reject(new Error(data.error)) : resolve(data.result);
@@ -49,7 +49,7 @@ export function createExcelBridge({
       };
       worker.postMessage({
         action, accessToken, target: config.target, itemId, payload,
-        userObjectId, ownerObjectId: config.ownerObjectId
+        userObjectId, userEmail, ownerObjectId: config.ownerObjectId
       });
     }));
     queue = task.catch(() => {});
@@ -86,7 +86,7 @@ export function createExcelBridge({
       const auth = await client.acquireTokenPopup({ scopes, account: account || undefined, prompt: account ? undefined : 'select_account' });
       const accessToken = verifyTenant(auth);
       const userObjectId = auth.account.idTokenClaims.oid;
-      pendingData = useResult(await runWorker('connect', accessToken, undefined, userObjectId));
+      pendingData = useResult(await runWorker('connect', accessToken, undefined, userObjectId, auth.account.username));
       account = auth.account;
       element('signin-panel')?.classList.add('hidden');
       resolveSignedIn();
@@ -113,7 +113,7 @@ export function createExcelBridge({
       }
       throw error;
     }
-    return useResult(await runWorker('refresh', accessToken, undefined, account.idTokenClaims?.oid));
+    return useResult(await runWorker('refresh', accessToken, undefined, account.idTokenClaims?.oid, account.username));
   }
 
   async function mutate(method, args) {
@@ -128,7 +128,7 @@ export function createExcelBridge({
       }
       throw error;
     }
-    const result = await runWorker('mutate', accessToken, { method, args }, account.idTokenClaims?.oid);
+    const result = await runWorker('mutate', accessToken, { method, args }, account.idTokenClaims?.oid, account.username);
     pendingData = null;
     return result.response;
   }

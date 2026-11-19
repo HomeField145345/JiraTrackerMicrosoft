@@ -141,9 +141,9 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
   };
   context.importScripts('excel-worker.js');
   return {
-    run: (action, itemId, payload, userObjectId, ownerObjectId) => context.runExcelOperation({
+    run: (action, itemId, payload, userObjectId, ownerObjectId, userEmail) => context.runExcelOperation({
       action, itemId, payload, accessToken: 'simulated',
-      userObjectId, ownerObjectId,
+      userObjectId, userEmail, ownerObjectId,
       target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
     }),
     revision: () => commits,
@@ -273,6 +273,25 @@ test('links the configured owner to the Admin row in a workbook with the legacy 
   const migrated = await graph.workbook();
   assert.equal(migrated.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
   assert.equal(migrated.getWorksheet('Users').getCell('K2').value, ownerObjectId);
+});
+
+test('matches the configured owner email when multiple unassigned Admin rows exist', async () => {
+  const graph = harness();
+  const initial = await graph.run('connect');
+  const workbook = await graph.workbook();
+  workbook.getWorksheet('Users').addRow([
+    'user-2', 'owner', 'owner@example.com', 'Workbook Owner', 'admin', true,
+    '', new Date(), '', '', ''
+  ]);
+  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'owner@example.com');
+  assert.equal(connected.user.username, 'owner');
+  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+  const migrated = await graph.workbook();
+  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, '');
+  assert.equal(migrated.getWorksheet('Users').getCell('K3').value, ownerObjectId);
 });
 
 test('filters project data and capacity to the mapped non-admin workbook user', async () => {

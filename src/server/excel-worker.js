@@ -2,7 +2,7 @@ importScripts('../../vendor/exceljs.min.js', 'manifest.js');
 importScripts.apply(self, SERVER_SCRIPTS);
 importScripts('platform/ExcelStorage.js');
 
-async function runExcelOperation({ action, accessToken, target, itemId, payload, userObjectId, ownerObjectId }) {
+async function runExcelOperation({ action, accessToken, target, itemId, payload, userObjectId, userEmail, ownerObjectId }) {
   const storage = new ExcelStorage(accessToken, target);
   if (action === 'configure' && (target?.fileName === undefined || !itemId)) {
     throw new Error('Connect to a specific existing workbook before setting it up.');
@@ -13,7 +13,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
   if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
   Platform.cache().clear();
-  const currentUser = userObjectId ? resolveMicrosoftUser(userObjectId, ownerObjectId) : null;
+  const currentUser = userObjectId ? resolveMicrosoftUser(userObjectId, ownerObjectId, userEmail) : null;
   let response;
   let message = action === 'configure' ?
     (needsSetup ? 'Workbook set up.' : 'Workbook is already set up.') : undefined;

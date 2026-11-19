@@ -92,31 +92,42 @@ function getUsers() {
   return users;
 }
 
-function resolveMicrosoftUser(objectId, ownerObjectId) {
+function resolveMicrosoftUser(objectId, ownerObjectId, identityEmail) {
   const normalizedObjectId = String(objectId || '').trim().toLowerCase();
   if (!normalizedObjectId) throw new Error('Microsoft did not provide an account ID.');
 
-  let matches = getUsers().filter(user =>
+  const users = getUsers();
+  let matches = users.filter(user =>
     String(user.microsoftObjectId || '').trim().toLowerCase() === normalizedObjectId
   );
   if (matches.length > 1) throw new Error('This Microsoft account is assigned to multiple workbook users.');
 
   if (matches.length === 0 && normalizedObjectId === String(ownerObjectId || '').trim().toLowerCase()) {
-    const admins = getUsers().filter(user =>
+    let admins = users.filter(user =>
       user.isActive === true && String(user.role || '').trim().toLowerCase() === 'admin' &&
       !String(user.microsoftObjectId || '').trim()
     );
+    const normalizedEmail = String(identityEmail || '').trim().toLowerCase();
+    if (admins.length > 1 && normalizedEmail) {
+      const emailMatches = admins.filter(user => String(user.email || '').trim().toLowerCase() === normalizedEmail);
+      if (emailMatches.length === 1) admins = emailMatches;
+    }
     if (admins.length === 1) {
       updateUser(admins[0].id, { microsoftObjectId: objectId });
       matches = getUsers().filter(user =>
         String(user.microsoftObjectId || '').trim().toLowerCase() === normalizedObjectId
       );
+    } else if (admins.length === 0) {
+      throw new Error('The configured Microsoft owner has no active Admin row in the Users sheet. Add or activate an Admin user, then sign in again.');
+    } else {
+      throw new Error('The configured Microsoft owner matches multiple Admin rows. Add the owner email to exactly one Admin row in the Users sheet, then sign in again.');
     }
   }
 
   const user = matches[0];
   if (!user || user.isActive !== true) {
-    throw new Error('Your Microsoft account is not assigned an active user in this workbook. Contact a workbook admin.');
+    const accountLabel = String(identityEmail || normalizedObjectId).trim();
+    throw new Error(`Microsoft account ${accountLabel} (Object ID ${normalizedObjectId}) is not assigned to an active user. Add this Object ID to the matching active row in the Users sheet.`);
   }
 
   return {

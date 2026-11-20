@@ -297,7 +297,7 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(section.children[0].textContent, 'Sprint 13');
   assert.match(section.children[1].textContent, /4 story points.*1 issue/);
   const table = section.children[2].children[0];
-  const [currentRow, currentDetails, emptyRow, zeroCapRow, zeroLoadRow, unassignedRow, unassignedDetails] =
+  const [currentRow, currentDetails, emptyRow, emptyDetails, zeroCapRow, , zeroLoadRow, , unassignedRow, unassignedDetails] =
     elements['capacity-table-body'].children;
   const [futureRow, futureDetails] = table.children[1].children;
   assert.deepEqual(futureRow.children.slice(1, 5).map(cell => cell.textContent), ['1', '4', '5', '1']);
@@ -308,14 +308,21 @@ test('capacity view shows developer workload and expands sprint assignments inde
   const [futurePercent, futureTrack] = futureRow.children[5].children;
   assert.equal(futurePercent.textContent, '80%');
   assert.equal(futureTrack.children[0].style.width, '80%');
-  assert.equal(emptyRow.children[0].textContent, 'Blair');
-  assert.equal(emptyRow.children[0].children.length, 0);
+  const [emptyName, emptyToggle] = emptyRow.children[0].children;
+  assert.equal(emptyName.textContent, 'Blair');
+  assert.equal(emptyToggle.children[0].textContent, 'Stories (0)');
+  assert.equal(emptyDetails.hidden, true);
+  emptyToggle.click();
+  assert.equal(emptyDetails.hidden, false);
+  assert.equal(emptyDetails.children[0].textContent, 'No stories assigned for this sprint.');
   assert.equal(emptyRow.children[5].textContent, 'Capacity not set');
   assert.deepEqual(zeroCapRow.children[5].children.map(child => child.textContent), ['Over capacity']);
   assert.deepEqual(zeroLoadRow.children[5].children.map(child => child.textContent), ['Zero capacity']);
   assert.equal(unassignedRow.children[5].textContent, 'Needs assignee');
-  const currentToggle = currentRow.children[0].children[0];
-  const futureToggle = futureRow.children[0].children[0];
+  const currentToggle = currentRow.children[0].children[1];
+  const futureToggle = futureRow.children[0].children[1];
+  assert.equal(currentToggle.children[0].textContent, 'Stories (1)');
+  assert.equal(futureToggle.children[0].textContent, 'Stories (1)');
   assert.equal(currentDetails.hidden, true);
   assert.equal(futureDetails.hidden, true);
   assert.equal(futureToggle.attributes['aria-expanded'], 'false');
@@ -329,7 +336,9 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(futureToggle.attributes['aria-expanded'], 'true');
   const storyCells = details => details.children[0].children[0].children[1].children[0].children;
   assert.equal(unassignedDetails.hidden, true);
-  unassignedRow.children[0].children[0].click();
+  const unassignedToggle = unassignedRow.children[0].children[1];
+  assert.equal(unassignedToggle.children[0].textContent, 'Issues (1)');
+  unassignedToggle.click();
   assert.equal(unassignedDetails.hidden, false);
   assert.deepEqual(storyCells(unassignedDetails).slice(1).map(cell => cell.textContent), ['Fix login', 'Bug', 'Open', '0']);
   assert.equal(storyCells(currentDetails)[0].children[0].textContent, 'TEAM-12');

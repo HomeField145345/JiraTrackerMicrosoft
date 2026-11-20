@@ -280,14 +280,15 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     }
     entry.issueCount++;
     entry.storyPoints += points;
-    if (issueType === 'story' || entry.unassignedIssues) {
+    var isStory = issueType === 'story' || issueType === 'vzagile story';
+    if (isStory || entry.unassignedIssues) {
       var issue = {
         jiraKey: String(item['Jira #'] || '').trim(),
         summary: String(item.Summary || '').trim(),
         status: String(item.Status || '').trim(),
         storyPoints: points
       };
-      if (issueType === 'story') entry.stories.push(issue);
+      if (isStory) entry.stories.push(issue);
       if (entry.unassignedIssues) {
         entry.unassignedIssues.push(Object.assign({ issueType: String(item['Issue Type'] || '').trim() }, issue));
       }

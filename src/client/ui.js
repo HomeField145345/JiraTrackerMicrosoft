@@ -1338,21 +1338,26 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
         var row = body.insertRow();
         row.className = 'border-b border-gray-200';
         var nameCell = row.insertCell();
-        nameCell.className = 'px-3 py-3 text-gray-900';
+        nameCell.className = 'px-3 py-3 text-black';
+        var name = document.createElement('span');
+        name.className = 'block';
+        name.textContent = developer.developer;
+        nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
         var assignments = (unassigned && developer.unassignedIssues) || developer.stories || [];
         var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint stories';
-        if (assignments.length) {
+        if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.className = 'w-full inline-flex items-center justify-between gap-3 text-left text-black cursor-pointer';
-            toggle.setAttribute('aria-label', detailsLabel);
+            toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            var toggleText = (unassigned ? 'Issues' : 'Stories') + ' (' + numberFormat.format(assignments.length) + ')';
+            toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
             toggle.setAttribute('aria-expanded', 'false');
             var detailsId = 'capacity-stories-' + sectionId + '-' + index;
             toggle.setAttribute('aria-controls', detailsId);
-            var name = document.createElement('span');
-            name.textContent = developer.developer;
-            toggle.appendChild(name);
+            var label = document.createElement('span');
+            label.textContent = toggleText;
+            toggle.appendChild(label);
             var arrow = document.createElement('span');
             arrow.setAttribute('aria-hidden', 'true');
             arrow.textContent = '▸';
@@ -1366,15 +1371,17 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
             var detailsCell = detailsRow.insertCell();
             detailsCell.colSpan = 6;
             detailsCell.className = 'px-4 py-3';
-            renderCapacityAssignments_(detailsCell, assignments, detailsLabel, unassigned, numberFormat);
+            if (assignments.length) {
+                renderCapacityAssignments_(detailsCell, assignments, detailsLabel, unassigned, numberFormat);
+            } else {
+                detailsCell.textContent = 'No stories assigned for this sprint.';
+            }
             toggle.addEventListener('click', function() {
                 var expand = detailsRow.hidden;
                 detailsRow.hidden = !expand;
                 toggle.setAttribute('aria-expanded', String(expand));
                 arrow.textContent = expand ? '▾' : '▸';
             });
-        } else {
-            nameCell.textContent = developer.developer;
         }
         var issueCell = row.insertCell();
         issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';

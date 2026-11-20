@@ -176,7 +176,7 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
     const capacity = graph.analyzeCapacity([
       { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
       { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
-      { 'Jira #': 'TEAM-2', 'Issue Type': ' Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
+      { 'Jira #': 'TEAM-2', 'Issue Type': ' VZAgile Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
       { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
       { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
       { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },

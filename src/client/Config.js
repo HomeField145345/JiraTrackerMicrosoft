@@ -72,9 +72,35 @@
         story: [],
         bug: []
     };
-    var availableStatuses = [];
+    var availableStatuses = {
+        epic: [],
+        story: [],
+        bug: []
+    };
     var workbookUsers = [];
     var editingUserIndex = null;
+
+    function getStatusesByIssueType_(projects) {
+        var statuses = {
+            epic: new Set(),
+            story: new Set(),
+            bug: new Set()
+        };
+
+        (projects || []).forEach(function(project) {
+            var issueType = String(project['Issue Type'] || '').trim().toLowerCase();
+            if (!Object.prototype.hasOwnProperty.call(statuses, issueType)) return;
+
+            var status = String(project.Status || '').trim();
+            if (status) statuses[issueType].add(status);
+        });
+
+        return {
+            epic: Array.from(statuses.epic).sort(),
+            story: Array.from(statuses.story).sort(),
+            bug: Array.from(statuses.bug).sort()
+        };
+    }
 
     function syncConfigFooter_(targetSelector) {
         var isCapacity = targetSelector === '#tab-developer-capacity';
@@ -798,21 +824,13 @@
                     if (projects && Array.isArray(projects)) {
                         
                         
-                        // Extract unique statuses only - stages come from configuration
-                        var statusesSet = new Set();
-                        
-                        projects.forEach(function(project) {
-                            var status = project['Status'];
-                            if (status && status.trim()) {
-                                statusesSet.add(status.trim());
-                            }
-                        });
+                        // Keep Jira statuses scoped to their issue type.
+                        availableStatuses = getStatusesByIssueType_(projects);
                         
                         // Get stages from configuration options, not from project data
                         availableStages.epic = getConfigOptionsList('epicProjectStageOptions');
                         availableStages.story = getConfigOptionsList('storyProjectStageOptions'); 
                         availableStages.bug = getConfigOptionsList('bugProjectStageOptions');
-                        availableStatuses = Array.from(statusesSet).sort();
                         
                         
                         
@@ -827,7 +845,10 @@
                         var statusEl = document.getElementById('refreshDataStatus');
                         if (statusEl) {
                             var totalStages = availableStages.epic.length + availableStages.story.length + availableStages.bug.length;
-                            statusEl.textContent = 'Found ' + availableStatuses.length + ' statuses and ' + totalStages + ' total stages';
+                            var totalStatuses = new Set(
+                                availableStatuses.epic.concat(availableStatuses.story, availableStatuses.bug)
+                            ).size;
+                            statusEl.textContent = 'Found ' + totalStatuses + ' statuses and ' + totalStages + ' total stages';
                             statusEl.className = 'text-sm text-green-600';
                             setTimeout(function() { statusEl.textContent = ''; }, 3000);
                         }
@@ -857,7 +878,7 @@
             
             container.innerHTML = '';
             
-            availableStatuses.forEach(function(status) {
+            (availableStatuses[selectedType] || []).forEach(function(status) {
                 var btn = document.createElement('button');
                 btn.className = 'status-btn w-full text-left p-2 rounded border text-sm hover:bg-blue-50 hover:border-blue-300';
                 btn.textContent = status;

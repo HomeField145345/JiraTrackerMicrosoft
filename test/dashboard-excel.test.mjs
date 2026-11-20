@@ -157,6 +157,24 @@ test('does not expose an unsafe workbook link on sign-in failure', async () => {
   assert.equal(doc.elements['signin-workbook-link'].hidden, true);
 });
 
+test('groups workflow Jira statuses by issue type', () => {
+  const context = vm.createContext({ window: {} });
+  vm.runInContext(readFileSync(new URL('../src/client/Config.js', import.meta.url), 'utf8'), context);
+  const statuses = context.getStatusesByIssueType_([
+    { 'Issue Type': 'Epic', Status: 'In Progress' },
+    { 'Issue Type': 'Story', Status: 'To Do' },
+    { 'Issue Type': 'Bug', Status: 'In Progress' },
+    { 'Issue Type': 'Story', Status: 'In Progress' },
+    { 'Issue Type': 'Task', Status: 'Open' },
+    { 'Issue Type': 'Bug', Status: ' ' }
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(statuses)), {
+    epic: ['In Progress'],
+    story: ['In Progress', 'To Do'],
+    bug: ['In Progress']
+  });
+});
+
 test('tells the user when the workbook still needs setup', async () => {
   const { bridge, doc } = setup({ connectResult: { needsSetup: true } });
   await bridge.initialize();

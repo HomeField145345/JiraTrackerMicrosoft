@@ -1,25 +1,237 @@
-    body { 
-        font-family: 'Inter', sans-serif; 
+    body {
+        font-family: 'Inter', sans-serif;
     }
-    textarea { 
-        font-family: inherit; 
-        font-size: inherit; 
+    textarea {
+        font-family: inherit;
+        font-size: inherit;
     }
-    .tab-btn { 
-        padding: 0.5rem 0; 
-        border-bottom: 2px solid transparent; 
-        color: #4b5563; 
+
+    /* Two-pane Configuration Modal */
+    .config-modal-panel {
+        border-radius: 12px;
+        background: #FFFFFF;
+        color: #000000;
+        border: 1px solid #D8DADA;
     }
-    .tab-btn.active { 
-        border-color: #2563eb; 
-        color: #1f2937; 
-        font-weight: 600; 
+    .config-sidebar {
+        background: #F6F6F6;
+        border-color: #D8DADA;
     }
-    .tab-panel.hidden { display: none; }
-    .sticky-footer { 
-        position: sticky; 
-        bottom: 0; 
-        background: white; 
-        border-top: 1px solid #e5e7eb; 
-        box-shadow: 0 -1px 2px rgba(0,0,0,0.03);
+    .config-nav-group-label {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6F7171;
+        padding: 0 12px;
+        margin-bottom: 4px;
+    }
+    .tab-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        text-align: left;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 400;
+        color: #6F7171;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .tab-btn:hover {
+        background: #ECECEC;
+        color: #000000;
+    }
+    .tab-btn.active {
+        background: #000000;
+        color: #FFFFFF;
+        font-weight: 500;
+    }
+    .tab-panel.hidden {
+        display: none;
+    }
+
+    .config-card {
+        background: #FFFFFF;
+        border: 1px solid #D8DADA;
+        border-radius: 12px;
+        padding: 20px;
+    }
+    .config-field {
+        width: 100%;
+        border: 1px solid #D8DADA;
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-size: 14px;
+        color: #000000;
+        background: #FFFFFF;
+        transition: border-color 0.15s ease;
+    }
+    .config-field:focus {
+        outline: none;
+        border-color: #000000;
+    }
+    .config-helper {
+        font-size: 12px;
+        color: #6F7171;
+        margin-top: 4px;
+    }
+    .config-btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        border-radius: 12px;
+        background: #000000;
+        color: #FFFFFF;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid #000000;
+        cursor: pointer;
+        transition: opacity 0.15s ease;
+    }
+    .config-btn-primary:hover:not(:disabled) {
+        opacity: 0.88;
+    }
+    .config-btn-primary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .config-btn-secondary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 16px;
+        border-radius: 12px;
+        background: #FFFFFF;
+        color: #000000;
+        font-size: 14px;
+        font-weight: 500;
+        border: 1px solid #D8DADA;
+        cursor: pointer;
+        transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .config-btn-secondary:hover:not(:disabled) {
+        background: #F6F6F6;
+        border-color: #000000;
+    }
+    .config-btn-secondary:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+    }
+    .config-link-action {
+        font-size: 12px;
+        font-weight: 500;
+        color: #000000;
+        text-decoration: underline;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 0;
+    }
+    .config-link-action:hover {
+        color: #6F7171;
+    }
+
+    /* Segmented control for Workflow mapping item types */
+    .mapping-segmented {
+        display: inline-flex;
+        padding: 4px;
+        border-radius: 10px;
+        background: #F6F6F6;
+        border: 1px solid #D8DADA;
+        gap: 4px;
+    }
+    .mapping-tab-btn {
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        color: #6F7171;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .mapping-tab-btn:hover {
+        color: #000000;
+    }
+    .mapping-tab-btn.active {
+        background: #FFFFFF;
+        color: #000000;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Collapsible accordion for Workflow rules */
+    .config-accordion summary {
+        list-style: none;
+        cursor: pointer;
+    }
+    .config-accordion summary::-webkit-details-marker {
+        display: none;
+    }
+    .config-accordion[open] .config-accordion-chevron {
+        transform: rotate(180deg);
+    }
+    .config-accordion-chevron {
+        transition: transform 0.15s ease;
+    }
+
+    /* Non-interactive status & role badges */
+    .config-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 23px;
+        padding: 2px 10px;
+        border-radius: 9999px;
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.4;
+        user-select: none;
+    }
+    .config-badge-active {
+        background: #DCF5E6;
+        color: #008331;
+    }
+    .config-badge-inactive {
+        background: #F6F6F6;
+        color: #6F7171;
+    }
+    .config-badge-role {
+        background: #F6F6F6;
+        color: #000000;
+        border: 1px solid #D8DADA;
+    }
+
+    /* Status feedback colors */
+    .config-status-neutral {
+        color: #6F7171;
+    }
+    .config-status-success {
+        color: #008331;
+    }
+    .config-status-error {
+        color: #B95319;
+    }
+
+    .sticky-footer {
+        position: sticky;
+        bottom: 0;
+        background: #FFFFFF;
+        border-top: 1px solid #D8DADA;
+    }
+
+    @media (max-width: 767px) {
+        .config-sidebar nav {
+            flex-direction: row;
+            flex-wrap: wrap;
+        }
+        .config-sidebar .tab-btn {
+            width: auto;
+        }
     }

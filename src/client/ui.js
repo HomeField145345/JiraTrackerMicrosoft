@@ -1363,7 +1363,8 @@ function saveDeveloperCapacity(event) {
     });
     if (invalid) {
         status.textContent = 'Enter a non-negative number or leave capacity blank.';
-        status.className = 'text-sm text-orange-800';
+        status.classList.remove('config-status-neutral', 'config-status-success');
+        status.classList.add('config-status-error');
         invalid.focus();
         return;
     }
@@ -1373,7 +1374,8 @@ function saveDeveloperCapacity(event) {
     button.disabled = true;
     inputs.forEach(function(input) { input.disabled = true; });
     status.textContent = 'Saving capacity...';
-    status.className = 'text-sm text-gray-600';
+    status.classList.remove('config-status-error', 'config-status-success');
+    status.classList.add('config-status-neutral');
     callServer('saveDeveloperCapacity', [entries]).then(function(response) {
         if (!response || response.status !== 'success') {
             throw new Error(response && response.message ? response.message : 'Could not save capacity.');
@@ -1381,13 +1383,15 @@ function saveDeveloperCapacity(event) {
         return callServer('getProjectData', []).then(function(data) {
             if (!handleDataLoaded(data)) throw new Error('Capacity saved, but refresh failed. Reload the page.');
             status.textContent = 'Capacity saved.';
-            status.className = 'text-sm text-green-700';
+            status.classList.remove('config-status-neutral', 'config-status-error');
+            status.classList.add('config-status-success');
         }, function(error) {
             throw new Error('Capacity saved, but refresh failed: ' + getErrorMessage_(error));
         });
     }).catch(function(error) {
         status.textContent = getErrorMessage_(error);
-        status.className = 'text-sm text-orange-800';
+        status.classList.remove('config-status-neutral', 'config-status-success');
+        status.classList.add('config-status-error');
     }).finally(function() {
         button.disabled = false;
         inputs.forEach(function(input) { input.disabled = false; });

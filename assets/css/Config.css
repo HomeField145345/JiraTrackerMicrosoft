@@ -1,12 +1,13 @@
-    body {
-        font-family: 'Inter', sans-serif;
-    }
-    textarea {
+    #config-modal textarea {
         font-family: inherit;
         font-size: inherit;
     }
 
     /* Two-pane Configuration Modal */
+    #config-modal .hidden,
+    #config-modal [hidden] {
+        display: none !important;
+    }
     .config-modal-panel {
         border-radius: 12px;
         background: #FFFFFF;
@@ -26,7 +27,7 @@
         padding: 0 12px;
         margin-bottom: 4px;
     }
-    .tab-btn {
+    .config-sidebar .tab-btn {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -42,11 +43,11 @@
         cursor: pointer;
         transition: background-color 0.15s ease, color 0.15s ease;
     }
-    .tab-btn:hover {
+    .config-sidebar .tab-btn:hover {
         background: #ECECEC;
         color: #000000;
     }
-    .tab-btn.active {
+    .config-sidebar .tab-btn.active {
         background: #000000;
         color: #FFFFFF;
         font-weight: 500;
@@ -56,10 +57,36 @@
     }
 
     .config-card {
-        background: #FFFFFF;
-        border: 1px solid #D8DADA;
+        background: transparent;
+        border: 0;
+        padding: 0;
+    }
+    #user-editor-panel {
+        background: #F6F6F6;
         border-radius: 12px;
-        padding: 20px;
+        padding: 24px;
+    }
+    .config-content {
+        overscroll-behavior: contain;
+    }
+    .config-content > .tab-panel {
+        max-width: 800px;
+    }
+    .config-content > .tab-panel > * + * {
+        margin-top: 32px;
+    }
+    .config-table-wrap {
+        overflow-x: auto;
+    }
+    .config-users-table {
+        min-width: 480px;
+        table-layout: fixed;
+    }
+    .config-users-table th:first-child {
+        width: 40%;
+    }
+    .config-users-table td:first-child {
+        overflow-wrap: anywhere;
     }
     .config-field {
         width: 100%;
@@ -72,8 +99,11 @@
         transition: border-color 0.15s ease;
     }
     .config-field:focus {
-        outline: none;
         border-color: #000000;
+    }
+    #config-modal :is(button, input, select, textarea, summary):focus-visible {
+        outline: 2px solid #000000;
+        outline-offset: 2px;
     }
     .config-helper {
         font-size: 12px;
@@ -219,19 +249,58 @@
         color: #B95319;
     }
 
-    .sticky-footer {
+    .config-footer {
         position: sticky;
         bottom: 0;
         background: #FFFFFF;
         border-top: 1px solid #D8DADA;
     }
 
+    @media (min-width: 768px) and (max-width: 1100px) {
+        .mapping-panel > .grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     @media (max-width: 767px) {
+        .config-modal-frame {
+            padding: 8px;
+        }
+        .config-modal-panel {
+            max-height: calc(100dvh - 16px);
+        }
+        .config-modal-header,
+        .config-footer {
+            padding: 16px;
+        }
+        .config-content {
+            padding: 16px;
+        }
+        .config-sidebar {
+            padding: 12px 16px;
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
         .config-sidebar nav {
             flex-direction: row;
-            flex-wrap: wrap;
+            flex-wrap: nowrap;
+            gap: 16px;
+            width: max-content;
+        }
+        .config-sidebar nav > div > .flex {
+            flex-wrap: nowrap;
         }
         .config-sidebar .tab-btn {
             width: auto;
+            white-space: nowrap;
+        }
+        #user-editor-panel {
+            padding: 16px;
+        }
+        .config-footer > div:first-child {
+            flex-basis: 100%;
+        }
+        .config-footer > div:first-child:not(:has(p:not(.hidden):not(:empty))) {
+            display: none;
         }
     }

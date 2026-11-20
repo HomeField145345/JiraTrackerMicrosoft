@@ -53,7 +53,7 @@
         }
         if (statusEl) {
             statusEl.textContent = 'Error: ' + error.message;
-            statusEl.className = 'text-sm config-status-error';
+            setConfigStatusTone_(statusEl, 'error');
         } else {
             console.error('Config Error:', error);
             alert('Config Error: ' + error.message);
@@ -98,8 +98,12 @@
         var status = document.getElementById('users-status');
         if (!status) return;
         status.textContent = message;
-        status.className = 'text-sm ' + (tone === 'success' ? 'config-status-success' :
-            tone === 'error' ? 'config-status-error' : 'config-status-neutral');
+        setConfigStatusTone_(status, tone);
+    }
+
+    function setConfigStatusTone_(status, tone) {
+        status.classList.remove('config-status-success', 'config-status-error', 'config-status-neutral');
+        status.classList.add('config-status-' + tone);
     }
 
     function closeUserEditor_() {
@@ -411,7 +415,7 @@
 
                 saveBtn.disabled = true;
                 saveBtn.textContent = 'Saving...';
-                if (statusEl) { statusEl.textContent = ''; statusEl.className = 'text-sm text-gray-500'; }
+                if (statusEl) { statusEl.textContent = ''; setConfigStatusTone_(statusEl, 'neutral'); }
 
                 var linksData = Array.from(document.querySelectorAll('#linksList .flex')).map(function(el) {
                     return { title: el.querySelector('span').textContent, url: el.getAttribute('data-url') };
@@ -439,7 +443,7 @@
 
                 callServer('saveConfiguration', [optionsData]).then(function(response) {
                         if (response.status === 'success') {
-                            if (statusEl) { statusEl.textContent = response.message || 'Configuration saved.'; statusEl.className = 'text-sm config-status-success'; }
+                            if (statusEl) { statusEl.textContent = response.message || 'Configuration saved.'; setConfigStatusTone_(statusEl, 'success'); }
                             try {
                                 // Apply new config immediately across the dashboard.
                                 if (typeof refreshData === 'function') {
@@ -529,7 +533,7 @@
         var statusEl = document.getElementById('configStatus');
         if (statusEl) {
             statusEl.textContent = 'Loading configuration…';
-            statusEl.className = 'text-sm config-status-neutral';
+            setConfigStatusTone_(statusEl, 'neutral');
         }
 
         callServer('getConfigData', []).then(onConfigDataLoaded, handleConfigFailure_);
@@ -595,7 +599,7 @@
             var statusEl = document.getElementById('configStatus');
             if (statusEl) {
                 statusEl.textContent = 'Loaded configuration payload.';
-                statusEl.className = 'text-sm text-gray-500';
+                setConfigStatusTone_(statusEl, 'neutral');
             }
         } catch (e) { /* no-op */ }
         if (!data || !data.config) {

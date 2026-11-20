@@ -11,6 +11,19 @@ const ids = {
 };
 const dashboardData = { projects: [{ 'Jira #': 'ABC-1' }], independentTasks: [], config: { stages: [] } };
 
+function fakeClassList(initial = []) {
+  const classes = new Set(initial);
+  return {
+    add: (...names) => names.forEach(name => classes.add(name)),
+    remove: (...names) => names.forEach(name => classes.delete(name)),
+    contains: name => classes.has(name),
+    toggle(name, force) {
+      if (force === undefined ? !classes.has(name) : force) classes.add(name);
+      else classes.delete(name);
+    }
+  };
+}
+
 function fakeDocument() {
   const elements = {};
   for (const id of ['signin-panel', 'signin-status', 'signin-btn', 'signin-workbook-link']) {
@@ -159,6 +172,7 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
       this.dataset = {};
       this.validity = { valid: true };
       this.value = '';
+      this.classList = fakeClassList();
     }
     replaceChildren() { this.children = []; }
     insertRow() { const row = new Element(); this.children.push(row); return row; }
@@ -205,11 +219,37 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   inputs()[1].validity.valid = true;
   inputs()[1].value = '5.5';
   context.saveDeveloperCapacity({ preventDefault() {} });
+  elements['developer-capacity-status'].classList.add('hidden');
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
     { method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: '0' }, { developer: 'Blair', capacity: '5.5' }]] },
     { method: 'getProjectData', args: [] }
   ]);
   assert.equal(elements['developer-capacity-status'].textContent, 'Capacity saved.');
+  assert.equal(elements['developer-capacity-status'].classList.contains('hidden'), true);
   assert.equal(elements['save-developer-capacity'].disabled, false);
+});
+
+test('configuration footer keeps inactive actions and asynchronous statuses hidden', () => {
+  const ids = ['saveConfigBtn', 'configStatus', 'save-developer-capacity',
+    'developer-capacity-status', 'save-users', 'users-status'];
+  const elements = Object.fromEntries(ids.map(id => [id, { classList: fakeClassList() }]));
+  const context = vm.createContext({
+    window: {},
+    document: { getElementById: id => elements[id] }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/Config.js', import.meta.url), 'utf8'), context);
+
+  context.syncConfigFooter_('#tab-users');
+  assert.equal(elements['save-users'].classList.contains('hidden'), false);
+  assert.equal(elements.saveConfigBtn.classList.contains('hidden'), true);
+  assert.equal(elements['save-developer-capacity'].classList.contains('hidden'), true);
+
+  context.syncConfigFooter_('#tab-dropdowns');
+  context.setUsersStatus_('Users loaded.', 'neutral');
+  context.setConfigStatusTone_(elements['developer-capacity-status'], 'success');
+  assert.equal(elements['users-status'].classList.contains('hidden'), true);
+  assert.equal(elements['developer-capacity-status'].classList.contains('hidden'), true);
+  assert.equal(elements.configStatus.classList.contains('hidden'), false);
+  assert.equal(elements.saveConfigBtn.classList.contains('hidden'), false);
 });

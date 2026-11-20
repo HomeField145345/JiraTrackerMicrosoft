@@ -883,7 +883,7 @@
 
   <!-- CONFIGURATION MODAL (In-App) -->
   <div id="config-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="flex items-center justify-center min-h-screen p-4">
+    <div class="config-modal-frame flex items-center justify-center min-h-screen p-4">
       <!-- Background overlay -->
       <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity" aria-hidden="true" id="config-modal-overlay"></div>
 
@@ -891,7 +891,7 @@
       <div class="config-modal-panel relative z-10 w-full max-w-5xl max-h-[84vh] flex flex-col overflow-hidden shadow-xl">
 
         <!-- Header -->
-        <div class="flex items-center justify-between px-6 py-4 bg-white border-b border-[#D8DADA] shrink-0">
+        <div class="config-modal-header flex items-center justify-between px-6 py-4 bg-white border-b border-[#D8DADA] shrink-0">
           <div>
             <h3 class="text-lg font-normal text-black" id="modal-title">Configuration</h3>
           </div>
@@ -928,7 +928,7 @@
           </aside>
 
           <!-- Right Content Pane -->
-          <div class="flex-1 min-w-0 bg-white p-6 overflow-y-auto">
+          <div class="config-content flex-1 min-w-0 bg-white p-6 overflow-y-auto">
 
             <!-- Dropdowns Panel -->
             <section id="tab-dropdowns" class="tab-panel space-y-6" aria-labelledby="dropdowns-heading">
@@ -999,7 +999,6 @@
                       <button type="button" class="config-link-action" data-clean-for="actPctOptions">Sort &amp; clean</button>
                     </div>
                     <textarea id="actPctOptions" rows="5" class="config-field"></textarea>
-                    <p class="config-helper">One value per line.</p>
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
@@ -1007,7 +1006,6 @@
                       <button type="button" class="config-link-action" data-clean-for="planningStageOptions">Sort &amp; clean</button>
                     </div>
                     <textarea id="planningStageOptions" rows="5" class="config-field"></textarea>
-                    <p class="config-helper">One value per line.</p>
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
@@ -1120,10 +1118,6 @@
                   </div>
                 </div>
 
-                <div class="p-3 bg-[#F6F6F6] rounded-lg text-xs text-[#6F7171]">
-                  <strong class="text-black font-medium">How mapping works:</strong>
-                  Select Refresh data to load statuses from your workbook, choose a Jira status on the left, toggle matching project stages in the middle, review the summary on the right, then save changes.
-                </div>
               </div>
 
               <!-- Collapsible Lifecycle & Filter Rules Accordion -->
@@ -1213,7 +1207,7 @@
               </div>
 
               <form id="developer-capacity-form" class="max-w-2xl" novalidate>
-                <div class="border border-[#D8DADA] rounded-xl overflow-hidden bg-white">
+                <div class="config-table-wrap border border-[#D8DADA] rounded-xl bg-white">
                   <table class="w-full text-sm">
                     <thead>
                       <tr class="text-left bg-[#F6F6F6] border-b border-[#D8DADA] text-xs font-medium text-[#6F7171]">
@@ -1283,8 +1277,8 @@
 
               <!-- Compact Users Directory Table -->
               <form id="users-form" novalidate>
-                <div class="border border-[#D8DADA] rounded-xl overflow-hidden bg-white">
-                  <table class="w-full text-sm">
+                <div class="config-table-wrap border border-[#D8DADA] rounded-xl bg-white">
+                  <table class="config-users-table w-full text-sm">
                     <thead>
                       <tr class="text-left bg-[#F6F6F6] border-b border-[#D8DADA] text-xs font-medium text-[#6F7171]">
                         <th scope="col" class="px-4 py-3">User</th>
@@ -1303,7 +1297,7 @@
         </div>
 
         <!-- Single Context-Aware Sticky Footer -->
-        <div class="sticky-footer px-6 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div class="config-footer sticky-footer px-6 py-4 flex flex-wrap items-center justify-between gap-4 shrink-0">
           <div class="min-w-0 flex-1">
             <p id="configStatus" class="text-sm config-status-neutral" role="status" aria-live="polite"></p>
             <p id="developer-capacity-status" class="text-sm config-status-neutral hidden" role="status" aria-live="polite"></p>

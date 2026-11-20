@@ -253,10 +253,11 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
   (items || []).forEach(function(item) {
     var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
     if (developer && developer.toLowerCase() !== 'unassigned' && !capacityByDeveloper.has(developer.toLowerCase())) {
-      capacityByDeveloper.set(developer.toLowerCase(), { developer: developer, issueCount: 0, storyPoints: 0 });
+      capacityByDeveloper.set(developer.toLowerCase(), { developer: developer, issueCount: 0, storyPoints: 0, stories: [] });
     }
     if (!hasSprint) return;
-    if (String(item['Issue Type'] || '').trim().toLowerCase() === 'epic') return;
+    var issueType = String(item['Issue Type'] || '').trim().toLowerCase();
+    if (issueType === 'epic') return;
 
     var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
     var belongsToCurrentSprint = sprintEntries.some(function(entry) {
@@ -273,11 +274,19 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     var key = developer.toLowerCase();
     var entry = capacityByDeveloper.get(key);
     if (!entry) {
-      entry = { developer: developer, issueCount: 0, storyPoints: 0 };
+      entry = { developer: developer, issueCount: 0, storyPoints: 0, stories: [] };
       capacityByDeveloper.set(key, entry);
     }
     entry.issueCount++;
     entry.storyPoints += points;
+    if (issueType === 'story') {
+      entry.stories.push({
+        jiraKey: String(item['Jira #'] || '').trim(),
+        summary: String(item.Summary || '').trim(),
+        status: String(item.Status || '').trim(),
+        storyPoints: points
+      });
+    }
     totalIssues++;
     totalStoryPoints += points;
   });

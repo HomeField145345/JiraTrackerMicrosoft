@@ -174,9 +174,9 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
 test('aggregates sprint assignments and remaining capacity for Jira assignees', () => {
     const graph = harness();
     const capacity = graph.analyzeCapacity([
-      { 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
-      { 'Issue Type': 'Bug', Assignee: 'Avery', 'Story Points': 2, sprint: 'Sprint 12' },
-      { 'Issue Type': 'Story', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
+      { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
+      { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
+      { 'Jira #': 'TEAM-2', 'Issue Type': ' Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
       { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
       { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
       { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' }
@@ -191,10 +191,13 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
       totalIssues: 4,
       totalStoryPoints: 10,
       developers: [
-        { developer: 'Avery', issueCount: 2, storyPoints: 5, capacity: 4, remaining: -1 },
-        { developer: 'Blair', issueCount: 1, storyPoints: 5, capacity: null, remaining: null },
-        { developer: 'Casey', issueCount: 0, storyPoints: 0, capacity: 7, remaining: 7 },
-        { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null }
+        { developer: 'Avery', issueCount: 2, storyPoints: 5, capacity: 4, remaining: -1,
+          stories: [{ jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3 }] },
+        { developer: 'Blair', issueCount: 1, storyPoints: 5, capacity: null, remaining: null,
+          stories: [{ jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5 }] },
+        { developer: 'Casey', issueCount: 0, storyPoints: 0, capacity: 7, remaining: 7, stories: [] },
+        { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null,
+          stories: [{ jiraKey: '', summary: '', status: '', storyPoints: 0 }] }
       ]
     });
     assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
@@ -202,7 +205,7 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
     });
     const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
     assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
-      { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: 0, remaining: null }
+      { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: 0, remaining: null, stories: [] }
     ]);
 });
 
@@ -211,8 +214,8 @@ test('plans capacity for identifiable future sprints without counting closed spr
   const sprint = (number, state, dates = '') =>
     `com.atlassian.Sprint@1[id=${number},state=${state},name=Sprint ${number}${dates}]`;
   const items = [
-    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 3, sprint: sprint(12, 'ACTIVE') },
-    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 4, sprint: `${sprint(12, 'ACTIVE')}, ${sprint(13, 'FUTURE')}` },
+    { 'Jira #': 'TEAM-1', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 3, sprint: sprint(12, 'ACTIVE') },
+    { 'Jira #': 'TEAM-2', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 4, sprint: `${sprint(12, 'ACTIVE')}, ${sprint(13, 'FUTURE')}` },
     { 'Issue Type': 'Bug', Assignee: 'Blair', 'Story Points': 2, sprint: 'Sprint 14' },
     { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 14' },
     { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 9, sprint: sprint(15, 'CLOSED') },
@@ -221,9 +224,11 @@ test('plans capacity for identifiable future sprints without counting closed spr
   const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 5 }]);
   assert.equal(plan.current.sprintName, 'Sprint 12');
   assert.equal(plan.current.totalStoryPoints, 7);
+  assert.deepEqual(Array.from(plan.current.developers[0].stories, story => story.jiraKey), ['TEAM-1', 'TEAM-2']);
   assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
   assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
-    developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1
+    developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1,
+    stories: [{ jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4 }]
   });
   assert.equal(plan.future[1].totalStoryPoints, 2);
   assert.equal(plan.future[2].developers.find(dev => dev.developer === 'Unassigned').remaining, null);
@@ -573,6 +578,7 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   addIssue('TEAM-2', 'someone-else', 'Blair', 8);
   addIssue('TEAM-3', 'pm', 'Avery', 2, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
   addIssue('TEAM-4', 'someone-else', 'Blair', 9, 'com.atlassian.Sprint@1[id=14,state=FUTURE,name=Sprint 14]');
+  addIssue('TEAM-5', 'someone-else', 'Avery', 6, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
   const memberObjectId = '44444444-4444-4444-4444-444444444444';
   users.addRow([
     'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
@@ -583,11 +589,12 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1', 'TEAM-3']);
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
-    { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: null, remaining: null }
+    { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, stories: [] }
   ]);
   assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.futureSprintCapacity.map(sprint => sprint.sprintName))), ['Sprint 13']);
   assert.equal(memberData.projects.futureSprintCapacity[0].developers[0].storyPoints, 2);
+  assert.deepEqual(Array.from(memberData.projects.futureSprintCapacity[0].developers[0].stories, story => story.jiraKey), ['TEAM-3']);
 });
 
 test('does not replace an unrelated file at the OneDrive destination', async () => {

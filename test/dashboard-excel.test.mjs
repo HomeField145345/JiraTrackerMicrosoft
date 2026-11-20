@@ -248,15 +248,20 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   assert.equal(elements['save-developer-capacity'].disabled, false);
 });
 
-test('capacity view renders future sprint tables and replaces them on refresh', () => {
+test('capacity view expands each sprint’s assigned stories independently and refreshes the tables', () => {
   class Element {
-    constructor(tag = '') { this.tag = tag; this.children = []; this.textContent = ''; }
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {};
+    }
     appendChild(child) { this.children.push(child); return child; }
     replaceChildren() { this.children = []; }
     insertRow() { return this.appendChild(new Element('tr')); }
     insertCell() { return this.appendChild(new Element('td')); }
     createTHead() { return this.appendChild(new Element('thead')); }
     createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() { this.listeners.click(); }
   }
   const elements = Object.fromEntries([
     'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
@@ -264,10 +269,15 @@ test('capacity view renders future sprint tables and replaces them on refresh', 
   ].map(id => [id, new Element()]));
   const future = {
     sprintName: 'Sprint 13', totalStoryPoints: 4, totalIssues: 1,
-    developers: [{ developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1 }]
+    developers: [{ developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1,
+      stories: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', status: 'To Do', storyPoints: 4 }] }]
   };
   const state = { allData: {
-    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 3, totalIssues: 1, developers: [] },
+    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 3, totalIssues: 1, developers: [
+      { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: 5, remaining: 2,
+        stories: [{ jiraKey: 'TEAM-12', summary: 'Release fixes', status: 'Done', storyPoints: 3 }] },
+      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: 5, remaining: 5, stories: [] }
+    ] },
     futureSprintCapacity: [future]
   } };
   const context = vm.createContext({
@@ -282,8 +292,32 @@ test('capacity view renders future sprint tables and replaces them on refresh', 
   assert.equal(section.children[0].textContent, 'Sprint 13');
   assert.match(section.children[1].textContent, /4 story points.*1 issue/);
   const table = section.children[2].children[0];
-  assert.deepEqual(table.children[1].children[0].children.map(cell => cell.textContent),
-    ['Avery', '1', '4', '5', '1']);
+  const [currentRow, currentDetails, emptyRow] = elements['capacity-table-body'].children;
+  const [futureRow, futureDetails] = table.children[1].children;
+  assert.deepEqual(futureRow.children.slice(1).map(cell => cell.textContent), ['1', '4', '5', '1']);
+  assert.equal(emptyRow.children[0].textContent, 'Blair');
+  assert.equal(emptyRow.children[0].children.length, 0);
+  const currentToggle = currentRow.children[0].children[0];
+  const futureToggle = futureRow.children[0].children[0];
+  assert.equal(currentDetails.hidden, true);
+  assert.equal(futureDetails.hidden, true);
+  assert.equal(futureToggle.attributes['aria-expanded'], 'false');
+  assert.equal(futureToggle.attributes['aria-controls'], futureDetails.id);
+  assert.notEqual(currentDetails.id, futureDetails.id);
+  currentToggle.click();
+  assert.equal(currentDetails.hidden, false);
+  assert.equal(futureDetails.hidden, true);
+  futureToggle.click();
+  assert.equal(futureDetails.hidden, false);
+  assert.equal(futureToggle.attributes['aria-expanded'], 'true');
+  const storyCells = details => details.children[0].children[0].children[1].children[0].children;
+  assert.equal(storyCells(currentDetails)[0].children[0].textContent, 'TEAM-12');
+  const [key, ...fields] = storyCells(futureDetails);
+  assert.equal(key.children[0].href, 'https://onejira.verizon.com/browse/TEAM-13');
+  assert.deepEqual(fields.map(cell => cell.textContent), ['Prepare next release', 'To Do', '4']);
+  futureToggle.click();
+  assert.equal(futureDetails.hidden, true);
+  assert.equal(currentDetails.hidden, false);
   state.allData.futureSprintCapacity = [];
   context.renderCapacityView();
   assert.equal(elements['future-sprint-capacities'].children.length, 0);

@@ -1277,7 +1277,7 @@ function renderCapacityView() {
     if (sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
     if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
     if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
-    renderCapacityRows_(body, capacity.developers, numberFormat);
+    renderCapacityRows_(body, capacity.developers, numberFormat, 'current');
 
     var futureContainer = document.getElementById('future-sprint-capacities');
     if (!futureContainer) return;
@@ -1289,7 +1289,7 @@ function renderCapacityView() {
     futureHeading.className = 'text-xl font-normal text-black mt-8 mb-4';
     futureHeading.textContent = 'Future sprints';
     futureContainer.appendChild(futureHeading);
-    futureSprints.forEach(function(sprint) {
+    futureSprints.forEach(function(sprint, index) {
         var section = document.createElement('section');
         section.className = 'mb-8';
         var heading = document.createElement('h3');
@@ -1315,14 +1315,14 @@ function renderCapacityView() {
             header.appendChild(cell);
         });
         var futureBody = table.createTBody();
-        renderCapacityRows_(futureBody, sprint.developers, numberFormat);
+        renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index);
         tableWrapper.appendChild(table);
         section.appendChild(tableWrapper);
         futureContainer.appendChild(section);
     });
 }
 
-function renderCapacityRows_(body, developers, numberFormat) {
+function renderCapacityRows_(body, developers, numberFormat, sectionId) {
     body.replaceChildren();
     if (!developers || developers.length === 0) {
         var emptyRow = body.insertRow();
@@ -1333,12 +1333,45 @@ function renderCapacityRows_(body, developers, numberFormat) {
         return;
     }
 
-    developers.forEach(function(developer) {
+    developers.forEach(function(developer, index) {
         var row = body.insertRow();
         row.className = 'border-b border-gray-200';
         var nameCell = row.insertCell();
         nameCell.className = 'px-3 py-3 text-gray-900';
-        nameCell.textContent = developer.developer;
+        if (developer.stories && developer.stories.length) {
+            var toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'w-full inline-flex items-center justify-between gap-3 text-left text-black cursor-pointer';
+            toggle.setAttribute('aria-label', developer.developer + ' sprint stories');
+            toggle.setAttribute('aria-expanded', 'false');
+            var detailsId = 'capacity-stories-' + sectionId + '-' + index;
+            toggle.setAttribute('aria-controls', detailsId);
+            var name = document.createElement('span');
+            name.textContent = developer.developer;
+            toggle.appendChild(name);
+            var arrow = document.createElement('span');
+            arrow.setAttribute('aria-hidden', 'true');
+            arrow.textContent = '▸';
+            toggle.appendChild(arrow);
+            nameCell.appendChild(toggle);
+
+            var detailsRow = body.insertRow();
+            detailsRow.id = detailsId;
+            detailsRow.hidden = true;
+            detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
+            var detailsCell = detailsRow.insertCell();
+            detailsCell.colSpan = 5;
+            detailsCell.className = 'px-4 py-3';
+            renderCapacityStories_(detailsCell, developer, numberFormat);
+            toggle.addEventListener('click', function() {
+                var expand = detailsRow.hidden;
+                detailsRow.hidden = !expand;
+                toggle.setAttribute('aria-expanded', String(expand));
+                arrow.textContent = expand ? '▾' : '▸';
+            });
+        } else {
+            nameCell.textContent = developer.developer;
+        }
         var issueCell = row.insertCell();
         issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
         issueCell.textContent = numberFormat.format(developer.issueCount);
@@ -1351,6 +1384,44 @@ function renderCapacityRows_(body, developers, numberFormat) {
             cell.textContent = value == null ? '—' : numberFormat.format(value);
         });
     });
+}
+
+function renderCapacityStories_(container, developer, numberFormat) {
+    var table = document.createElement('table');
+    table.className = 'w-full text-sm text-black';
+    table.setAttribute('aria-label', developer.developer + ' sprint stories');
+    var header = table.createTHead().insertRow();
+    header.className = 'border-b border-[#D8DADA] text-xs text-[#6F7171]';
+    ['Jira key', 'Summary', 'Status', 'Story points'].forEach(function(label, index) {
+        var cell = document.createElement('th');
+        cell.scope = 'col';
+        cell.className = 'px-3 py-2 font-normal ' + (index === 3 ? 'text-right' : 'text-left');
+        cell.textContent = label;
+        header.appendChild(cell);
+    });
+    var body = table.createTBody();
+    developer.stories.forEach(function(story) {
+        var row = body.insertRow();
+        var keyCell = row.insertCell();
+        keyCell.className = 'px-3 py-2 whitespace-nowrap';
+        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(story.jiraKey)) {
+            var link = document.createElement('a');
+            link.href = 'https://onejira.verizon.com/browse/' + story.jiraKey;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'underline';
+            link.textContent = story.jiraKey;
+            keyCell.appendChild(link);
+        } else {
+            keyCell.textContent = story.jiraKey || '—';
+        }
+        [story.summary || 'Untitled', story.status || '—', numberFormat.format(story.storyPoints)].forEach(function(value, index) {
+            var cell = row.insertCell();
+            cell.className = 'px-3 py-2' + (index === 2 ? ' text-right tabular-nums' : '');
+            cell.textContent = value;
+        });
+    });
+    container.appendChild(table);
 }
 
 function renderDeveloperCapacityConfig() {

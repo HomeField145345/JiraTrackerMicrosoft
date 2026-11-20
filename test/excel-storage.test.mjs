@@ -246,7 +246,8 @@ test('plans capacity for identifiable future sprints without counting closed spr
   const today = new Date();
   const currentDate = `${today.getMonth() + 1}/${today.getDate()}`;
   const dateBasedCurrent = graph.analyzeSprintData([
-    { sprint: `Sprint 81 ${currentDate}-${currentDate}` },
+    { sprint: 'Sprint 81' },
+    { sprint: `Sprint 80 1/1-1/2, Sprint 81 ${currentDate}-${currentDate}` },
     { sprint: 'Sprint 82' }
   ]);
   assert.equal(dateBasedCurrent.currentSprintName, 'Sprint 81');

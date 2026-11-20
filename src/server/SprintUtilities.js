@@ -54,17 +54,33 @@ function parseSprintEntries_(sprintString) {
     if (entries.length > 0) return entries;
   }
 
-  // Keep the date range when a single named sprint uses the legacy format.
-  var simpleMatches = s.match(/Sprint\s*\d+/ig);
-  var dateMatch = s.match(/(\d{1,2})[/.](\d{1,2})\s*-\s*(\d{1,2})[/.](\d{1,2})/);
-  if (simpleMatches && (!dateMatch || simpleMatches.length > 1)) {
-    simpleMatches.forEach(function(name) {
-      entries.push({ name: name.trim(), state: '', startDate: null, endDate: null });
-    });
-    return entries;
+  // Parse each legacy sprint label independently so date ranges survive in
+  // fields that contain multiple comma-separated sprints.
+  var sprintPattern = /(Sprint\s*\d+)(?:\s+(\d{1,2})[/.](\d{1,2})\s*-\s*(\d{1,2})[/.](\d{1,2}))?/ig;
+  var sprintMatch;
+  while ((sprintMatch = sprintPattern.exec(s)) !== null) {
+    var sprintName = sprintMatch[1].trim();
+    var startDate = null;
+    var endDate = null;
+    if (sprintMatch[2]) {
+      var startMonth = parseInt(sprintMatch[2], 10);
+      var startDay = parseInt(sprintMatch[3], 10);
+      var endMonth = parseInt(sprintMatch[4], 10);
+      var endDay = parseInt(sprintMatch[5], 10);
+      var year = new Date().getFullYear();
+      if (startMonth >= 1 && startMonth <= 12 && endMonth >= 1 && endMonth <= 12) {
+        startDate = new Date(year, startMonth - 1, startDay);
+        endDate = new Date(year, endMonth - 1, endDay);
+        if (startDate > endDate) endDate.setFullYear(year + 1);
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+    entries.push({ name: sprintName, state: '', startDate: startDate, endDate: endDate });
   }
+  if (entries.length > 0) return entries;
 
   // --- Legacy M/DD - M/DD date range format ---
+  var dateMatch = s.match(/(\d{1,2})[/.](\d{1,2})\s*-\s*(\d{1,2})[/.](\d{1,2})/);
   if (dateMatch) {
     var sm = parseInt(dateMatch[1], 10), sd = parseInt(dateMatch[2], 10);
     var em = parseInt(dateMatch[3], 10), ed = parseInt(dateMatch[4], 10);
@@ -135,50 +151,37 @@ function analyzeSprintData(items) {
         }
       }
 
-      // Create stats entry if not yet seen
-      if (!stats[sprintName]) {
-        var isActive = false;
-
-        // 1. Trust explicit Jira state flag first
-        if (entry.state === 'ACTIVE') {
-          isActive = true;
-        } else if (entry.state === 'CLOSED' || entry.state === 'COMPLETE' || entry.state === 'COMPLETED') {
-          isActive = false;
-        } else if (entry.startDate && entry.endDate) {
-          // 2. Fall back to date range check
-          isActive = now >= entry.startDate && now <= entry.endDate;
-        }
-
-        stats[sprintName] = {
+      var s = stats[sprintName];
+      if (!s) {
+        s = stats[sprintName] = {
           name: sprintName,
           state: entry.state,
           startDate: entry.startDate,
           endDate: entry.endDate,
-          isActive: isActive,
+          isActive: false,
           totalItems: 0,
           completedItems: 0,
           totalPoints: 0,
           completedPoints: 0
         };
+      } else {
+        if (entry.state === 'ACTIVE' || !s.state) s.state = entry.state;
+        if (entry.startDate && (!s.startDate || entry.startDate < s.startDate)) s.startDate = entry.startDate;
+        if (entry.endDate && (!s.endDate || entry.endDate > s.endDate)) s.endDate = entry.endDate;
+      }
 
-        // Track best active sprint:
-        // Priority 1 – explicit ACTIVE state; Priority 2 – latest end date
-        if (isActive) {
-          if (!activeSprint) {
-            activeSprint = stats[sprintName];
-          } else if (entry.state === 'ACTIVE' && activeSprint.state !== 'ACTIVE') {
-            activeSprint = stats[sprintName]; // explicit flag beats date inference
-          } else if (
-            entry.state === activeSprint.state &&
-            entry.endDate && activeSprint.endDate &&
-            entry.endDate > activeSprint.endDate
-          ) {
-            activeSprint = stats[sprintName]; // same priority – prefer later end date
-          }
+      var isClosed = entry.state === 'CLOSED' || entry.state === 'COMPLETE' || entry.state === 'COMPLETED';
+      var isActive = entry.state === 'ACTIVE' ||
+        (!isClosed && entry.startDate && entry.endDate && now >= entry.startDate && now <= entry.endDate);
+      if (isActive) {
+        s.isActive = true;
+        if (!activeSprint ||
+            (s.state === 'ACTIVE' && activeSprint.state !== 'ACTIVE') ||
+            (s.state === activeSprint.state && s.endDate && activeSprint.endDate && s.endDate > activeSprint.endDate)) {
+          activeSprint = s;
         }
       }
 
-      var s = stats[sprintName];
       s.totalItems++;
 
       var points = parseFloat(item['Story Points'] || item.storyPoints || 0);

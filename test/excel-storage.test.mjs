@@ -163,6 +163,8 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
     analyzeCapacity: (items, sprintName, entries) => context.analyzeSprintCapacity(items, sprintName, entries),
     analyzeCapacityPlan: (projects, items, entries) =>
       context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries),
+    analyzeSprintData: items => context.analyzeSprintData(items),
+    parseSprintEntries: value => context.parseSprintEntries_(value),
     interfere: () => { interfere = true; },
     changeOnDownload: () => { changeOnDownload = true; }
   };
@@ -236,6 +238,18 @@ test('plans capacity for identifiable future sprints without counting closed spr
   const unknownPlan = graph.analyzeCapacityPlan(unknown, unknown, []);
   assert.equal(unknownPlan.current.sprintName, 'Sprint 21');
   assert.equal(unknownPlan.future.length, 0);
+  const legacy = graph.parseSprintEntries('Sprint 22 1.01 - 1.14');
+  assert.equal(legacy[0].name, 'Sprint 22');
+  assert.equal(legacy[0].startDate.getMonth(), 0);
+  assert.equal(legacy[0].endDate.getDate(), 14);
+
+  const today = new Date();
+  const currentDate = `${today.getMonth() + 1}/${today.getDate()}`;
+  const dateBasedCurrent = graph.analyzeSprintData([
+    { sprint: `Sprint 81 ${currentDate}-${currentDate}` },
+    { sprint: 'Sprint 82' }
+  ]);
+  assert.equal(dateBasedCurrent.currentSprintName, 'Sprint 81');
 });
 
 test('upgrades an older workbook when an admin saves developer capacity', async () => {

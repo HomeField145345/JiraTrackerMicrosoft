@@ -10,7 +10,7 @@
  * Handles:
  *   - Jira verbose format: com.atlassian.greenhopper...Sprint@hash[id=N,state=ACTIVE,name=Sprint N,startDate=ISO,endDate=ISO,...]
  *   - Simple names: "Sprint 93, Sprint 110"
- *   - Legacy date format: "Sprint 93 M.DD - M.DD"
+ *   - Legacy date format: "Sprint 93 M/DD - M/DD"
  * @param {string} sprintString
  * @returns {Array<{name:string, state:string, startDate:Date|null, endDate:Date|null}>}
  */
@@ -54,17 +54,17 @@ function parseSprintEntries_(sprintString) {
     if (entries.length > 0) return entries;
   }
 
-  // --- Simple "Sprint N" comma-separated names ---
+  // Keep the date range when a single named sprint uses the legacy format.
   var simpleMatches = s.match(/Sprint\s*\d+/ig);
-  if (simpleMatches) {
+  var dateMatch = s.match(/(\d{1,2})[/.](\d{1,2})\s*-\s*(\d{1,2})[/.](\d{1,2})/);
+  if (simpleMatches && (!dateMatch || simpleMatches.length > 1)) {
     simpleMatches.forEach(function(name) {
       entries.push({ name: name.trim(), state: '', startDate: null, endDate: null });
     });
     return entries;
   }
 
-  // --- Legacy M.DD - M.DD date range format ---
-  var dateMatch = s.match(/(\d{1,2})\.(\d{1,2})\s*-\s*(\d{1,2})\.(\d{1,2})/);
+  // --- Legacy M/DD - M/DD date range format ---
   if (dateMatch) {
     var sm = parseInt(dateMatch[1], 10), sd = parseInt(dateMatch[2], 10);
     var em = parseInt(dateMatch[3], 10), ed = parseInt(dateMatch[4], 10);

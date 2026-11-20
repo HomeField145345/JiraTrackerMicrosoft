@@ -3,9 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import vm from 'node:vm';
 
-async function harness({ authError, workerError } = {}) {
+async function harness({ authError, workerError, cachedAccount } = {}) {
   const logs = [];
   const elements = new Map();
+  const workerActions = [];
   const ownerId = '11111111-1111-1111-1111-111111111111';
   const tenantId = '22222222-2222-2222-2222-222222222222';
   const config = {
@@ -14,16 +15,24 @@ async function harness({ authError, workerError } = {}) {
     ownerObjectId: ownerId,
     target: { driveId: 'private-drive', folderId: 'private-folder' }
   };
+  let msalConfig;
   class PublicClientApplication {
+    constructor(config) { msalConfig = config; }
     async initialize() {}
+    getAllAccounts() { return cachedAccount ? [cachedAccount] : []; }
+    setActiveAccount() {}
     async acquireTokenPopup() {
       if (authError) throw authError;
       return { accessToken: 'secret-token', account: { idTokenClaims: { oid: ownerId, tid: tenantId } } };
     }
+    async acquireTokenSilent() {
+      return { accessToken: 'secret-token', account: cachedAccount };
+    }
   }
   class Worker {
-    postMessage() {
-      this.onmessage({ data: { error: workerError } });
+    postMessage({ action }) {
+      workerActions.push(action);
+      this.onmessage({ data: { error: workerError || 'Workbook unavailable.' } });
     }
   }
   const context = vm.createContext({
@@ -45,8 +54,8 @@ async function harness({ authError, workerError } = {}) {
     .replace("import { PublicClientApplication } from '@azure/msal-browser';", '');
   vm.runInContext(source, context);
   await new Promise(resolve => setImmediate(resolve));
-  await elements.get('connect').onclick();
-  return { logs, status: elements.get('status').textContent };
+  if (!cachedAccount) await elements.get('connect').onclick();
+  return { logs, status: elements.get('status').textContent, workerActions, msalConfig };
 }
 
 test('reports consent error details without logging the raw Microsoft message', async () => {
@@ -72,4 +81,17 @@ test('distinguishes workbook HTTP failures from authentication failures', async 
   assert.equal(failure.httpStatus, '403');
   assert.match(status, /Microsoft HTTP 403/);
   assert.doesNotMatch(JSON.stringify(logs), /private filename|secret-token/);
+});
+
+test('restores a cached Microsoft account and silently reconnects after page reload', async () => {
+  const ownerId = '11111111-1111-1111-1111-111111111111';
+  const tenantId = '22222222-2222-2222-2222-222222222222';
+  const { logs, workerActions, msalConfig } = await harness({
+    cachedAccount: { idTokenClaims: { oid: ownerId, tid: tenantId } }
+  });
+
+  assert.equal(msalConfig.cache.cacheLocation, 'sessionStorage');
+  assert.deepEqual(workerActions, ['refresh']);
+  assert.match(JSON.stringify(logs), /Authentication completed/);
+  assert.doesNotMatch(JSON.stringify(logs), /secret-token/);
 });

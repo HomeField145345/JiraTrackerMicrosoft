@@ -44,10 +44,13 @@ function fakeDocument() {
   return { getElementById: id => elements[id] || null, elements };
 }
 
-function setup({ oid = ids.ownerObjectId, connectResult, connectError, errorWorkbookUrl, userRole = 'admin' } = {}) {
+function setup({
+  oid = ids.ownerObjectId, connectResult, connectError, errorWorkbookUrl, userRole = 'admin', cachedAccounts = []
+} = {}) {
   const doc = fakeDocument();
   const actions = [];
   const messages = [];
+  let msalConfig;
   class FakeWorker {
     postMessage(message) {
       actions.push(message.action);
@@ -68,9 +71,14 @@ function setup({ oid = ids.ownerObjectId, connectResult, connectError, errorWork
   }
   const auth = { accessToken: 'token', account: { username: 'owner@example.com', name: 'Owner', idTokenClaims: { oid, tid: ids.tenantId } } };
   class FakeMsal {
+    constructor(config) { msalConfig = config; }
     async initialize() {}
     async acquireTokenPopup() { return auth; }
     async acquireTokenSilent() { return auth; }
+    getAllAccounts() { return cachedAccounts; }
+    getActiveAccount() { return cachedAccounts[0] || null; }
+    setActiveAccount() {}
+    getTokenCache() { return { removeAccount: async () => {} }; }
   }
   const bridge = createExcelBridge({
     document: doc,
@@ -79,7 +87,7 @@ function setup({ oid = ids.ownerObjectId, connectResult, connectError, errorWork
     Worker: FakeWorker,
     PublicClientApplication: FakeMsal
   });
-  return { bridge, doc, actions, messages };
+  return { bridge, doc, actions, messages, get msalConfig() { return msalConfig; } };
 }
 
 test('loads the workbook-matched profile after Microsoft sign-in', async () => {
@@ -101,6 +109,23 @@ test('loads the workbook-matched profile after Microsoft sign-in', async () => {
   await bridge.call('getProjectData', []);
   assert.deepEqual(actions, ['connect', 'refresh']);
   assert.deepEqual(await bridge.call('getConfigData', []), { config: dashboardData.config });
+});
+
+test('silently reconnects to the workbook using a cached Microsoft account', async () => {
+  const cachedAccount = {
+    username: 'owner@example.com',
+    tenantId: ids.tenantId,
+    idTokenClaims: { oid: ids.ownerObjectId, tid: ids.tenantId }
+  };
+  const result = setup({ cachedAccounts: [cachedAccount] });
+  const { bridge, doc, actions } = result;
+  await bridge.initialize();
+  await bridge.whenSignedIn();
+
+  assert.equal(result.msalConfig.cache.cacheLocation, 'sessionStorage');
+  assert.equal(bridge.isSignedIn(), true);
+  assert.equal(doc.elements['signin-panel'].classList.contains('hidden'), true);
+  assert.deepEqual(actions, ['connect']);
 });
 
 test('routes allowlisted dashboard edits to the workbook worker', async () => {

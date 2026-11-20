@@ -82,6 +82,16 @@ export function createExcelBridge({
     return result.projects;
   }
 
+  async function connect(auth) {
+    const accessToken = verifyTenant(auth);
+    const userObjectId = auth.account.idTokenClaims.oid;
+    pendingData = useResult(await runWorker('connect', accessToken, undefined, userObjectId, auth.account.username));
+    account = auth.account;
+    client.setActiveAccount(account);
+    element('signin-panel')?.classList.add('hidden');
+    resolveSignedIn();
+  }
+
   async function signIn() {
     if (!client || busy) return;
     busy = true;
@@ -90,13 +100,9 @@ export function createExcelBridge({
     element('signin-btn')?.setAttribute('disabled', '');
     setStatus('Connecting to Excel…');
     try {
-      const auth = await client.acquireTokenPopup({ scopes, account: account || undefined, prompt: account ? undefined : 'select_account' });
-      const accessToken = verifyTenant(auth);
-      const userObjectId = auth.account.idTokenClaims.oid;
-      pendingData = useResult(await runWorker('connect', accessToken, undefined, userObjectId, auth.account.username));
-      account = auth.account;
-      element('signin-panel')?.classList.add('hidden');
-      resolveSignedIn();
+      await connect(await client.acquireTokenPopup({
+        scopes, account: account || undefined, prompt: account ? undefined : 'select_account'
+      }));
     } catch (error) {
       account = null;
       profile = null;
@@ -187,7 +193,12 @@ export function createExcelBridge({
     pendingData = null;
     worker?.terminate();
     worker = null;
-    loc.reload();
+    Promise.all(client.getAllAccounts().map(cachedAccount => client.getTokenCache().removeAccount(cachedAccount)))
+      .then(() => {
+        client.setActiveAccount(null);
+        loc.reload();
+      })
+      .catch(error => setStatus(`Could not sign out of Microsoft. ${error.message}`));
   }
 
   async function initialize() {
@@ -208,10 +219,16 @@ export function createExcelBridge({
           authority: `https://login.microsoftonline.com/${config.tenantId}`,
           redirectUri: new URL('./excel-auth.html', loc.href).href
         },
-        cache: { cacheLocation: 'memoryStorage' }
+        cache: { cacheLocation: 'sessionStorage' }
       });
       await app.initialize();
       client = app;
+      const cachedAccounts = app.getAllAccounts().filter(cachedAccount =>
+        cachedAccount.tenantId?.toLowerCase() === config.tenantId.toLowerCase()
+      );
+      const activeAccount = app.getActiveAccount();
+      account = activeAccount?.tenantId?.toLowerCase() === config.tenantId.toLowerCase() ?
+        activeAccount : cachedAccounts.length === 1 ? cachedAccounts[0] : null;
       const button = element('signin-btn');
       if (button) {
         button.hidden = false;
@@ -219,6 +236,15 @@ export function createExcelBridge({
       }
       setStatus(config.target?.fileName ?
         `Sign in to load ${config.target.fileName}.` : 'Sign in to load your tracker workbook.');
+      if (account) {
+        setStatus('Reconnecting to Excel…');
+        try {
+          await connect(await client.acquireTokenSilent({ scopes, account }));
+        } catch (error) {
+          showSignIn(error.name === 'InteractionRequiredAuthError' ?
+            'Your Microsoft session needs you to sign in again.' : error.message);
+        }
+      }
     } catch (error) {
       setStatus(error.message);
     }

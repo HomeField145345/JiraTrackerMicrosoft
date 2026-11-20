@@ -109,6 +109,7 @@ async function run(action, getPayload) {
       throw new Error('Sign in with the Microsoft account configured as the tracker owner.');
     }
     account = auth.account;
+    client.setActiveAccount(account);
     stage = 'preparing request';
     const payload = getPayload ? await getPayload() : undefined;
     stage = 'workbook operation';
@@ -193,13 +194,18 @@ async function initialize() {
         authority: `https://login.microsoftonline.com/${config.tenantId}`,
         redirectUri: new URL('./excel-auth.html', location.href).href
       },
-      cache: { cacheLocation: 'memoryStorage' }
+      cache: { cacheLocation: 'sessionStorage' }
     });
     await app.initialize();
     client = app;
+    account = app.getAllAccounts().find(cachedAccount =>
+      cachedAccount.idTokenClaims?.oid?.toLowerCase() === config.ownerObjectId.toLowerCase() &&
+      cachedAccount.idTokenClaims?.tid?.toLowerCase() === config.tenantId.toLowerCase()
+    );
     element('status').textContent = config.target?.fileName ?
       `Sign in to connect to ${config.target.fileName}.` : 'Sign in to create or open your tracker workbook.';
     element('connect').hidden = false;
+    if (account) await run('refresh');
   } catch (error) {
     console.error('[Excel tracker] Initialization failed', {
       name: error.name,

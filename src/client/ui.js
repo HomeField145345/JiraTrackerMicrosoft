@@ -1344,16 +1344,16 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
         name.textContent = developer.developer;
         nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
-        var assignments = (unassigned && developer.unassignedIssues) || developer.stories || [];
-        var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint stories';
+        var assignments = developer.issues;
+        var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint issues';
         if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
             toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
-            var toggleText = (unassigned ? 'Issues' : 'Stories') + ' (' + numberFormat.format(assignments.length) + ')';
+            var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
             toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
             toggle.setAttribute('aria-expanded', 'false');
-            var detailsId = 'capacity-stories-' + sectionId + '-' + index;
+            var detailsId = 'capacity-issues-' + sectionId + '-' + index;
             toggle.setAttribute('aria-controls', detailsId);
             var label = document.createElement('span');
             label.textContent = toggleText;
@@ -1372,9 +1372,9 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
             detailsCell.colSpan = 6;
             detailsCell.className = 'px-4 py-3';
             if (assignments.length) {
-                renderCapacityAssignments_(detailsCell, assignments, detailsLabel, unassigned, numberFormat);
+                renderCapacityAssignments_(detailsCell, assignments, detailsLabel, numberFormat);
             } else {
-                detailsCell.textContent = 'No stories assigned for this sprint.';
+                detailsCell.textContent = 'No issues assigned for this sprint.';
             }
             toggle.addEventListener('click', function() {
                 var expand = detailsRow.hidden;
@@ -1435,14 +1435,13 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat) {
     }
 }
 
-function renderCapacityAssignments_(container, assignments, label, showIssueType, numberFormat) {
+function renderCapacityAssignments_(container, assignments, label, numberFormat) {
     var table = document.createElement('table');
     table.className = 'w-full text-sm text-black';
     table.setAttribute('aria-label', label);
     var header = table.createTHead().insertRow();
     header.className = 'border-b border-[#D8DADA] text-xs text-[#6F7171]';
-    var columns = ['Jira key', 'Summary', 'Status', 'Story points'];
-    if (showIssueType) columns.splice(2, 0, 'Type');
+    var columns = ['Jira key', 'Summary', 'Type', 'Status', 'Story points'];
     columns.forEach(function(label, index) {
         var cell = document.createElement('th');
         cell.scope = 'col';
@@ -1466,8 +1465,7 @@ function renderCapacityAssignments_(container, assignments, label, showIssueType
         } else {
             keyCell.textContent = issue.jiraKey || '—';
         }
-        var values = [issue.summary || 'Untitled', issue.status || '—', numberFormat.format(issue.storyPoints)];
-        if (showIssueType) values.splice(1, 0, issue.issueType || '—');
+        var values = [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', numberFormat.format(issue.storyPoints)];
         values.forEach(function(value, index) {
             var cell = row.insertCell();
             cell.className = 'px-3 py-2' + (index === values.length - 1 ? ' text-right tabular-nums' : '');

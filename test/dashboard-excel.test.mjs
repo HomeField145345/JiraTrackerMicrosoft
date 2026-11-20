@@ -270,17 +270,18 @@ test('capacity view shows developer workload and expands sprint assignments inde
   const future = {
     sprintName: 'Sprint 13', totalStoryPoints: 4, totalIssues: 1,
     developers: [{ developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1,
-      stories: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', status: 'To Do', storyPoints: 4 }] }]
+      issues: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', issueType: 'Story', status: 'To Do', storyPoints: 4 }] }]
   };
   const state = { allData: {
     sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 4, totalIssues: 3, developers: [
       { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: 2, remaining: -1,
-        stories: [{ jiraKey: 'TEAM-12', summary: 'Release fixes', status: 'Done', storyPoints: 3 }] },
-      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, stories: [] },
-      { developer: 'Casey', issueCount: 1, storyPoints: 1, capacity: 0, remaining: -1, stories: [] },
-      { developer: 'Drew', issueCount: 0, storyPoints: 0, capacity: 0, remaining: 0, stories: [] },
-      { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null, stories: [],
-        unassignedIssues: [{ jiraKey: 'TEAM-14', summary: 'Fix login', issueType: 'Bug', status: 'Open', storyPoints: 0 }] }
+        issues: [{ jiraKey: 'TEAM-12', summary: 'Release fixes', issueType: 'Custom work item', status: 'Done', storyPoints: 3 }] },
+      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, issues: [] },
+      { developer: 'Casey', issueCount: 1, storyPoints: 1, capacity: 0, remaining: -1,
+        issues: [{ jiraKey: 'TEAM-15', summary: 'Verify release', issueType: 'Task', status: 'Open', storyPoints: 1 }] },
+      { developer: 'Drew', issueCount: 0, storyPoints: 0, capacity: 0, remaining: 0, issues: [] },
+      { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null,
+        issues: [{ jiraKey: 'TEAM-14', summary: 'Fix login', issueType: 'Bug', status: 'Open', storyPoints: 0 }] }
     ] },
     futureSprintCapacity: [future]
   } };
@@ -310,19 +311,19 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(futureTrack.children[0].style.width, '80%');
   const [emptyName, emptyToggle] = emptyRow.children[0].children;
   assert.equal(emptyName.textContent, 'Blair');
-  assert.equal(emptyToggle.children[0].textContent, 'Stories (0)');
+  assert.equal(emptyToggle.children[0].textContent, 'Issues (0)');
   assert.equal(emptyDetails.hidden, true);
   emptyToggle.click();
   assert.equal(emptyDetails.hidden, false);
-  assert.equal(emptyDetails.children[0].textContent, 'No stories assigned for this sprint.');
+  assert.equal(emptyDetails.children[0].textContent, 'No issues assigned for this sprint.');
   assert.equal(emptyRow.children[5].textContent, 'Capacity not set');
   assert.deepEqual(zeroCapRow.children[5].children.map(child => child.textContent), ['Over capacity']);
   assert.deepEqual(zeroLoadRow.children[5].children.map(child => child.textContent), ['Zero capacity']);
   assert.equal(unassignedRow.children[5].textContent, 'Needs assignee');
   const currentToggle = currentRow.children[0].children[1];
   const futureToggle = futureRow.children[0].children[1];
-  assert.equal(currentToggle.children[0].textContent, 'Stories (1)');
-  assert.equal(futureToggle.children[0].textContent, 'Stories (1)');
+  assert.equal(currentToggle.children[0].textContent, 'Issues (1)');
+  assert.equal(futureToggle.children[0].textContent, 'Issues (1)');
   assert.equal(currentDetails.hidden, true);
   assert.equal(futureDetails.hidden, true);
   assert.equal(futureToggle.attributes['aria-expanded'], 'false');
@@ -342,9 +343,10 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(unassignedDetails.hidden, false);
   assert.deepEqual(storyCells(unassignedDetails).slice(1).map(cell => cell.textContent), ['Fix login', 'Bug', 'Open', '0']);
   assert.equal(storyCells(currentDetails)[0].children[0].textContent, 'TEAM-12');
+  assert.equal(storyCells(currentDetails)[2].textContent, 'Custom work item');
   const [key, ...fields] = storyCells(futureDetails);
   assert.equal(key.children[0].href, 'https://onejira.verizon.com/browse/TEAM-13');
-  assert.deepEqual(fields.map(cell => cell.textContent), ['Prepare next release', 'To Do', '4']);
+  assert.deepEqual(fields.map(cell => cell.textContent), ['Prepare next release', 'Story', 'To Do', '4']);
   futureToggle.click();
   assert.equal(futureDetails.hidden, true);
   assert.equal(currentDetails.hidden, false);

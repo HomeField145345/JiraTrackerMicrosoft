@@ -253,11 +253,11 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
   (items || []).forEach(function(item) {
     var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
     if (developer && developer.toLowerCase() !== 'unassigned' && !capacityByDeveloper.has(developer.toLowerCase())) {
-      capacityByDeveloper.set(developer.toLowerCase(), { developer: developer, issueCount: 0, storyPoints: 0, stories: [] });
+      capacityByDeveloper.set(developer.toLowerCase(), { developer: developer, storyPoints: 0, issues: [] });
     }
     if (!hasSprint) return;
-    var issueType = String(item['Issue Type'] || '').trim().toLowerCase();
-    if (issueType === 'epic') return;
+    var issueType = String(item['Issue Type'] || '').trim();
+    if (issueType.toLowerCase() === 'epic') return;
 
     var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
     var belongsToCurrentSprint = sprintEntries.some(function(entry) {
@@ -274,25 +274,17 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     var key = developer.toLowerCase();
     var entry = capacityByDeveloper.get(key);
     if (!entry) {
-      entry = { developer: developer, issueCount: 0, storyPoints: 0, stories: [] };
-      if (developer === 'Unassigned') entry.unassignedIssues = [];
+      entry = { developer: developer, storyPoints: 0, issues: [] };
       capacityByDeveloper.set(key, entry);
     }
-    entry.issueCount++;
     entry.storyPoints += points;
-    var isStory = issueType === 'story' || issueType === 'vzagile story';
-    if (isStory || entry.unassignedIssues) {
-      var issue = {
-        jiraKey: String(item['Jira #'] || '').trim(),
-        summary: String(item.Summary || '').trim(),
-        status: String(item.Status || '').trim(),
-        storyPoints: points
-      };
-      if (isStory) entry.stories.push(issue);
-      if (entry.unassignedIssues) {
-        entry.unassignedIssues.push(Object.assign({ issueType: String(item['Issue Type'] || '').trim() }, issue));
-      }
-    }
+    entry.issues.push({
+      jiraKey: String(item['Jira #'] || '').trim(),
+      summary: String(item.Summary || '').trim(),
+      issueType: issueType,
+      status: String(item.Status || '').trim(),
+      storyPoints: points
+    });
     totalIssues++;
     totalStoryPoints += points;
   });
@@ -300,6 +292,7 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
   var developers = Array.from(capacityByDeveloper.values()).map(function(entry) {
     var config = entry.developer === 'Unassigned' ? null : configuredCapacity.get(entry.developer.toLowerCase());
     var capacity = config && config.capacity != null ? config.capacity : null;
+    entry.issueCount = entry.issues.length;
     entry.capacity = capacity;
     entry.remaining = capacity == null || !hasSprint ? null : capacity - entry.storyPoints;
     return entry;

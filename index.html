@@ -384,10 +384,8 @@
 
     <main class="main">
       <div id="table-controls" class="table-controls-bar" style="display: none;">
-    <div class="flex items-center justify-between w-full">
-      <div class="flex items-center gap-3">
-        <!-- View Toggles (Moved from Quick Links) -->
-        <div class="flex items-center gap-2 border-r pr-3 border-gray-200">
+    <div class="table-controls-layout">
+        <div class="table-controls-group" role="group" aria-label="Issue types">
            <button class="filter-toggle active" id="filter-toggle-stories" title="Show/Hide Stories">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
@@ -417,7 +415,7 @@
            </div>
         </div>
 
-        <div class="flex items-center gap-2 border-r pr-3 border-gray-200">
+        <div class="table-controls-group" role="group" aria-label="Issue visibility">
            <button class="filter-toggle" id="filter-toggle-closed" title="Show/Hide Closed Items">
               <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="9 11 12 14 22 4"></polyline>
@@ -433,21 +431,21 @@
            </button>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="table-controls-group" role="group" aria-label="Epic rows">
           <button id="expandAllBtn" class="btn" title="Expand All Epics">
-            <span>📂</span> Expand All
+            Expand all
           </button>
           <button id="collapseAllBtn" class="btn" title="Collapse All Epics">
-            <span>📁</span> Collapse All
+            Collapse all
           </button>
         </div>
         
-        <div class="flex items-center gap-2">
-          <div id="filter-container" class="relative">
+        <div class="table-controls-group table-controls-filters" role="group" aria-label="Filters">
+          <div id="filter-container">
             <button id="filter-toggle-btn" class="btn">Filters</button>
-            <div id="filter-popup" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg p-4 border border-gray-200 z-50">
-              <h4 class="font-semibold mb-2">Filter by</h4>
-              <div class="space-y-3">
+            <div id="filter-popup" class="hidden">
+              <h4>Filter by</h4>
+              <div class="filter-popup-options">
                 <!-- Multi-select dropdowns with checkboxes -->
                 <div class="filter-dropdown" data-filter="status">
                   <button class="filter-dropdown-toggle w-full text-left select">
@@ -544,9 +542,7 @@
             <span class="filter-badge">Filters Active</span>
           </div>
         </div>
-      </div>
-      
-      <div id="count" class="text-sm text-gray-600" style="min-width: 120px; text-align: right;"></div>
+      <div id="count"></div>
     </div>
       </div>
       <div id="content-wrapper" class="content-wrapper">

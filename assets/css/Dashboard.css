@@ -723,6 +723,10 @@
         .table-controls-filters {
             margin-inline-start: 0;
         }
+
+        #filter-popup {
+            inset-inline: 0 auto;
+        }
     }
     
     .table-controls-bar .filters-section select {

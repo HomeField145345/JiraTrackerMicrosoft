@@ -28,6 +28,10 @@ Use an existing blank workbook (a blank `Sheet1` is fine) or a workbook with onl
 
 Use the workbook as an app-managed file: keep its name, tabs and headers unchanged, and close Excel before saving changes from the tracker. Although setup preserves existing formatting, later task saves and CSV imports still replace the workbook and do not preserve custom formatting or other Excel features; keep a backup or use a copy for those features. These writes check its Microsoft revision before committing; the tracker is intended for one writer, not simultaneous Excel editing or concurrent use across devices. In-place setup does not enable live sync. The Excel workbook limit is 20 MiB.
 
+## Dashboard filters
+
+The Dashboard toolbar groups issue types, visibility toggles, and epic row controls. These groups wrap on narrower screens. Open **Filters** for detailed options such as Jira status, sprint, and assignee.
+
 ## Developer capacity
 
 Admins can open **Actions > Configuration > Developer capacity** to set a non-negative story-point capacity for each distinct JiraData assignee. Leave a value blank if it is unknown; zero is a valid capacity. These are recurring per-sprint values, not sprint-specific history. The **Capacity** view shows the current sprint and identifiable future sprints present in the workbook. For each sprint it subtracts assigned story points, including completed issues, from capacity; a negative result indicates over-allocation. Epics are excluded, and unestimated issues count as zero points.

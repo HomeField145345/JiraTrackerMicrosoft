@@ -442,7 +442,7 @@
         
         <div class="table-controls-group table-controls-filters" role="group" aria-label="Filters">
           <div id="filter-container">
-            <button id="filter-toggle-btn" class="btn">Filters</button>
+            <button id="filter-toggle-btn" class="btn" aria-controls="filter-popup">Filters</button>
             <div id="filter-popup" class="hidden">
               <h4>Filter by</h4>
               <div class="filter-popup-options">
@@ -532,14 +532,12 @@
             </div>
           </div>
           
-          <!-- Quick filters dropdown removed -->
-          
           <button id="clearFiltersBtn" class="btn btn-sm btn-danger" style="display: none;">
-            Clear Filters
+            Clear filters
           </button>
           
           <div id="activeFiltersIndicator" class="active-filters-indicator" style="display: none;">
-            <span class="filter-badge">Filters Active</span>
+            <span class="filter-badge">Filters active</span>
           </div>
         </div>
       <div id="count"></div>

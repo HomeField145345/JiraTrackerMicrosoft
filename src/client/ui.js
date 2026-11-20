@@ -1329,22 +1329,23 @@ function renderDeveloperCapacityConfig() {
     }
     developers.forEach(function(name, index) {
         var row = body.insertRow();
-        row.className = 'border-b border-gray-200';
+        row.className = 'hover:bg-[#F6F6F6] transition-colors';
         var nameCell = row.insertCell();
-        nameCell.className = 'px-3 py-3';
+        nameCell.className = 'px-4 py-3';
         var label = document.createElement('label');
         label.htmlFor = 'developer-capacity-' + index;
+        label.className = 'text-black font-normal';
         label.textContent = name;
         nameCell.appendChild(label);
         var cell = row.insertCell();
-        cell.className = 'px-3 py-3';
+        cell.className = 'px-4 py-3 text-right';
         var input = document.createElement('input');
         input.id = label.htmlFor;
         input.type = 'number';
         input.min = '0';
         input.step = 'any';
         input.dataset.developer = name;
-        input.className = 'border border-gray-400 rounded-xl px-3 py-2 w-32';
+        input.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-28 text-right bg-white';
         var capacity = capacities.get(name.toLowerCase());
         input.value = capacity == null ? '' : String(capacity);
         cell.appendChild(input);

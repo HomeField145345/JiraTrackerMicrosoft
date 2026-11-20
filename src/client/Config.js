@@ -3,34 +3,57 @@
         var listEl = document.getElementById('linksList');
         if (!listEl) return; // Guard clause for when running in dashboard context if elements aren't ready
         
-        listEl.innerHTML = '';
+        listEl.replaceChildren();
         if (!links || links.length === 0) {
-            listEl.innerHTML = '<p class="text-sm text-gray-500">No links configured yet.</p>';
+            var empty = document.createElement('p');
+            empty.className = 'text-sm text-[#6F7171] py-2';
+            empty.textContent = 'No links configured yet.';
+            listEl.appendChild(empty);
             return;
         }
 
         links.forEach(function(link, index) {
             var linkEl = document.createElement('div');
-            linkEl.className = 'flex items-center justify-between bg-gray-50 p-2 rounded-md';
+            linkEl.className = 'flex items-center justify-between gap-4 py-3';
             // Store the full URL in a data attribute
-            linkEl.setAttribute('data-url', link.url); 
-            
-            linkEl.innerHTML =
-                '<div style="overflow: hidden;">' + // Add a wrapper to prevent long text from breaking layout
-                    '<span class="font-medium text-sm">' + link.title + '</span>' +
-                    // Use a p tag for display, but it won't be used for saving
-                    '<p class="text-xs text-gray-500 truncate">' + link.url + '</p>' + 
-                '</div>' +
-                '<button data-index="' + index + '" class="remove-link-btn text-sm text-red-500 hover:text-red-700 ml-4 flex-shrink-0">Remove</button>';
+            linkEl.setAttribute('data-url', link.url);
+
+            var info = document.createElement('div');
+            info.className = 'min-w-0';
+
+            var titleSpan = document.createElement('span');
+            titleSpan.className = 'font-medium text-sm text-black block truncate';
+            titleSpan.textContent = link.title;
+
+            var urlP = document.createElement('p');
+            urlP.className = 'text-xs text-[#6F7171] truncate mt-0.5';
+            urlP.textContent = link.url;
+
+            info.appendChild(titleSpan);
+            info.appendChild(urlP);
+
+            var removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.setAttribute('data-index', String(index));
+            removeBtn.className = 'remove-link-btn config-link-action shrink-0';
+            removeBtn.textContent = 'Remove';
+
+            linkEl.appendChild(info);
+            linkEl.appendChild(removeBtn);
             listEl.appendChild(linkEl);
         });
     }
 
     function handleConfigFailure_(error) {
         var statusEl = document.getElementById('configStatus');
+        var saveBtn = document.getElementById('saveConfigBtn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save changes';
+        }
         if (statusEl) {
             statusEl.textContent = 'Error: ' + error.message;
-            statusEl.className = 'mt-4 text-sm text-red-600 text-right';
+            statusEl.className = 'text-sm config-status-error';
         } else {
             console.error('Config Error:', error);
             alert('Config Error: ' + error.message);
@@ -50,136 +73,262 @@
         bug: []
     };
     var availableStatuses = [];
+    var workbookUsers = [];
+    var editingUserIndex = null;
 
-    function appendUserRow(user) {
-        var body = document.getElementById('users-body');
-        if (!body) return;
-        user = user || {};
+    function syncConfigFooter_(targetSelector) {
+        var isCapacity = targetSelector === '#tab-developer-capacity';
+        var isUsers = targetSelector === '#tab-users';
+        var isWorkspace = !isCapacity && !isUsers;
 
-        var row = document.createElement('tr');
-        row.className = 'border-b border-gray-200';
-        row.dataset.userId = user.id == null ? '' : String(user.id);
+        var toggle = function(id, visible) {
+            var el = document.getElementById(id);
+            if (el) el.classList.toggle('hidden', !visible);
+        };
 
-        function appendInput(field, value, type, required, maxLength) {
-            var cell = document.createElement('td');
-            cell.className = 'px-2 py-2';
-            var input = document.createElement('input');
-            input.type = type;
-            input.value = value == null ? '' : String(value);
-            input.dataset.field = field;
-            input.setAttribute('aria-label', field);
-            input.required = Boolean(required);
-            if (maxLength) input.maxLength = maxLength;
-            input.className = 'w-full min-w-32 rounded border border-gray-300 px-2 py-1';
-            if (field === 'microsoftObjectId') {
-                input.maxLength = 36;
-                input.pattern = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
-                input.required = !row.dataset.userId;
-                input.title = 'Enter the user’s Microsoft Object ID.';
-            }
-            cell.appendChild(input);
-            row.appendChild(cell);
-            return input;
+        toggle('saveConfigBtn', isWorkspace);
+        toggle('configStatus', isWorkspace);
+        toggle('save-developer-capacity', isCapacity);
+        toggle('developer-capacity-status', isCapacity);
+        toggle('save-users', isUsers);
+        toggle('users-status', isUsers);
+    }
+
+    function setUsersStatus_(message, tone) {
+        var status = document.getElementById('users-status');
+        if (!status) return;
+        status.textContent = message;
+        status.className = 'text-sm ' + (tone === 'success' ? 'config-status-success' :
+            tone === 'error' ? 'config-status-error' : 'config-status-neutral');
+    }
+
+    function closeUserEditor_() {
+        editingUserIndex = null;
+        var panel = document.getElementById('user-editor-panel');
+        var err = document.getElementById('user-editor-error');
+        if (panel) panel.classList.add('hidden');
+        if (err) err.textContent = '';
+    }
+
+    function openUserEditor_(index) {
+        var panel = document.getElementById('user-editor-panel');
+        if (!panel) return;
+        editingUserIndex = typeof index === 'number' ? index : null;
+        var user = editingUserIndex !== null ? workbookUsers[editingUserIndex] : {
+            id: '',
+            username: '',
+            email: '',
+            displayName: '',
+            role: 'user',
+            isActive: true,
+            microsoftObjectId: ''
+        };
+
+        var titleEl = document.getElementById('user-editor-title');
+        if (titleEl) titleEl.textContent = editingUserIndex !== null ? 'Edit user' : 'Add user';
+
+        var displayNameEl = document.getElementById('user-edit-display-name');
+        var usernameEl = document.getElementById('user-edit-username');
+        var emailEl = document.getElementById('user-edit-email');
+        var roleEl = document.getElementById('user-edit-role');
+        var objectIdEl = document.getElementById('user-edit-object-id');
+        var activeEl = document.getElementById('user-edit-active');
+        var errEl = document.getElementById('user-editor-error');
+
+        if (displayNameEl) displayNameEl.value = user.displayName || '';
+        if (usernameEl) usernameEl.value = user.username || '';
+        if (emailEl) emailEl.value = user.email || '';
+        if (objectIdEl) objectIdEl.value = user.microsoftObjectId || '';
+        if (activeEl) activeEl.checked = user.isActive === undefined ? true : user.isActive === true;
+        if (errEl) errEl.textContent = '';
+
+        if (roleEl) {
+            roleEl.replaceChildren();
+            var roles = ['user', 'admin'];
+            var existingRole = String(user.role || '').trim().toLowerCase();
+            if (existingRole && roles.indexOf(existingRole) === -1) roles.push(existingRole);
+            roles.forEach(function(role) {
+                var option = document.createElement('option');
+                option.value = role;
+                option.textContent = role.charAt(0).toUpperCase() + role.slice(1).replace(/_/g, ' ');
+                roleEl.appendChild(option);
+            });
+            roleEl.value = existingRole || 'user';
         }
 
-        appendInput('username', user.username, 'text', true, 128);
-        appendInput('email', user.email, 'email', !row.dataset.userId, 254);
-        appendInput('displayName', user.displayName, 'text', !row.dataset.userId, 128);
+        panel.classList.remove('hidden');
+        if (displayNameEl) displayNameEl.focus();
+    }
 
-        var roleCell = document.createElement('td');
-        roleCell.className = 'px-2 py-2';
-        var roleSelect = document.createElement('select');
-        roleSelect.dataset.field = 'role';
-        roleSelect.setAttribute('aria-label', 'Role');
-        roleSelect.className = 'w-full min-w-28 rounded border border-gray-300 px-2 py-1';
-        var roles = ['user', 'admin'];
-        var existingRole = String(user.role || '').trim().toLowerCase();
-        if (existingRole && !roles.includes(existingRole)) roles.push(existingRole);
-        roles.forEach(function(role) {
-            var option = document.createElement('option');
-            option.value = role;
-            option.textContent = role.replace(/_/g, ' ');
-            roleSelect.appendChild(option);
-        });
-        roleSelect.value = existingRole || 'user';
-        roleCell.appendChild(roleSelect);
-        row.appendChild(roleCell);
+    function applyUserEditor_() {
+        var panel = document.getElementById('user-editor-panel');
+        if (!panel || panel.classList.contains('hidden')) return true;
 
-        var activeCell = document.createElement('td');
-        activeCell.className = 'px-2 py-2 text-center';
-        var activeInput = document.createElement('input');
-        activeInput.type = 'checkbox';
-        activeInput.dataset.field = 'isActive';
-        activeInput.setAttribute('aria-label', 'Active');
-        activeInput.checked = user.isActive === undefined ? true : user.isActive === true;
-        activeCell.appendChild(activeInput);
-        row.appendChild(activeCell);
+        var displayNameEl = document.getElementById('user-edit-display-name');
+        var usernameEl = document.getElementById('user-edit-username');
+        var emailEl = document.getElementById('user-edit-email');
+        var roleEl = document.getElementById('user-edit-role');
+        var objectIdEl = document.getElementById('user-edit-object-id');
+        var activeEl = document.getElementById('user-edit-active');
+        var errEl = document.getElementById('user-editor-error');
 
-        appendInput('microsoftObjectId', user.microsoftObjectId, 'text', false, 36);
-        body.appendChild(row);
+        var existing = editingUserIndex !== null ? workbookUsers[editingUserIndex] : null;
+        var isNew = !existing || !existing.id;
+        var username = usernameEl ? usernameEl.value.trim() : '';
+        var displayName = (displayNameEl ? displayNameEl.value.trim() : '') || username;
+        var email = emailEl ? emailEl.value.trim() : '';
+        var role = roleEl ? roleEl.value.trim().toLowerCase() : 'user';
+        var microsoftObjectId = objectIdEl ? objectIdEl.value.trim() : '';
+        var isActive = activeEl ? activeEl.checked : true;
+
+        var showError = function(msg, focusEl) {
+            if (errEl) errEl.textContent = msg;
+            if (focusEl) focusEl.focus();
+            return false;
+        };
+
+        if (!username || username.length > 128) {
+            return showError('Enter a username up to 128 characters.', usernameEl);
+        }
+        if ((isNew && !email) || email.length > 254 || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) {
+            return showError('Enter a valid email address.', emailEl);
+        }
+        if (isNew && !microsoftObjectId) {
+            return showError('New users require a Microsoft Object ID.', objectIdEl);
+        }
+        if (microsoftObjectId && !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(microsoftObjectId)) {
+            return showError('Enter a valid 36-character Microsoft Object ID.', objectIdEl);
+        }
+
+        var updated = {
+            id: existing ? (existing.id || '') : '',
+            username: username,
+            email: email,
+            displayName: displayName,
+            role: role || 'user',
+            isActive: isActive,
+            microsoftObjectId: microsoftObjectId
+        };
+
+        if (editingUserIndex !== null) {
+            workbookUsers[editingUserIndex] = updated;
+        } else {
+            workbookUsers.push(updated);
+        }
+
+        closeUserEditor_();
+        renderUsers(workbookUsers);
+        setUsersStatus_('Unsaved changes. Select Save users to commit.', 'neutral');
+        return true;
     }
 
     function renderUsers(users) {
         var body = document.getElementById('users-body');
         if (!body) return;
+        workbookUsers = Array.isArray(users) ? users.map(function(user) {
+            return {
+                id: user.id == null ? '' : String(user.id),
+                username: user.username || '',
+                email: user.email || '',
+                displayName: user.displayName || '',
+                role: String(user.role || 'user').trim().toLowerCase(),
+                isActive: user.isActive === undefined ? true : user.isActive === true,
+                microsoftObjectId: user.microsoftObjectId || ''
+            };
+        }) : [];
         body.replaceChildren();
-        users.forEach(appendUserRow);
+
+        if (!workbookUsers.length) {
+            var emptyRow = document.createElement('tr');
+            var emptyCell = document.createElement('td');
+            emptyCell.colSpan = 4;
+            emptyCell.className = 'px-4 py-6 text-sm text-[#6F7171]';
+            emptyCell.textContent = 'No users found.';
+            emptyRow.appendChild(emptyCell);
+            body.appendChild(emptyRow);
+            return;
+        }
+
+        workbookUsers.forEach(function(user, index) {
+            var row = document.createElement('tr');
+            row.className = 'hover:bg-[#F6F6F6] transition-colors';
+
+            var userCell = document.createElement('td');
+            userCell.className = 'px-4 py-3';
+            var nameEl = document.createElement('div');
+            nameEl.className = 'font-medium text-black';
+            nameEl.textContent = user.displayName || user.username;
+            var metaEl = document.createElement('div');
+            metaEl.className = 'text-xs text-[#6F7171] mt-0.5';
+            metaEl.textContent = user.email ? (user.username && user.username !== user.email ? user.email + ' · ' + user.username : user.email) : user.username;
+            userCell.appendChild(nameEl);
+            userCell.appendChild(metaEl);
+            row.appendChild(userCell);
+
+            var roleCell = document.createElement('td');
+            roleCell.className = 'px-4 py-3';
+            var roleBadge = document.createElement('span');
+            roleBadge.className = 'config-badge config-badge-role';
+            var roleLabel = user.role || 'user';
+            roleBadge.textContent = roleLabel.charAt(0).toUpperCase() + roleLabel.slice(1).replace(/_/g, ' ');
+            roleCell.appendChild(roleBadge);
+            row.appendChild(roleCell);
+
+            var statusCell = document.createElement('td');
+            statusCell.className = 'px-4 py-3';
+            var statusBadge = document.createElement('span');
+            statusBadge.className = 'config-badge ' + (user.isActive ? 'config-badge-active' : 'config-badge-inactive');
+            statusBadge.textContent = user.isActive ? 'Active' : 'Inactive';
+            statusCell.appendChild(statusBadge);
+            row.appendChild(statusCell);
+
+            var actionCell = document.createElement('td');
+            actionCell.className = 'px-4 py-3 text-right';
+            var editBtn = document.createElement('button');
+            editBtn.type = 'button';
+            editBtn.className = 'config-link-action';
+            editBtn.textContent = 'Edit';
+            editBtn.addEventListener('click', function() {
+                openUserEditor_(index);
+            });
+            actionCell.appendChild(editBtn);
+            row.appendChild(actionCell);
+
+            body.appendChild(row);
+        });
     }
 
     function loadUsers() {
-        var status = document.getElementById('users-status');
-        if (status) status.textContent = 'Loading users…';
+        closeUserEditor_();
+        setUsersStatus_('Loading users…', 'neutral');
         return callServer('getUsers', []).then(function(users) {
             if (!Array.isArray(users)) throw new Error('The workbook returned an invalid user list.');
             renderUsers(users);
-            if (status) status.textContent = users.length + (users.length === 1 ? ' user loaded.' : ' users loaded.');
+            setUsersStatus_(users.length + (users.length === 1 ? ' user loaded.' : ' users loaded.'), 'neutral');
         }).catch(function(error) {
-            if (status) status.textContent = 'Could not load users: ' + getErrorMessage_(error);
+            setUsersStatus_('Could not load users: ' + getErrorMessage_(error), 'error');
         });
     }
 
     function saveUsers(event) {
         event.preventDefault();
-        var body = document.getElementById('users-body');
-        var status = document.getElementById('users-status');
+        if (!applyUserEditor_()) return;
         var button = document.getElementById('save-users');
-        var invalid = body.querySelector(':invalid');
-        if (invalid) {
-            status.textContent = 'Complete required fields and correct invalid values.';
-            invalid.focus();
-            return;
-        }
 
-        var users = Array.from(body.querySelectorAll('tr')).map(function(row) {
-            function value(field) {
-                var input = row.querySelector('[data-field="' + field + '"]');
-                return input ? input.value.trim() : '';
-            }
-            return {
-                id: row.dataset.userId,
-                username: value('username'),
-                email: value('email'),
-                displayName: value('displayName'),
-                role: value('role'),
-                isActive: row.querySelector('[data-field="isActive"]').checked,
-                microsoftObjectId: value('microsoftObjectId')
-            };
-        });
-
-        button.disabled = true;
-        status.textContent = 'Saving users…';
-        callServer('saveUsers', [users]).then(function(response) {
+        if (button) button.disabled = true;
+        setUsersStatus_('Saving users…', 'neutral');
+        callServer('saveUsers', [workbookUsers]).then(function(response) {
             if (!response || response.status !== 'success') {
                 throw new Error(response && response.message ? response.message : 'Could not save users.');
             }
             return callServer('getUsers', []).then(function(savedUsers) {
                 renderUsers(savedUsers);
-                status.textContent = 'Users saved.';
+                setUsersStatus_('Users saved.', 'success');
             });
         }).catch(function(error) {
-            status.textContent = getErrorMessage_(error);
+            setUsersStatus_(getErrorMessage_(error), 'error');
         }).finally(function() {
-            button.disabled = false;
+            if (button) button.disabled = false;
         });
     }
 
@@ -189,15 +338,17 @@
         if (_configUiInitialized) return;
         _configUiInitialized = true;
 
-        // Tabs: simple toggling between panels
+        // Sidebar navigation toggling between panels + context-aware footer
         document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected', 'false'); });
                 document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.add('hidden'); });
                 btn.classList.add('active');
                 btn.setAttribute('aria-selected', 'true');
-                var target = document.querySelector(btn.dataset.target);
+                var targetSelector = btn.dataset.target;
+                var target = document.querySelector(targetSelector);
                 if (target) target.classList.remove('hidden');
+                syncConfigFooter_(targetSelector);
             });
         });
 
@@ -205,8 +356,12 @@
         if (usersForm) usersForm.addEventListener('submit', saveUsers);
         var addUserButton = document.getElementById('add-user-row');
         if (addUserButton) addUserButton.addEventListener('click', function() {
-            appendUserRow({ role: 'user', isActive: true });
+            openUserEditor_(null);
         });
+        var applyUserButton = document.getElementById('user-editor-apply');
+        if (applyUserButton) applyUserButton.addEventListener('click', applyUserEditor_);
+        var cancelUserButton = document.getElementById('user-editor-cancel');
+        if (cancelUserButton) cancelUserButton.addEventListener('click', closeUserEditor_);
 
         // Clean buttons: dedupe, trim, sort
         document.querySelectorAll('[data-clean-for]').forEach(function(el) {
@@ -284,7 +439,7 @@
 
                 callServer('saveConfiguration', [optionsData]).then(function(response) {
                         if (response.status === 'success') {
-                            if (statusEl) { statusEl.textContent = response.message || 'Configuration Saved!'; statusEl.className = 'text-sm text-green-600'; }
+                            if (statusEl) { statusEl.textContent = response.message || 'Configuration saved.'; statusEl.className = 'text-sm config-status-success'; }
                             try {
                                 // Apply new config immediately across the dashboard.
                                 if (typeof refreshData === 'function') {
@@ -297,7 +452,7 @@
                             handleConfigFailure_(new Error(response.message));
                         }
                         saveBtn.disabled = false;
-                        saveBtn.textContent = 'Save Configuration';
+                        saveBtn.textContent = 'Save changes';
                         setTimeout(function() { if (statusEl) statusEl.textContent = ''; }, 3000);
                     }, handleConfigFailure_);
             });
@@ -359,13 +514,23 @@
             tab.hidden = !isAdmin;
             tab.classList.toggle('hidden', !isAdmin);
         });
+        var activeTab = document.querySelector('.tab-btn.active');
+        if (!isAdmin && activeTab && activeTab.hasAttribute('data-admin-only')) {
+            var defaultTab = document.querySelector('.tab-btn[data-target="#tab-dropdowns"]');
+            if (defaultTab) defaultTab.click();
+        } else {
+            syncConfigFooter_(activeTab ? activeTab.dataset.target : '#tab-dropdowns');
+        }
         if (isAdmin) {
             if (typeof renderDeveloperCapacityConfig === 'function') renderDeveloperCapacityConfig();
             loadUsers();
         }
 
         var statusEl = document.getElementById('configStatus');
-        if (statusEl) statusEl.textContent = 'Loading configuration...';
+        if (statusEl) {
+            statusEl.textContent = 'Loading configuration…';
+            statusEl.className = 'text-sm config-status-neutral';
+        }
 
         callServer('getConfigData', []).then(onConfigDataLoaded, handleConfigFailure_);
     };
@@ -378,9 +543,7 @@
         }
         
         container.innerHTML = '';
-        // Reset class to ensure it matches the new layout if needed, but keep the grid
-        // Use fixed height to match textareas (approx h-60) and ensure scrolling
-        container.className = 'mt-1 w-full rounded-md border border-gray-300 shadow-sm p-2 h-60 overflow-y-auto bg-white';
+        container.className = 'w-full rounded-lg border border-[#D8DADA] p-3 max-h-56 overflow-y-auto bg-white';
         
         var selectedSet = new Set(selectedStages || []);
         var hasAnyStages = false;
@@ -391,23 +554,23 @@
             hasAnyStages = true;
 
             var groupHeader = document.createElement('div');
-            groupHeader.className = 'text-xs font-bold text-gray-500 uppercase tracking-wider mt-2 mb-1 pb-1 border-b border-gray-100';
+            groupHeader.className = 'text-xs font-semibold text-[#6F7171] uppercase tracking-wider mt-3 first:mt-0 mb-1.5 pb-1 border-b border-[#D8DADA]';
             groupHeader.textContent = title;
             container.appendChild(groupHeader);
 
             stages.forEach(function(stage) {
                 var label = document.createElement('label');
-                label.className = 'flex items-center space-x-2 p-1 hover:bg-gray-100 rounded cursor-pointer ml-1';
+                label.className = 'flex items-center space-x-2 p-1.5 hover:bg-[#F6F6F6] rounded cursor-pointer';
                 
                 var checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.value = stage;
                 checkbox.checked = selectedSet.has(stage);
-                checkbox.className = 'form-checkbox h-4 w-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500';
+                checkbox.className = 'form-checkbox h-4 w-4 text-black rounded border-[#D8DADA]';
                 
                 var span = document.createElement('span');
                 span.textContent = stage;
-                span.className = 'text-sm text-gray-700 truncate';
+                span.className = 'text-sm text-black truncate';
                 span.title = stage; // Tooltip for long names
                 
                 label.appendChild(checkbox);
@@ -422,7 +585,7 @@
         renderGroup('Bug Options', groupedStages.bug);
 
         if (!hasAnyStages) {
-            container.innerHTML = '<p class="text-sm text-gray-500 p-2">No Project Stages defined. Please add options to any of the "Project Stage Options" lists below.</p>';
+            container.innerHTML = '<p class="text-sm text-[#6F7171] p-1">No project stages defined. Add options to the Project stages lists above.</p>';
         }
     }
 
@@ -522,14 +685,11 @@
         
         
         
-        // Update tab buttons
+        // Update segmented tab buttons
         document.querySelectorAll('.mapping-tab-btn').forEach(function(btn) {
-            btn.classList.remove('border-blue-500', 'text-blue-600');
-            btn.classList.add('border-transparent');
-            if (btn.getAttribute('data-type') === type) {
-                btn.classList.add('border-blue-500', 'text-blue-600');
-                btn.classList.remove('border-transparent');
-            }
+            var isMatch = btn.getAttribute('data-type') === type;
+            btn.classList.toggle('active', isMatch);
+            btn.setAttribute('aria-selected', isMatch ? 'true' : 'false');
         });
         
         // Show/hide panels

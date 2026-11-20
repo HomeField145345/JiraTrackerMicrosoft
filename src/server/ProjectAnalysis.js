@@ -112,7 +112,11 @@ function getProjectData_(user, targetUsername) {
       return visibleDevelopers.has(entry.developer.toLowerCase());
     });
   }
-  data.sprintCapacity = analyzeSprintCapacity(data.projects, data.sprintStats.currentSprintName, data.developerCapacity);
+  var capacityPlan = analyzeSprintCapacityPlan(
+    data.projects, data.projects.concat(data.independentTasks), data.sprintStats, data.developerCapacity
+  );
+  data.sprintCapacity = capacityPlan.current;
+  data.futureSprintCapacity = capacityPlan.future;
   return data;
 }
 

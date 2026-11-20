@@ -296,3 +296,53 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     developers: developers
   };
 }
+
+function analyzeSprintCapacityPlan(projects, sprintItems, sprintStats, capacityEntries) {
+  var now = new Date();
+  var sprints = new Map();
+  (sprintItems || []).forEach(function(item) {
+    parseSprintEntries_(item.sprint || item.Sprint).forEach(function(entry) {
+      var name = formatSprint(entry.name);
+      if (name === '—') name = entry.name;
+      if (!name) return;
+      var key = name.toLowerCase();
+      var sprint = sprints.get(key);
+      if (!sprint) {
+        sprint = { name: name, states: new Set(), startDate: null };
+        sprints.set(key, sprint);
+      }
+      if (entry.state) sprint.states.add(entry.state);
+      if (entry.startDate && (!sprint.startDate || entry.startDate < sprint.startDate)) {
+        sprint.startDate = entry.startDate;
+      }
+    });
+  });
+
+  var currentName = String(sprintStats.currentSprintName || 'None');
+  var current = sprints.get(currentName.toLowerCase());
+  var isClosed = function(sprint) {
+    return sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED');
+  };
+  if (current && !current.states.has('ACTIVE') && !isClosed(current) &&
+      (current.states.has('FUTURE') || (current.startDate && current.startDate > now))) {
+    currentName = 'None';
+  }
+  var currentNumber = currentName.match(/^Sprint\s*(\d+)$/i);
+  var future = Array.from(sprints.values()).filter(function(sprint) {
+    if (sprint.name.toLowerCase() === currentName.toLowerCase() ||
+        sprint.states.has('ACTIVE') || isClosed(sprint)) return false;
+    if (sprint.states.has('FUTURE')) return true;
+    if (sprint.startDate) return sprint.startDate > now;
+    var number = sprint.name.match(/^Sprint\s*(\d+)$/i);
+    return Boolean(currentNumber && number && Number(number[1]) > Number(currentNumber[1]));
+  }).sort(function(a, b) {
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return {
+    current: analyzeSprintCapacity(projects, currentName, capacityEntries),
+    future: future.map(function(sprint) {
+      return analyzeSprintCapacity(projects, sprint.name, capacityEntries);
+    })
+  };
+}

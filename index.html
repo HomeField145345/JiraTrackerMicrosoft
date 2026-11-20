@@ -564,7 +564,7 @@
           <div>
             <h2 id="capacity-title" class="text-xl font-semibold text-gray-900">Sprint capacity</h2>
             <p id="capacity-sprint-name" class="text-sm text-gray-600 mt-1">Current sprint</p>
-            <p class="text-sm text-gray-600 mt-2">Remaining is capacity minus assigned story points, including completed issues.</p>
+            <p class="text-sm text-gray-600 mt-2">Remaining is capacity minus assigned story points, including completed issues. Capacity repeats each sprint.</p>
           </div>
           <div class="flex items-baseline gap-6" aria-live="polite">
             <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-points">0</span><span class="text-sm text-gray-600 ml-2">story points</span></div>
@@ -587,6 +587,7 @@
             </tbody>
           </table>
         </div>
+        <div id="future-sprint-capacities" class="px-4 pb-4"></div>
       </section>
 
       <!-- My Tasks View -->

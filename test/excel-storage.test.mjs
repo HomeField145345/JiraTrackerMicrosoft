@@ -161,6 +161,8 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       item.eTag = '"external-change"';
     },
     analyzeCapacity: (items, sprintName, entries) => context.analyzeSprintCapacity(items, sprintName, entries),
+    analyzeCapacityPlan: (projects, items, entries) =>
+      context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries),
     interfere: () => { interfere = true; },
     changeOnDownload: () => { changeOnDownload = true; }
   };
@@ -200,6 +202,40 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
     assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
       { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: 0, remaining: null }
     ]);
+});
+
+test('plans capacity for identifiable future sprints without counting closed sprints', () => {
+  const graph = harness();
+  const sprint = (number, state, dates = '') =>
+    `com.atlassian.Sprint@1[id=${number},state=${state},name=Sprint ${number}${dates}]`;
+  const items = [
+    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 3, sprint: sprint(12, 'ACTIVE') },
+    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 4, sprint: `${sprint(12, 'ACTIVE')}, ${sprint(13, 'FUTURE')}` },
+    { 'Issue Type': 'Bug', Assignee: 'Blair', 'Story Points': 2, sprint: 'Sprint 14' },
+    { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 14' },
+    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 9, sprint: sprint(15, 'CLOSED') },
+    { 'Issue Type': 'Story', 'Story Points': 1, sprint: sprint(16, 'OPEN', ',startDate=2099-01-01,endDate=2099-01-14') }
+  ];
+  const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 5 }]);
+  assert.equal(plan.current.sprintName, 'Sprint 12');
+  assert.equal(plan.current.totalStoryPoints, 7);
+  assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
+  assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
+    developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1
+  });
+  assert.equal(plan.future[1].totalStoryPoints, 2);
+  assert.equal(plan.future[2].developers.find(dev => dev.developer === 'Unassigned').remaining, null);
+
+  const futureOnly = [{ Assignee: 'Avery', 'Story Points': 2, sprint: sprint(20, 'FUTURE') }];
+  const futurePlan = graph.analyzeCapacityPlan(futureOnly, futureOnly, [{ developer: 'Avery', capacity: 5 }]);
+  assert.equal(futurePlan.current.sprintName, 'None');
+  assert.equal(futurePlan.future[0].sprintName, 'Sprint 20');
+  assert.equal(futurePlan.future[0].developers[0].remaining, 3);
+
+  const unknown = [{ Assignee: 'Avery', sprint: 'Sprint 20, Sprint 21' }];
+  const unknownPlan = graph.analyzeCapacityPlan(unknown, unknown, []);
+  assert.equal(unknownPlan.current.sprintName, 'Sprint 21');
+  assert.equal(unknownPlan.future.length, 0);
 });
 
 test('upgrades an older workbook when an admin saves developer capacity', async () => {
@@ -503,7 +539,7 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   const users = workbook.getWorksheet('Users');
   const issues = workbook.getWorksheet('JiraData');
   const headers = issues.getRow(1).values.slice(1);
-  const addIssue = (jiraId, owner, developer, points) => {
+  const addIssue = (jiraId, owner, developer, points, sprint = 'Sprint 12') => {
     const row = Array(headers.length).fill('');
     const values = {
       'Jira #': jiraId,
@@ -513,13 +549,15 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
       'Assigned Dev': developer,
       Owner: owner,
       'Story Points': points,
-      sprint: 'Sprint 12'
+      sprint
     };
     Object.entries(values).forEach(([header, value]) => { row[headers.indexOf(header)] = value; });
     issues.addRow(row);
   };
   addIssue('TEAM-1', 'pm', 'Avery', 3);
   addIssue('TEAM-2', 'someone-else', 'Blair', 8);
+  addIssue('TEAM-3', 'pm', 'Avery', 2, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
+  addIssue('TEAM-4', 'someone-else', 'Blair', 9, 'com.atlassian.Sprint@1[id=14,state=FUTURE,name=Sprint 14]');
   const memberObjectId = '44444444-4444-4444-4444-444444444444';
   users.addRow([
     'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
@@ -528,10 +566,13 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
   const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
-  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1']);
+  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1', 'TEAM-3']);
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
-    { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: null, remaining: null }
+    { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: null, remaining: null }
   ]);
+  assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');
+  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.futureSprintCapacity.map(sprint => sprint.sprintName))), ['Sprint 13']);
+  assert.equal(memberData.projects.futureSprintCapacity[0].developers[0].storyPoints, 2);
 });
 
 test('does not replace an unrelated file at the OneDrive destination', async () => {

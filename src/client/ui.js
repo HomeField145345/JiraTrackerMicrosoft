@@ -1277,9 +1277,54 @@ function renderCapacityView() {
     if (sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
     if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
     if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
-    body.replaceChildren();
+    renderCapacityRows_(body, capacity.developers, numberFormat);
 
-    if (!capacity.developers || capacity.developers.length === 0) {
+    var futureContainer = document.getElementById('future-sprint-capacities');
+    if (!futureContainer) return;
+    futureContainer.replaceChildren();
+    var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
+    if (!futureSprints.length) return;
+
+    var futureHeading = document.createElement('h2');
+    futureHeading.className = 'text-xl font-normal text-black mt-8 mb-4';
+    futureHeading.textContent = 'Future sprints';
+    futureContainer.appendChild(futureHeading);
+    futureSprints.forEach(function(sprint) {
+        var section = document.createElement('section');
+        section.className = 'mb-8';
+        var heading = document.createElement('h3');
+        heading.className = 'text-lg font-normal text-black';
+        heading.textContent = sprint.sprintName;
+        section.appendChild(heading);
+        var summary = document.createElement('p');
+        summary.className = 'text-sm text-[#6F7171] mt-1 mb-4';
+        summary.textContent = numberFormat.format(sprint.totalStoryPoints) + ' story points · ' +
+            numberFormat.format(sprint.totalIssues) + (sprint.totalIssues === 1 ? ' issue' : ' issues');
+        section.appendChild(summary);
+        var tableWrapper = document.createElement('div');
+        tableWrapper.className = 'overflow-x-auto';
+        var table = document.createElement('table');
+        table.className = 'w-full text-sm';
+        var header = table.createTHead().insertRow();
+        header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
+        ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining'].forEach(function(label, index) {
+            var cell = document.createElement('th');
+            cell.scope = 'col';
+            cell.className = 'px-3 py-2' + (index ? ' text-right' : '');
+            cell.textContent = label;
+            header.appendChild(cell);
+        });
+        var futureBody = table.createTBody();
+        renderCapacityRows_(futureBody, sprint.developers, numberFormat);
+        tableWrapper.appendChild(table);
+        section.appendChild(tableWrapper);
+        futureContainer.appendChild(section);
+    });
+}
+
+function renderCapacityRows_(body, developers, numberFormat) {
+    body.replaceChildren();
+    if (!developers || developers.length === 0) {
         var emptyRow = body.insertRow();
         var emptyCell = emptyRow.insertCell();
         emptyCell.colSpan = 5;
@@ -1288,7 +1333,7 @@ function renderCapacityView() {
         return;
     }
 
-    capacity.developers.forEach(function(developer) {
+    developers.forEach(function(developer) {
         var row = body.insertRow();
         row.className = 'border-b border-gray-200';
         var nameCell = row.insertCell();

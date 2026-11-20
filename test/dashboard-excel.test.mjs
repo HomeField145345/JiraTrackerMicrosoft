@@ -230,6 +230,47 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   assert.equal(elements['save-developer-capacity'].disabled, false);
 });
 
+test('capacity view renders future sprint tables and replaces them on refresh', () => {
+  class Element {
+    constructor(tag = '') { this.tag = tag; this.children = []; this.textContent = ''; }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'future-sprint-capacities'
+  ].map(id => [id, new Element()]));
+  const future = {
+    sprintName: 'Sprint 13', totalStoryPoints: 4, totalIssues: 1,
+    developers: [{ developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1 }]
+  };
+  const state = { allData: {
+    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 3, totalIssues: 1, developers: [] },
+    futureSprintCapacity: [future]
+  } };
+  const context = vm.createContext({
+    window: { addEventListener() {} }, APP_STATE: state,
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+  assert.equal(elements['capacity-sprint-name'].textContent, 'Sprint 12');
+  const [heading, section] = elements['future-sprint-capacities'].children;
+  assert.equal(heading.textContent, 'Future sprints');
+  assert.equal(section.children[0].textContent, 'Sprint 13');
+  assert.match(section.children[1].textContent, /4 story points.*1 issue/);
+  const table = section.children[2].children[0];
+  assert.deepEqual(table.children[1].children[0].children.map(cell => cell.textContent),
+    ['Avery', '1', '4', '5', '1']);
+  state.allData.futureSprintCapacity = [];
+  context.renderCapacityView();
+  assert.equal(elements['future-sprint-capacities'].children.length, 0);
+});
+
 test('configuration footer keeps inactive actions and asynchronous statuses hidden', () => {
   const ids = ['saveConfigBtn', 'configStatus', 'save-developer-capacity',
     'developer-capacity-status', 'save-users', 'users-status'];

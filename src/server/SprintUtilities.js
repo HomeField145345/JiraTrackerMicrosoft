@@ -275,17 +275,22 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries) {
     var entry = capacityByDeveloper.get(key);
     if (!entry) {
       entry = { developer: developer, issueCount: 0, storyPoints: 0, stories: [] };
+      if (developer === 'Unassigned') entry.unassignedIssues = [];
       capacityByDeveloper.set(key, entry);
     }
     entry.issueCount++;
     entry.storyPoints += points;
-    if (issueType === 'story') {
-      entry.stories.push({
+    if (issueType === 'story' || entry.unassignedIssues) {
+      var issue = {
         jiraKey: String(item['Jira #'] || '').trim(),
         summary: String(item.Summary || '').trim(),
         status: String(item.Status || '').trim(),
         storyPoints: points
-      });
+      };
+      if (issueType === 'story') entry.stories.push(issue);
+      if (entry.unassignedIssues) {
+        entry.unassignedIssues.push(Object.assign({ issueType: String(item['Issue Type'] || '').trim() }, issue));
+      }
     }
     totalIssues++;
     totalStoryPoints += points;

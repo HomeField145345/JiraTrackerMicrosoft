@@ -179,7 +179,10 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
       { 'Jira #': 'TEAM-2', 'Issue Type': ' Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
       { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
       { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
-      { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' }
+      { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },
+      { 'Jira #': 'TEAM-3', Summary: 'Fix login', Status: 'Open', 'Issue Type': 'Bug', Assignee: 'unassigned', sprint: 'Sprint 12' },
+      { 'Issue Type': 'Epic', sprint: 'Sprint 12' },
+      { 'Issue Type': 'Bug', sprint: 'Sprint 11' }
     ], 'Sprint 12', [
       { developer: 'avery', capacity: 4 },
       { developer: 'Casey', capacity: 7 },
@@ -188,7 +191,7 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
 
     assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
       sprintName: 'Sprint 12',
-      totalIssues: 4,
+      totalIssues: 5,
       totalStoryPoints: 10,
       developers: [
         { developer: 'Avery', issueCount: 2, storyPoints: 5, capacity: 4, remaining: -1,
@@ -196,8 +199,12 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
         { developer: 'Blair', issueCount: 1, storyPoints: 5, capacity: null, remaining: null,
           stories: [{ jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5 }] },
         { developer: 'Casey', issueCount: 0, storyPoints: 0, capacity: 7, remaining: 7, stories: [] },
-        { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null,
-          stories: [{ jiraKey: '', summary: '', status: '', storyPoints: 0 }] }
+        { developer: 'Unassigned', issueCount: 2, storyPoints: 0, capacity: null, remaining: null,
+          stories: [{ jiraKey: '', summary: '', status: '', storyPoints: 0 }],
+          unassignedIssues: [
+            { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0 },
+            { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0 }
+          ] }
       ]
     });
     assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {

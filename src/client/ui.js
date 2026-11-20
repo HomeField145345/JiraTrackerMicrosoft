@@ -1307,10 +1307,10 @@ function renderCapacityView() {
         table.className = 'w-full text-sm';
         var header = table.createTHead().insertRow();
         header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
-        ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining'].forEach(function(label, index) {
+        ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining', 'Workload'].forEach(function(label, index) {
             var cell = document.createElement('th');
             cell.scope = 'col';
-            cell.className = 'px-3 py-2' + (index ? ' text-right' : '');
+            cell.className = 'px-3 py-2' + (index > 0 && index < 5 ? ' text-right' : '');
             cell.textContent = label;
             header.appendChild(cell);
         });
@@ -1327,22 +1327,26 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
     if (!developers || developers.length === 0) {
         var emptyRow = body.insertRow();
         var emptyCell = emptyRow.insertCell();
-        emptyCell.colSpan = 5;
+        emptyCell.colSpan = 6;
         emptyCell.className = 'px-3 py-8 text-center text-gray-500';
         emptyCell.textContent = 'No developers found.';
         return;
     }
 
+    var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
     developers.forEach(function(developer, index) {
         var row = body.insertRow();
         row.className = 'border-b border-gray-200';
         var nameCell = row.insertCell();
         nameCell.className = 'px-3 py-3 text-gray-900';
-        if (developer.stories && developer.stories.length) {
+        var unassigned = developer.developer === 'Unassigned';
+        var assignments = (unassigned && developer.unassignedIssues) || developer.stories || [];
+        var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint stories';
+        if (assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
             toggle.className = 'w-full inline-flex items-center justify-between gap-3 text-left text-black cursor-pointer';
-            toggle.setAttribute('aria-label', developer.developer + ' sprint stories');
+            toggle.setAttribute('aria-label', detailsLabel);
             toggle.setAttribute('aria-expanded', 'false');
             var detailsId = 'capacity-stories-' + sectionId + '-' + index;
             toggle.setAttribute('aria-controls', detailsId);
@@ -1360,9 +1364,9 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
             detailsRow.hidden = true;
             detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
             var detailsCell = detailsRow.insertCell();
-            detailsCell.colSpan = 5;
+            detailsCell.colSpan = 6;
             detailsCell.className = 'px-4 py-3';
-            renderCapacityStories_(detailsCell, developer, numberFormat);
+            renderCapacityAssignments_(detailsCell, assignments, detailsLabel, unassigned, numberFormat);
             toggle.addEventListener('click', function() {
                 var expand = detailsRow.hidden;
                 detailsRow.hidden = !expand;
@@ -1383,41 +1387,83 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId) {
             cell.className = 'px-3 py-3 text-right tabular-nums text-gray-900';
             cell.textContent = value == null ? '—' : numberFormat.format(value);
         });
+        renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat);
     });
 }
 
-function renderCapacityStories_(container, developer, numberFormat) {
+function renderCapacityWorkload_(cell, developer, unassigned, percentFormat) {
+    cell.className = 'px-3 py-3 min-w-[144px] text-xs text-[#6F7171] whitespace-nowrap';
+    if (unassigned) {
+        cell.textContent = 'Needs assignee';
+        return;
+    }
+    if (developer.remaining == null) {
+        cell.textContent = developer.capacity == null ? 'Capacity not set' : 'No sprint';
+        return;
+    }
+
+    var overCapacity = developer.remaining < 0;
+    var ratio = developer.capacity > 0 ? Math.max(0, developer.storyPoints / developer.capacity) : null;
+    if (ratio !== null) {
+        var percent = document.createElement('span');
+        percent.textContent = percentFormat.format(ratio);
+        cell.appendChild(percent);
+    }
+    if (overCapacity || ratio === null) {
+        var status = document.createElement('span');
+        status.className = overCapacity ? 'inline-block rounded-full bg-[#FFF9DE] px-2 py-1 text-black' : '';
+        if (ratio !== null) status.className += ' ml-2';
+        status.textContent = overCapacity ? 'Over capacity' : 'Zero capacity';
+        cell.appendChild(status);
+    }
+    if (ratio !== null) {
+        var track = document.createElement('div');
+        track.className = 'mt-1 h-2 overflow-hidden rounded-full bg-[#F6F6F6]';
+        track.setAttribute('aria-hidden', 'true');
+        var fill = document.createElement('div');
+        fill.className = overCapacity ? 'h-full bg-[#FED60E]' : 'h-full bg-[#006FC1]';
+        fill.style.width = (Math.min(ratio, 1) * 100) + '%';
+        track.appendChild(fill);
+        cell.appendChild(track);
+    }
+}
+
+function renderCapacityAssignments_(container, assignments, label, showIssueType, numberFormat) {
     var table = document.createElement('table');
     table.className = 'w-full text-sm text-black';
-    table.setAttribute('aria-label', developer.developer + ' sprint stories');
+    table.setAttribute('aria-label', label);
     var header = table.createTHead().insertRow();
     header.className = 'border-b border-[#D8DADA] text-xs text-[#6F7171]';
-    ['Jira key', 'Summary', 'Status', 'Story points'].forEach(function(label, index) {
+    var columns = ['Jira key', 'Summary', 'Status', 'Story points'];
+    if (showIssueType) columns.splice(2, 0, 'Type');
+    columns.forEach(function(label, index) {
         var cell = document.createElement('th');
         cell.scope = 'col';
-        cell.className = 'px-3 py-2 font-normal ' + (index === 3 ? 'text-right' : 'text-left');
+        cell.className = 'px-3 py-2 font-normal ' + (index === columns.length - 1 ? 'text-right' : 'text-left');
         cell.textContent = label;
         header.appendChild(cell);
     });
     var body = table.createTBody();
-    developer.stories.forEach(function(story) {
+    assignments.forEach(function(issue) {
         var row = body.insertRow();
         var keyCell = row.insertCell();
         keyCell.className = 'px-3 py-2 whitespace-nowrap';
-        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(story.jiraKey)) {
+        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(issue.jiraKey)) {
             var link = document.createElement('a');
-            link.href = 'https://onejira.verizon.com/browse/' + story.jiraKey;
+            link.href = 'https://onejira.verizon.com/browse/' + issue.jiraKey;
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             link.className = 'underline';
-            link.textContent = story.jiraKey;
+            link.textContent = issue.jiraKey;
             keyCell.appendChild(link);
         } else {
-            keyCell.textContent = story.jiraKey || '—';
+            keyCell.textContent = issue.jiraKey || '—';
         }
-        [story.summary || 'Untitled', story.status || '—', numberFormat.format(story.storyPoints)].forEach(function(value, index) {
+        var values = [issue.summary || 'Untitled', issue.status || '—', numberFormat.format(issue.storyPoints)];
+        if (showIssueType) values.splice(1, 0, issue.issueType || '—');
+        values.forEach(function(value, index) {
             var cell = row.insertCell();
-            cell.className = 'px-3 py-2' + (index === 2 ? ' text-right tabular-nums' : '');
+            cell.className = 'px-3 py-2' + (index === values.length - 1 ? ' text-right tabular-nums' : '');
             cell.textContent = value;
         });
     });

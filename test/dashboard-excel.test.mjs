@@ -248,10 +248,10 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   assert.equal(elements['save-developer-capacity'].disabled, false);
 });
 
-test('capacity view expands each sprint’s assigned stories independently and refreshes the tables', () => {
+test('capacity view shows developer workload and expands sprint assignments independently', () => {
   class Element {
     constructor(tag = '') {
-      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {};
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {}; this.style = {};
     }
     appendChild(child) { this.children.push(child); return child; }
     replaceChildren() { this.children = []; }
@@ -273,15 +273,20 @@ test('capacity view expands each sprint’s assigned stories independently and r
       stories: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', status: 'To Do', storyPoints: 4 }] }]
   };
   const state = { allData: {
-    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 3, totalIssues: 1, developers: [
-      { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: 5, remaining: 2,
+    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 4, totalIssues: 3, developers: [
+      { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: 2, remaining: -1,
         stories: [{ jiraKey: 'TEAM-12', summary: 'Release fixes', status: 'Done', storyPoints: 3 }] },
-      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: 5, remaining: 5, stories: [] }
+      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, stories: [] },
+      { developer: 'Casey', issueCount: 1, storyPoints: 1, capacity: 0, remaining: -1, stories: [] },
+      { developer: 'Drew', issueCount: 0, storyPoints: 0, capacity: 0, remaining: 0, stories: [] },
+      { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null, stories: [],
+        unassignedIssues: [{ jiraKey: 'TEAM-14', summary: 'Fix login', issueType: 'Bug', status: 'Open', storyPoints: 0 }] }
     ] },
     futureSprintCapacity: [future]
   } };
   const context = vm.createContext({
     window: { addEventListener() {} }, APP_STATE: state,
+    Intl: { NumberFormat: function(_, options) { return new Intl.NumberFormat('en-US', options); } },
     document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
   });
   vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
@@ -292,11 +297,23 @@ test('capacity view expands each sprint’s assigned stories independently and r
   assert.equal(section.children[0].textContent, 'Sprint 13');
   assert.match(section.children[1].textContent, /4 story points.*1 issue/);
   const table = section.children[2].children[0];
-  const [currentRow, currentDetails, emptyRow] = elements['capacity-table-body'].children;
+  const [currentRow, currentDetails, emptyRow, zeroCapRow, zeroLoadRow, unassignedRow, unassignedDetails] =
+    elements['capacity-table-body'].children;
   const [futureRow, futureDetails] = table.children[1].children;
-  assert.deepEqual(futureRow.children.slice(1).map(cell => cell.textContent), ['1', '4', '5', '1']);
+  assert.deepEqual(futureRow.children.slice(1, 5).map(cell => cell.textContent), ['1', '4', '5', '1']);
+  const [currentPercent, warning, currentTrack] = currentRow.children[5].children;
+  assert.equal(currentPercent.textContent, '150%');
+  assert.equal(warning.textContent, 'Over capacity');
+  assert.equal(currentTrack.children[0].style.width, '100%');
+  const [futurePercent, futureTrack] = futureRow.children[5].children;
+  assert.equal(futurePercent.textContent, '80%');
+  assert.equal(futureTrack.children[0].style.width, '80%');
   assert.equal(emptyRow.children[0].textContent, 'Blair');
   assert.equal(emptyRow.children[0].children.length, 0);
+  assert.equal(emptyRow.children[5].textContent, 'Capacity not set');
+  assert.deepEqual(zeroCapRow.children[5].children.map(child => child.textContent), ['Over capacity']);
+  assert.deepEqual(zeroLoadRow.children[5].children.map(child => child.textContent), ['Zero capacity']);
+  assert.equal(unassignedRow.children[5].textContent, 'Needs assignee');
   const currentToggle = currentRow.children[0].children[0];
   const futureToggle = futureRow.children[0].children[0];
   assert.equal(currentDetails.hidden, true);
@@ -311,6 +328,10 @@ test('capacity view expands each sprint’s assigned stories independently and r
   assert.equal(futureDetails.hidden, false);
   assert.equal(futureToggle.attributes['aria-expanded'], 'true');
   const storyCells = details => details.children[0].children[0].children[1].children[0].children;
+  assert.equal(unassignedDetails.hidden, true);
+  unassignedRow.children[0].children[0].click();
+  assert.equal(unassignedDetails.hidden, false);
+  assert.deepEqual(storyCells(unassignedDetails).slice(1).map(cell => cell.textContent), ['Fix login', 'Bug', 'Open', '0']);
   assert.equal(storyCells(currentDetails)[0].children[0].textContent, 'TEAM-12');
   const [key, ...fields] = storyCells(futureDetails);
   assert.equal(key.children[0].href, 'https://onejira.verizon.com/browse/TEAM-13');

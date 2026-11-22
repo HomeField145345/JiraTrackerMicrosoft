@@ -160,9 +160,9 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       bytes = updatedBytes;
       item.eTag = '"external-change"';
     },
-    analyzeCapacity: (items, sprintName, entries) => context.analyzeSprintCapacity(items, sprintName, entries),
-    analyzeCapacityPlan: (projects, items, entries) =>
-      context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries),
+    analyzeCapacity: (items, sprintName, entries, options) => context.analyzeSprintCapacity(items, sprintName, entries, options),
+    analyzeCapacityPlan: (projects, items, entries, options) =>
+      context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries, options),
     analyzeSprintData: items => context.analyzeSprintData(items),
     parseSprintEntries: value => context.parseSprintEntries_(value),
     interfere: () => { interfere = true; },
@@ -172,50 +172,137 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
 }
 
 test('aggregates sprint assignments and remaining capacity for Jira assignees', () => {
-    const graph = harness();
-    const capacity = graph.analyzeCapacity([
-      { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
-      { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
-      { 'Jira #': 'TEAM-2', 'Issue Type': ' VZAgile Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
-      { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
-      { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
-      { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },
-      { 'Jira #': 'TEAM-3', Summary: 'Fix login', Status: 'Open', 'Issue Type': 'Bug', Assignee: 'unassigned', sprint: 'Sprint 12' },
-      { 'Issue Type': 'Epic', sprint: 'Sprint 12' },
-      { 'Issue Type': 'Bug', sprint: 'Sprint 11' }
-    ], 'Sprint 12', [
-      { developer: 'avery', capacity: 4 },
-      { developer: 'Casey', capacity: 7 },
-      { developer: 'Former developer', capacity: 5 }
-    ]);
+  const graph = harness();
+  const capacity = graph.analyzeCapacity([
+    { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
+    { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
+    { 'Jira #': 'TEAM-2', 'Issue Type': ' VZAgile Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
+    { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
+    { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
+    { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },
+    { 'Jira #': 'TEAM-3', Summary: 'Fix login', Status: 'Open', 'Issue Type': 'Bug', Assignee: 'unassigned', sprint: 'Sprint 12' },
+    { 'Issue Type': 'Epic', sprint: 'Sprint 12' },
+    { 'Issue Type': 'Bug', sprint: 'Sprint 11' }
+  ], 'Sprint 12', [
+    { developer: 'avery', capacity: 4 },
+    { developer: 'Casey', capacity: 7 },
+    { developer: 'Former developer', capacity: 5 }
+  ]);
 
-    assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
-      sprintName: 'Sprint 12',
-      totalIssues: 5,
-      totalStoryPoints: 10,
-      developers: [
-        { developer: 'Avery', issueCount: 2, storyPoints: 5, capacity: 4, remaining: -1,
-          issues: [
-            { issueType: 'Story', jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3 },
-            { issueType: 'Bug', jiraKey: '', summary: '', status: '', storyPoints: 2 }
-          ] },
-        { developer: 'Blair', issueCount: 1, storyPoints: 5, capacity: null, remaining: null,
-          issues: [{ issueType: 'VZAgile Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5 }] },
-        { developer: 'Casey', issueCount: 0, storyPoints: 0, capacity: 7, remaining: 7, issues: [] },
-        { developer: 'Unassigned', issueCount: 2, storyPoints: 0, capacity: null, remaining: null,
-          issues: [
-            { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0 },
-            { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0 }
-          ] }
-      ]
-    });
-    assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
-      sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
-    });
-    const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
-    assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
-      { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: 0, remaining: null, issues: [] }
-    ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
+    sprintName: 'Sprint 12',
+    sprintStart: null,
+    sprintEnd: null,
+    totalIssues: 5,
+    totalStoryPoints: 10,
+    completedPoints: 3,
+    inProgressPoints: 0,
+    notStartedPoints: 7,
+    completedIssues: 1,
+    unestimatedIssues: 2,
+    totalCapacity: 11,
+    pace: {
+      status: 'no_dates',
+      label: 'Dates unavailable',
+      timeElapsedPct: null,
+      completedPct: 0.3,
+      activePct: 0.3,
+      delta: null,
+      totalDays: null,
+      daysElapsed: null,
+      daysRemaining: null,
+      unit: null,
+      metricBasis: 'points'
+    },
+    developers: [
+        {
+        developer: 'Avery', issueCount: 2, storyPoints: 5, completedPoints: 3, inProgressPoints: 0, notStartedPoints: 2,
+        completedIssues: 1, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 4, remaining: -1, pace: null,
+        issues: [
+            { issueType: 'Story', jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3, workState: 'completed' },
+          { issueType: 'Bug', jiraKey: '', summary: '', status: '', storyPoints: 2, workState: 'notStarted' }
+        ]
+      },
+        {
+        developer: 'Blair', issueCount: 1, storyPoints: 5, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 5,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: null, remaining: null, pace: null,
+        issues: [{ issueType: 'VZAgile Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5, workState: 'notStarted' }]
+      },
+      {
+        developer: 'Casey', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 7, remaining: 7, pace: null, issues: []
+      },
+      {
+        developer: 'Unassigned', issueCount: 2, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 2, unestimatedCount: 2, capacity: null, remaining: null, pace: null,
+        issues: [
+            { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0, workState: 'notStarted' },
+          { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0, workState: 'notStarted' }
+        ]
+      }
+    ]
+  });
+  assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
+      sprintName: 'None', sprintStart: null, sprintEnd: null, totalIssues: 0, totalStoryPoints: 0,
+    completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0, completedIssues: 0, unestimatedIssues: 0,
+    totalCapacity: null, pace: null, developers: []
+  });
+  const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
+  assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
+      {
+      developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 0, remaining: null, pace: null, issues: []
+    }
+  ]);
+});
+
+test('computes stacked work states and sprint pace from elapsed workdays', () => {
+  const graph = harness();
+  const sprintField = 'com.atlassian.Sprint@1[id=40,state=ACTIVE,name=Sprint 40,startDate=2026-11-02,endDate=2026-11-13]';
+  const items = [
+    { 'Jira #': 'P-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 5, sprint: sprintField },
+    { 'Jira #': 'P-2', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 3, sprint: sprintField },
+    { 'Jira #': 'P-3', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: sprintField },
+    { 'Jira #': 'P-4', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'To Do', 'Story Points': 10, sprint: sprintField }
+  ];
+  const capacities = [{ developer: 'Avery', capacity: 8 }, { developer: 'Blair', capacity: 10 }];
+
+  // End of Friday week 1 (Nov 6, 2026 23:59) -> 5 of 10 workdays elapsed (50%)
+  const midSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-06T23:59:59') });
+  assert.equal(midSprint.completedPoints, 5);
+  assert.equal(midSprint.inProgressPoints, 3);
+  assert.equal(midSprint.notStartedPoints, 12);
+  assert.equal(midSprint.totalCapacity, 18);
+  assert.equal(midSprint.pace.status, 'at_risk'); // 25% done vs 50% elapsed (-25% delta)
+  assert.equal(midSprint.pace.label, 'At risk');
+  assert.equal(midSprint.pace.totalDays, 10);
+  assert.equal(midSprint.pace.daysRemaining, 5);
+
+  const avery = midSprint.developers.find(d => d.developer === 'Avery');
+  const blair = midSprint.developers.find(d => d.developer === 'Blair');
+  assert.equal(avery.completedPoints, 5);
+  assert.equal(avery.inProgressPoints, 3);
+  assert.equal(avery.notStartedPoints, 2);
+  assert.equal(avery.pace.status, 'on_track'); // 50% done vs 50% elapsed
+  assert.equal(blair.pace.status, 'behind'); // 0% done vs 50% elapsed
+
+  // Sunday of middle weekend (Nov 8, 2026) -> still 5 of 10 workdays elapsed (50%), weekend does not penalize pace
+  const weekend = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-08T12:00:00') });
+  assert.equal(Math.round(weekend.pace.timeElapsedPct * 100), 50);
+
+  // Day 9 of 10 workdays (Nov 12, 2026 23:59 -> 90% elapsed, 25% done) -> Behind
+  const lateSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-12T23:59:59') });
+  assert.equal(lateSprint.pace.status, 'behind');
+  assert.equal(lateSprint.pace.label, 'Behind');
+
+  // Before sprint starts -> Upcoming
+  const beforeStart = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-10-30T12:00:00') });
+  assert.equal(beforeStart.pace.status, 'upcoming');
+
+  // All done -> Completed
+  const doneItems = items.map(item => ({ ...item, Status: 'Done' }));
+  const finished = graph.analyzeCapacity(doneItems, 'Sprint 40', capacities, { now: new Date('2026-11-06T12:00:00') });
+  assert.equal(finished.pace.status, 'completed');
 });
 
 test('plans capacity for identifiable future sprints without counting closed sprints', () => {
@@ -236,8 +323,9 @@ test('plans capacity for identifiable future sprints without counting closed spr
   assert.deepEqual(Array.from(plan.current.developers[0].issues, issue => issue.jiraKey), ['TEAM-1', 'TEAM-2']);
   assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
   assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
-    developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1,
-    issues: [{ issueType: 'Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4 }]
+    developer: 'Avery', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4,
+    completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 5, remaining: 1, pace: null,
+    issues: [{ issueType: 'Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4, workState: 'notStarted' }]
   });
   assert.equal(plan.future[1].totalStoryPoints, 2);
   assert.equal(plan.future[2].developers.find(dev => dev.developer === 'Unassigned').remaining, null);
@@ -598,7 +686,10 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1', 'TEAM-3']);
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
-    { developer: 'Avery', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, issues: [] }
+    {
+      developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: null, remaining: null, pace: null, issues: []
+    }
   ]);
   assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.futureSprintCapacity.map(sprint => sprint.sprintName))), ['Sprint 13']);

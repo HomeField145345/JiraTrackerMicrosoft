@@ -56,33 +56,33 @@ function setup({
       actions.push(message.action);
       messages.push(message);
       const result = message.action === 'connect' && connectResult ? connectResult : {
-          itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData,
-          response: { status: 'success', message: 'Workbook saved.' },
-          user: {
-            id: 'user-1', username: 'owner@example.com', email: 'owner@example.com',
-            displayName: 'Owner', role: userRole, isActive: true, microsoftObjectId: oid
-          }
-        };
+        itemId: 'item-1', webUrl: 'https://example.com/book', projects: dashboardData,
+        response: { status: 'success', message: 'Workbook saved.' },
+        user: {
+          id: 'user-1', username: 'owner@example.com', email: 'owner@example.com',
+          displayName: 'Owner', role: userRole, isActive: true, microsoftObjectId: oid
+        }
+      };
       const data = message.action === 'connect' && connectError ?
         { error: connectError, workbookUrl: errorWorkbookUrl } : { result };
       queueMicrotask(() => this.onmessage({ data }));
     }
-    terminate() {}
+    terminate() { }
   }
   const auth = { accessToken: 'token', account: { username: 'owner@example.com', name: 'Owner', idTokenClaims: { oid, tid: ids.tenantId } } };
   class FakeMsal {
     constructor(config) { msalConfig = config; }
-    async initialize() {}
+    async initialize() { }
     async acquireTokenPopup() { return auth; }
     async acquireTokenSilent() { return auth; }
     getAllAccounts() { return cachedAccounts; }
     getActiveAccount() { return cachedAccounts[0] || null; }
-    setActiveAccount() {}
-    getTokenCache() { return { removeAccount: async () => {} }; }
+    setActiveAccount() { }
+    getTokenCache() { return { removeAccount: async () => { } }; }
   }
   const bridge = createExcelBridge({
     document: doc,
-    location: { href: 'https://example.com/app/index.html', reload() {} },
+    location: { href: 'https://example.com/app/index.html', reload() { } },
     fetch: async () => ({ ok: true, json: async () => ({ ...ids, target: { fileName: 'Tracker.xlsx' } }) }),
     Worker: FakeWorker,
     PublicClientApplication: FakeMsal
@@ -237,7 +237,7 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   };
   const calls = [];
   const context = vm.createContext({
-    window: { addEventListener() {} },
+    window: { addEventListener() { } },
     document: {
       getElementById: id => elements[id],
       createElement: () => new Element(),
@@ -256,12 +256,12 @@ test('developer configuration renders Jira assignees and saves valid capacity', 
   context.renderDeveloperCapacityConfig();
   assert.deepEqual(inputs().map(input => [input.dataset.developer, input.value]), [['Avery', '0'], ['Blair', '']]);
   inputs()[1].validity.valid = false;
-  context.saveDeveloperCapacity({ preventDefault() {} });
+  context.saveDeveloperCapacity({ preventDefault() { } });
   assert.equal(calls.length, 0);
   assert.match(elements['developer-capacity-status'].textContent, /non-negative/);
   inputs()[1].validity.valid = true;
   inputs()[1].value = '5.5';
-  context.saveDeveloperCapacity({ preventDefault() {} });
+  context.saveDeveloperCapacity({ preventDefault() { } });
   elements['developer-capacity-status'].classList.add('hidden');
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(JSON.parse(JSON.stringify(calls)), [
@@ -289,35 +289,68 @@ test('capacity view shows developer workload and expands sprint assignments inde
     click() { this.listeners.click(); }
   }
   const elements = Object.fromEntries([
-    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
-    'capacity-table-body', 'future-sprint-capacities'
+    'capacity-sprint-name', 'capacity-sprint-dates', 'capacity-pace-badge', 'capacity-pace-card',
+    'capacity-pace-summary', 'capacity-pace-breakdown', 'capacity-pace-bar', 'capacity-team-summary',
+    'capacity-total-points', 'capacity-total-issues', 'capacity-table-body', 'future-sprint-capacities'
   ].map(id => [id, new Element()]));
   const future = {
     sprintName: 'Sprint 13', totalStoryPoints: 4, totalIssues: 1,
-    developers: [{ developer: 'Avery', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1,
-      issues: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', issueType: 'Story', status: 'To Do', storyPoints: 4 }] }]
+    developers: [{
+      developer: 'Avery', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4,
+      capacity: 5, remaining: 1,
+      issues: [{ jiraKey: 'TEAM-13', summary: 'Prepare next release', issueType: 'Story', status: 'To Do', storyPoints: 4, workState: 'notStarted' }]
+    }]
   };
-  const state = { allData: {
-    sprintCapacity: { sprintName: 'Sprint 12', totalStoryPoints: 4, totalIssues: 3, developers: [
-      { developer: 'Avery', issueCount: 1, storyPoints: 3, capacity: 2, remaining: -1,
-        issues: [{ jiraKey: 'TEAM-12', summary: 'Release fixes', issueType: 'Custom work item', status: 'Done', storyPoints: 3 }] },
-      { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, issues: [] },
-      { developer: 'Casey', issueCount: 1, storyPoints: 1, capacity: 0, remaining: -1,
-        issues: [{ jiraKey: 'TEAM-15', summary: 'Verify release', issueType: 'Task', status: 'Open', storyPoints: 1 }] },
-      { developer: 'Drew', issueCount: 0, storyPoints: 0, capacity: 0, remaining: 0, issues: [] },
-      { developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null,
-        issues: [{ jiraKey: 'TEAM-14', summary: 'Fix login', issueType: 'Bug', status: 'Open', storyPoints: 0 }] }
-    ] },
-    futureSprintCapacity: [future]
-  } };
+  const state = {
+    allData: {
+      sprintCapacity: {
+        sprintName: 'Sprint 12', sprintStart: '2026-11-02T00:00:00.000Z', sprintEnd: '2026-11-13T23:59:59.000Z',
+        totalStoryPoints: 4, completedPoints: 2, inProgressPoints: 1, notStartedPoints: 1, totalIssues: 3, totalCapacity: 2,
+        pace: { status: 'on_track', label: 'On track', timeElapsedPct: 0.5, completedPct: 0.5, activePct: 0.75, delta: 0, totalDays: 10, daysElapsed: 5, daysRemaining: 5, unit: 'workdays', metricBasis: 'points' },
+        developers: [
+          {
+            developer: 'Avery', issueCount: 2, storyPoints: 3, completedPoints: 2, inProgressPoints: 1, notStartedPoints: 0,
+            capacity: 2, remaining: -1,
+            pace: { status: 'on_track', label: 'On track' },
+            issues: [
+              { jiraKey: 'TEAM-12', summary: 'Release fixes', issueType: 'Custom work item', status: 'Done', storyPoints: 2, workState: 'completed' },
+              { jiraKey: 'TEAM-16', summary: 'QA pass', issueType: 'Story', status: 'In Progress', storyPoints: 1, workState: 'inProgress' }
+            ]
+          },
+          { developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: null, remaining: null, issues: [] },
+          {
+            developer: 'Casey', issueCount: 1, storyPoints: 1, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 1,
+            capacity: 0, remaining: -1,
+            pace: { status: 'behind', label: 'Behind' },
+            issues: [{ jiraKey: 'TEAM-15', summary: 'Verify release', issueType: 'Task', status: 'Open', storyPoints: 1, workState: 'notStarted' }]
+          },
+          { developer: 'Drew', issueCount: 0, storyPoints: 0, capacity: 0, remaining: 0, issues: [] },
+          {
+            developer: 'Unassigned', issueCount: 1, storyPoints: 0, capacity: null, remaining: null,
+            issues: [{ jiraKey: 'TEAM-14', summary: 'Fix login', issueType: 'Bug', status: 'Open', storyPoints: 0, workState: 'notStarted' }]
+          }
+        ]
+      },
+      futureSprintCapacity: [future]
+    }
+  };
   const context = vm.createContext({
-    window: { addEventListener() {} }, APP_STATE: state,
-    Intl: { NumberFormat: function(_, options) { return new Intl.NumberFormat('en-US', options); } },
+    window: { addEventListener() { } }, APP_STATE: state,
+    Intl: {
+      NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); },
+      DateTimeFormat: function (_, options) { return new Intl.DateTimeFormat('en-US', options); }
+    },
     document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
   });
   vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
   context.renderCapacityView();
   assert.equal(elements['capacity-sprint-name'].textContent, 'Sprint 12');
+  assert.equal(elements['capacity-pace-badge'].textContent, 'On track');
+  assert.match(elements['capacity-pace-summary'].textContent, /On track.*50% points completed vs\. 50% time elapsed/);
+  assert.match(elements['capacity-sprint-dates'].textContent, /Day 5 of 10 workdays/);
+  assert.deepEqual(elements['capacity-pace-bar'].children[0].children.map(s => s.attributes['data-segment']), ['completed', 'inProgress', 'notStarted']);
+  assert.equal(elements['capacity-pace-bar'].children[1].attributes['data-marker'], 'elapsed');
+  assert.equal(elements['capacity-pace-bar'].children[1].style.left, '50%');
   const [heading, section] = elements['future-sprint-capacities'].children;
   assert.equal(heading.textContent, 'Future sprints');
   assert.equal(section.children[0].textContent, 'Sprint 13');
@@ -327,13 +360,17 @@ test('capacity view shows developer workload and expands sprint assignments inde
     elements['capacity-table-body'].children;
   const [futureRow, futureDetails] = table.children[1].children;
   assert.deepEqual(futureRow.children.slice(1, 5).map(cell => cell.textContent), ['1', '4', '5', '1']);
-  const [currentPercent, warning, currentTrack] = currentRow.children[5].children;
+  const [currentPercent, warning, currentPacePill, currentTrack, currentCaption] = currentRow.children[5].children;
   assert.equal(currentPercent.textContent, '150%');
   assert.equal(warning.textContent, 'Over capacity');
-  assert.equal(currentTrack.children[0].style.width, '100%');
-  const [futurePercent, futureTrack] = futureRow.children[5].children;
+  assert.equal(currentPacePill.textContent, 'On track');
+  assert.deepEqual(currentTrack.children[0].children.map(s => s.attributes['data-segment']), ['completed', 'inProgress']);
+  assert.equal(currentTrack.children[1].attributes['data-marker'], 'capacity-limit');
+  assert.equal(currentCaption.textContent, '2 done · 1 active');
+  const [futurePercent, futureTrack, futureCaption] = futureRow.children[5].children;
   assert.equal(futurePercent.textContent, '80%');
-  assert.equal(futureTrack.children[0].style.width, '80%');
+  assert.equal(futureTrack.children[0].children[0].style.width, '80%');
+  assert.equal(futureCaption.textContent, '4 to do');
   const [emptyName, emptyToggle] = emptyRow.children[0].children;
   assert.equal(emptyName.textContent, 'Blair');
   assert.equal(emptyToggle.children[0].textContent, 'Issues (0)');
@@ -342,12 +379,12 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(emptyDetails.hidden, false);
   assert.equal(emptyDetails.children[0].textContent, 'No issues assigned for this sprint.');
   assert.equal(emptyRow.children[5].textContent, 'Capacity not set');
-  assert.deepEqual(zeroCapRow.children[5].children.map(child => child.textContent), ['Over capacity']);
+  assert.deepEqual(zeroCapRow.children[5].children.map(child => child.textContent), ['Over capacity', 'Behind']);
   assert.deepEqual(zeroLoadRow.children[5].children.map(child => child.textContent), ['Zero capacity']);
   assert.equal(unassignedRow.children[5].textContent, 'Needs assignee');
   const currentToggle = currentRow.children[0].children[1];
   const futureToggle = futureRow.children[0].children[1];
-  assert.equal(currentToggle.children[0].textContent, 'Issues (1)');
+  assert.equal(currentToggle.children[0].textContent, 'Issues (2)');
   assert.equal(futureToggle.children[0].textContent, 'Issues (1)');
   assert.equal(currentDetails.hidden, true);
   assert.equal(futureDetails.hidden, true);

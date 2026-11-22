@@ -24,16 +24,16 @@
 function getProjectData_(user, targetUsername) {
   // Determine the Context User (The owner of the data we want to see)
   let contextUser = user;
-  
+
   // Ensure we have the full user object (including dataSheetId)
   // The 'user' passed from auth might be minimal {id, username, role}
   if (!contextUser.dataSheetId && contextUser.id) {
-      const fullUser = getUserById(contextUser.id);
-      if (fullUser) {
-          contextUser = fullUser;
-      }
+    const fullUser = getUserById(contextUser.id);
+    if (fullUser) {
+      contextUser = fullUser;
+    }
   }
-  
+
   // If a target is specified, use it.
   // This allows QA/View Only users to view PM/Admin workspaces.
   if (targetUsername && (!contextUser || contextUser.username !== targetUsername)) {
@@ -42,18 +42,18 @@ function getProjectData_(user, targetUsername) {
     const users = getUsers();
     const target = users.find(u => u.username === targetUsername);
     if (target) {
-        contextUser = target;
+      contextUser = target;
     }
   }
 
   var data = _getRawProjectData(contextUser);
-  
+
   if (data.error) return data;
-  
+
   // Determine which user to filter by
   // Default to the logged-in user (or the target if specified)
   var filterUser = contextUser.username;
-  
+
   // Filter data based on user ownership
   // SKIP FILTERING if:
   // 1. The user is an Admin
@@ -66,54 +66,55 @@ function getProjectData_(user, targetUsername) {
     var initialCount = data.projects.length;
 
     // Check if 'Owner' field exists in the data (check first few items)
-    var hasOwnerField = data.projects.some(function(p) { return p.hasOwnProperty('Owner'); });
-    
+    var hasOwnerField = data.projects.some(function (p) { return p.hasOwnProperty('Owner'); });
+
     // Check if ANY item has a non-empty Owner value
-    var hasAnyOwnerValue = data.projects.some(function(p) { return p.Owner && String(p.Owner).trim() !== ''; });
-    
+    var hasAnyOwnerValue = data.projects.some(function (p) { return p.Owner && String(p.Owner).trim() !== ''; });
+
     if ((!hasOwnerField || !hasAnyOwnerValue) && data.projects.length > 0) {
-        // Do not filter projects if Owner field is missing or unused
+      // Do not filter projects if Owner field is missing or unused
     } else {
-        // Filter projects: include ONLY if owner matches (supports multiple owners comma-separated)
-        data.projects = data.projects.filter(function(p) {
-          if (!p.Owner) return false;
-          var owners = String(p.Owner).split(',').map(function(s) { return s.trim(); });
-          return owners.indexOf(filterUser) !== -1;
-        });
+      // Filter projects: include ONLY if owner matches (supports multiple owners comma-separated)
+      data.projects = data.projects.filter(function (p) {
+        if (!p.Owner) return false;
+        var owners = String(p.Owner).split(',').map(function (s) { return s.trim(); });
+        return owners.indexOf(filterUser) !== -1;
+      });
     }
-    
+
     // Filter independent tasks: include ONLY if owner matches
     // Independent tasks might have different structure, check for Owner there too
-    var hasTaskOwner = data.independentTasks.some(function(t) { return t.hasOwnProperty('Owner'); });
-    var hasAnyTaskOwnerValue = data.independentTasks.some(function(t) { return t.Owner && String(t.Owner).trim() !== ''; });
-    
+    var hasTaskOwner = data.independentTasks.some(function (t) { return t.hasOwnProperty('Owner'); });
+    var hasAnyTaskOwnerValue = data.independentTasks.some(function (t) { return t.Owner && String(t.Owner).trim() !== ''; });
+
     if ((!hasTaskOwner || !hasAnyTaskOwnerValue) && data.independentTasks.length > 0) {
-         // Owner field missing or empty in independent tasks, skipping filtering
+      // Owner field missing or empty in independent tasks, skipping filtering
     } else {
-        data.independentTasks = data.independentTasks.filter(function(t) {
-          if (!t.Owner) return false;
-          var owners = String(t.Owner).split(',').map(function(s) { return s.trim(); });
-          return owners.indexOf(filterUser) !== -1;
-        });
+      data.independentTasks = data.independentTasks.filter(function (t) {
+        if (!t.Owner) return false;
+        var owners = String(t.Owner).split(',').map(function (s) { return s.trim(); });
+        return owners.indexOf(filterUser) !== -1;
+      });
     }
-    
+
     // Re-analyze sprint stats based on filtered data
     var allItems = data.projects.concat(data.independentTasks);
     data.sprintStats = analyzeSprintData(allItems);
   } else {
     // Skipping ownership filtering
   }
-  
+
   if (shouldFilter && filterUser) {
-    var visibleDevelopers = new Set(data.projects.map(function(project) {
+    var visibleDevelopers = new Set(data.projects.map(function (project) {
       return String(project.Assignee || '').trim().toLowerCase();
     }));
-    data.developerCapacity = data.developerCapacity.filter(function(entry) {
+    data.developerCapacity = data.developerCapacity.filter(function (entry) {
       return visibleDevelopers.has(entry.developer.toLowerCase());
     });
   }
   var capacityPlan = analyzeSprintCapacityPlan(
-    data.projects, data.projects.concat(data.independentTasks), data.sprintStats, data.developerCapacity
+    data.projects, data.projects.concat(data.independentTasks), data.sprintStats, data.developerCapacity,
+    { config: data.config }
   );
   data.sprintCapacity = capacityPlan.current;
   data.futureSprintCapacity = capacityPlan.future;
@@ -144,57 +145,57 @@ function _getRawProjectData(contextUser) {
     // Data comes from the User's specific spreadsheet (or global fallback)
     var dataSS;
     if (contextUser && contextUser.dataSheetId && String(contextUser.dataSheetId).trim() !== '') {
-       try {
-         dataSS = WorkbookService.openById(contextUser.dataSheetId);
-       } catch (e) {
-         dataSS = WorkbookService.getActiveWorkbook();
-       }
+      try {
+        dataSS = WorkbookService.openById(contextUser.dataSheetId);
+      } catch (e) {
+        dataSS = WorkbookService.getActiveWorkbook();
+      }
     } else {
-       dataSS = WorkbookService.getActiveWorkbook();
+      dataSS = WorkbookService.getActiveWorkbook();
     }
 
     var jiraSheet = getSheetOrThrow(dataSS, JIRA_DATA_SHEET);
 
     var manualDataSheet = getSheetOrThrow(dataSS, MANUAL_DATA_SHEET);
     var independentTasksSheet = getSheetOrThrow(dataSS, INDEPENDENT_TASKS_SHEET);
-    
+
     // Config always comes from the Global Master Spreadsheet
     var globalSS = WorkbookService.getActiveWorkbook();
     var configSheet = getSheetOrThrow(globalSS, CONFIG_SHEET);
-    
+
     // Load configuration options from sheets
     var config = _loadConfigurationCached(configSheet);
 
     // Developer capacity settings live in the global workbook (sheet may be missing in older workbooks)
     var developerCapacity = readDeveloperCapacity(globalSS.getSheetByName(DEVELOPER_CAPACITY_SHEET));
-    
+
     // Load all data sources
     var projects = readJiraData(jiraSheet) || [];
 
     var manualDataMap = readManualData(manualDataSheet) || {};
     var independentTasks = readIndependentTasks(independentTasksSheet) || [];
     var users = getUsers() || [];
-    
+
     // Combine Jira data with manual overrides
     var combinedProjects = _combineProjectData(projects, manualDataMap);
-    
+
     // Analyze sprint data
     var allItems = combinedProjects.concat(independentTasks);
     var sprintStats = analyzeSprintData(allItems);
-    
-    var finalData = { 
-      projects: combinedProjects, 
-      independentTasks: independentTasks, 
+
+    var finalData = {
+      projects: combinedProjects,
+      independentTasks: independentTasks,
       config: config || {},
       sprintStats: sprintStats,
       sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName, developerCapacity),
       developerCapacity: developerCapacity,
       users: users
     };
-    
+
     // Log timestamp samples for debugging
     _logTimestampSamples(combinedProjects);
-    
+
     // Cache the results
     setCacheInChunks(cache, cacheKey, JSON.stringify(finalData), 600);
     return finalData;
@@ -306,7 +307,7 @@ function _loadConfiguration(configSheet) {
     if (stageValue) {
       stageStatusMappings.push({
         stage: stageValue,
-        expectedStatuses: statusValue ? statusValue.split(',').map(function(s) { return s.trim(); }).filter(String) : []
+        expectedStatuses: statusValue ? statusValue.split(',').map(function (s) { return s.trim(); }).filter(String) : []
       });
     }
   }
@@ -314,7 +315,7 @@ function _loadConfiguration(configSheet) {
   if (stageStatusMappings.length === 0) {
     var legacyMappings = parseLegacyJson(9);
     if (legacyMappings.length > 0) {
-      stageStatusMappings = legacyMappings.map(function(mapping) {
+      stageStatusMappings = legacyMappings.map(function (mapping) {
         return {
           stage: mapping.stage,
           expectedStatuses: mapping.keywords || mapping.expectedStatuses || []
@@ -322,8 +323,8 @@ function _loadConfiguration(configSheet) {
       });
     }
   }
-  
-  return { 
+
+  return {
     actPctOptions: actPctOptions,
     planningStageOptions: planningStageOptions,
     projectStageOptions: projectStageOptions,
@@ -375,22 +376,22 @@ function _loadConfigurationCached(configSheet) {
  * @returns {Array<Object>} Combined project data
  */
 function _combineProjectData(projects, manualDataMap) {
-  return projects.map(function(p) {
+  return projects.map(function (p) {
     var jiraId = String(p['Jira #']);
     var manualData = manualDataMap[jiraId] || {};
-    
+
     var combined = {};
-    
+
     // Start with Jira data
     for (var key in p) {
       if (p.hasOwnProperty(key)) combined[key] = p[key];
     }
-    
+
     // Override with manual data where present
     for (var keyManual in manualData) {
       if (manualData.hasOwnProperty(keyManual)) combined[keyManual] = manualData[keyManual];
     }
-    
+
     return combined;
   });
 }
@@ -417,7 +418,7 @@ function _logTimestampSamples(combinedProjects) {
         });
       }
     }
-    
+
     logTimestampOperation("Project Data Sample (Before Client Return)", {
       sampleCount: timestampSamples.length,
       samples: timestampSamples,

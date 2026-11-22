@@ -1463,7 +1463,6 @@ function renderCapacityView() {
     if (sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
     if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
     if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
-    renderCapacityRows_(body, capacity.developers, numberFormat, 'current');
     renderCapacityPace_(capacity, numberFormat, percentFormat);
     renderCapacityRows_(body, capacity.developers, numberFormat, 'current', true);
 
@@ -1503,7 +1502,6 @@ function renderCapacityView() {
             header.appendChild(cell);
         });
         var futureBody = table.createTBody();
-        renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index);
         renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index, false);
         tableWrapper.appendChild(table);
         section.appendChild(tableWrapper);
@@ -1511,158 +1509,148 @@ function renderCapacityView() {
     });
 }
 
-function renderCapacityRows_(body, developers, numberFormat, sectionId) {
-    function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurrentSprint) {
-        body.replaceChildren();
-        if (!developers || developers.length === 0) {
-            var emptyRow = body.insertRow();
-            var emptyCell = emptyRow.insertCell();
-            emptyCell.colSpan = 6;
-            emptyCell.className = 'px-3 py-8 text-center text-gray-500';
-            emptyCell.textContent = 'No developers found.';
-            return;
-        }
-
-        var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
-        developers.forEach(function (developer, index) {
-            var row = body.insertRow();
-            row.className = 'border-b border-gray-200';
-            var nameCell = row.insertCell();
-            nameCell.className = 'px-3 py-3 text-black';
-            var name = document.createElement('span');
-            name.className = 'block';
-            name.textContent = developer.developer;
-            nameCell.appendChild(name);
-            var unassigned = developer.developer === 'Unassigned';
-            var assignments = developer.issues;
-            var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint issues';
-            if (!unassigned || assignments.length) {
-                var toggle = document.createElement('button');
-                toggle.type = 'button';
-                toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
-                var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
-                toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
-                toggle.setAttribute('aria-expanded', 'false');
-                var detailsId = 'capacity-issues-' + sectionId + '-' + index;
-                toggle.setAttribute('aria-controls', detailsId);
-                var label = document.createElement('span');
-                label.textContent = toggleText;
-                toggle.appendChild(label);
-                var arrow = document.createElement('span');
-                arrow.setAttribute('aria-hidden', 'true');
-                arrow.textContent = '▸';
-                toggle.appendChild(arrow);
-                nameCell.appendChild(toggle);
-
-                var detailsRow = body.insertRow();
-                detailsRow.id = detailsId;
-                detailsRow.hidden = true;
-                detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
-                var detailsCell = detailsRow.insertCell();
-                detailsCell.colSpan = 6;
-                detailsCell.className = 'px-4 py-3';
-                if (assignments.length) {
-                    renderCapacityAssignments_(detailsCell, assignments, detailsLabel, numberFormat);
-                } else {
-                    detailsCell.textContent = 'No issues assigned for this sprint.';
-                }
-                toggle.addEventListener('click', function () {
-                    var expand = detailsRow.hidden;
-                    detailsRow.hidden = !expand;
-                    toggle.setAttribute('aria-expanded', String(expand));
-                    arrow.textContent = expand ? '▾' : '▸';
-                });
-            }
-            var issueCell = row.insertCell();
-            issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
-            issueCell.textContent = numberFormat.format(developer.issueCount);
-            var pointsCell = row.insertCell();
-            pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
-            pointsCell.textContent = numberFormat.format(developer.storyPoints);
-            [developer.capacity, developer.remaining].forEach(function (value) {
-                var cell = row.insertCell();
-                cell.className = 'px-3 py-3 text-right tabular-nums text-gray-900';
-                cell.textContent = value == null ? '—' : numberFormat.format(value);
-            });
-            renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat);
-            renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
-        });
+function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurrentSprint) {
+    body.replaceChildren();
+    if (!developers || developers.length === 0) {
+        var emptyRow = body.insertRow();
+        var emptyCell = emptyRow.insertCell();
+        emptyCell.colSpan = 6;
+        emptyCell.className = 'px-3 py-8 text-center text-gray-500';
+        emptyCell.textContent = 'No developers found.';
+        return;
     }
 
-    function renderCapacityWorkload_(cell, developer, unassigned, percentFormat) {
-        cell.className = 'px-3 py-3 min-w-[144px] text-xs text-[#6F7171] whitespace-nowrap';
-        function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, numberFormat, isCurrentSprint) {
-            cell.className = 'px-3 py-3 min-w-[180px] text-xs text-[#6F7171] whitespace-nowrap';
-            if (unassigned) {
-                cell.textContent = 'Needs assignee';
-                return;
-            }
-            if (developer.remaining == null) {
-                cell.textContent = developer.capacity == null ? 'Capacity not set' : 'No sprint';
-                return;
-            }
+    var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
+    developers.forEach(function (developer, index) {
+        var row = body.insertRow();
+        row.className = 'border-b border-gray-200';
+        var nameCell = row.insertCell();
+        nameCell.className = 'px-3 py-3 text-black';
+        var name = document.createElement('span');
+        name.className = 'block';
+        name.textContent = developer.developer;
+        nameCell.appendChild(name);
+        var unassigned = developer.developer === 'Unassigned';
+        var assignments = developer.issues;
+        var detailsLabel = unassigned ? 'Unassigned sprint issues' : developer.developer + ' sprint issues';
+        if (!unassigned || assignments.length) {
+            var toggle = document.createElement('button');
+            toggle.type = 'button';
+            toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
+            toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
+            toggle.setAttribute('aria-expanded', 'false');
+            var detailsId = 'capacity-issues-' + sectionId + '-' + index;
+            toggle.setAttribute('aria-controls', detailsId);
+            var label = document.createElement('span');
+            label.textContent = toggleText;
+            toggle.appendChild(label);
+            var arrow = document.createElement('span');
+            arrow.setAttribute('aria-hidden', 'true');
+            arrow.textContent = '▸';
+            toggle.appendChild(arrow);
+            nameCell.appendChild(toggle);
 
-            var overCapacity = developer.remaining < 0;
-            var ratio = developer.capacity > 0 ? Math.max(0, developer.storyPoints / developer.capacity) : null;
-            if (ratio !== null) {
-                var percent = document.createElement('span');
-                percent.textContent = percentFormat.format(ratio);
-                cell.appendChild(percent);
+            var detailsRow = body.insertRow();
+            detailsRow.id = detailsId;
+            detailsRow.hidden = true;
+            detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
+            var detailsCell = detailsRow.insertCell();
+            detailsCell.colSpan = 6;
+            detailsCell.className = 'px-4 py-3';
+            if (assignments.length) {
+                renderCapacityAssignments_(detailsCell, assignments, detailsLabel, numberFormat);
+            } else {
+                detailsCell.textContent = 'No issues assigned for this sprint.';
             }
-            if (overCapacity || ratio === null) {
-                var status = document.createElement('span');
-                status.className = overCapacity ? 'inline-block rounded-full bg-[#FFF9DE] px-2 py-1 text-black' : '';
-                status.className = overCapacity ? 'inline-block rounded-full bg-[#FFF9DE] px-2 py-0.5 text-black' : '';
-                if (ratio !== null) status.className += ' ml-2';
-                status.textContent = overCapacity ? 'Over capacity' : 'Zero capacity';
-                cell.appendChild(status);
-            }
-            if (isCurrentSprint && developer.pace && ['on_track', 'at_risk', 'behind', 'completed'].indexOf(developer.pace.status) !== -1) {
-                var pacePill = document.createElement('span');
-                pacePill.className = getCapacityPaceBadgeClass_(developer.pace.status) + ' ml-2';
-                pacePill.setAttribute('data-pace', developer.pace.status);
-                pacePill.textContent = developer.pace.label;
-                cell.appendChild(pacePill);
-            }
-            if (ratio !== null) {
-                var breakdown = getDeveloperPointBreakdown_(developer);
-                var denominator = Math.max(developer.capacity, developer.storyPoints);
-                var track = document.createElement('div');
-                track.className = 'mt-1 h-2 overflow-hidden rounded-full bg-[#F6F6F6]';
-                track.className = 'relative mt-1.5 h-2.5 rounded-full bg-[#F6F6F6] border border-[#D8DADA]/60';
-                track.setAttribute('aria-hidden', 'true');
-                var fill = document.createElement('div');
-                fill.className = overCapacity ? 'h-full bg-[#FED60E]' : 'h-full bg-[#006FC1]';
-                fill.style.width = (Math.min(ratio, 1) * 100) + '%';
-                track.appendChild(fill);
-                track.title = numberFormat.format(breakdown.completed) + ' completed · ' +
-                    numberFormat.format(breakdown.inProgress) + ' in progress · ' +
-                    numberFormat.format(breakdown.notStarted) + ' not started';
-                appendStackedSegments_(track, breakdown, denominator);
-                if (overCapacity && developer.storyPoints > 0) {
-                    var limitMarker = document.createElement('div');
-                    limitMarker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-gray-900';
-                    limitMarker.setAttribute('data-marker', 'capacity-limit');
-                    limitMarker.style.left = ((developer.capacity / developer.storyPoints) * 100) + '%';
-                    track.appendChild(limitMarker);
-                }
-                cell.appendChild(track);
+            toggle.addEventListener('click', function () {
+                var expand = detailsRow.hidden;
+                detailsRow.hidden = !expand;
+                toggle.setAttribute('aria-expanded', String(expand));
+                arrow.textContent = expand ? '▾' : '▸';
+            });
+        }
+        var issueCell = row.insertCell();
+        issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
+        issueCell.textContent = numberFormat.format(developer.issueCount);
+        var pointsCell = row.insertCell();
+        pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
+        pointsCell.textContent = numberFormat.format(developer.storyPoints);
+        [developer.capacity, developer.remaining].forEach(function (value) {
+            var cell = row.insertCell();
+            cell.className = 'px-3 py-3 text-right tabular-nums text-gray-900';
+            cell.textContent = value == null ? '—' : numberFormat.format(value);
+        });
+        renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
+    });
+}
 
-                if (developer.storyPoints > 0) {
-                    var captionParts = [];
-                    if (breakdown.completed > 0) captionParts.push(numberFormat.format(breakdown.completed) + ' done');
-                    if (breakdown.inProgress > 0) captionParts.push(numberFormat.format(breakdown.inProgress) + ' active');
-                    if (breakdown.notStarted > 0) captionParts.push(numberFormat.format(breakdown.notStarted) + ' to do');
-                    if (developer.unestimatedCount > 0) captionParts.push(numberFormat.format(developer.unestimatedCount) + ' unest.');
-                    if (captionParts.length) {
-                        var caption = document.createElement('div');
-                        caption.className = 'mt-1 text-[11px] text-[#6F7171]';
-                        caption.textContent = captionParts.join(' · ');
-                        cell.appendChild(caption);
-                    }
-                }
+function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, numberFormat, isCurrentSprint) {
+    cell.className = 'px-3 py-3 min-w-[180px] text-xs text-[#6F7171] whitespace-nowrap';
+    if (unassigned) {
+        cell.textContent = 'Needs assignee';
+        return;
+    }
+    if (developer.remaining == null) {
+        cell.textContent = developer.capacity == null ? 'Capacity not set' : 'No sprint';
+        return;
+    }
+
+    var overCapacity = developer.remaining < 0;
+    var ratio = developer.capacity > 0 ? Math.max(0, developer.storyPoints / developer.capacity) : null;
+    if (ratio !== null) {
+        var percent = document.createElement('span');
+        percent.textContent = percentFormat.format(ratio);
+        cell.appendChild(percent);
+    }
+    if (overCapacity || ratio === null) {
+        var status = document.createElement('span');
+        status.className = overCapacity ? 'inline-block rounded-full bg-[#FFF9DE] px-2 py-0.5 text-black' : '';
+        if (ratio !== null) status.className += ' ml-2';
+        status.textContent = overCapacity ? 'Over capacity' : 'Zero capacity';
+        cell.appendChild(status);
+    }
+    if (isCurrentSprint && developer.pace && ['on_track', 'at_risk', 'behind', 'completed'].indexOf(developer.pace.status) !== -1) {
+        var pacePill = document.createElement('span');
+        pacePill.className = getCapacityPaceBadgeClass_(developer.pace.status) + ' ml-2';
+        pacePill.setAttribute('data-pace', developer.pace.status);
+        pacePill.textContent = developer.pace.label;
+        cell.appendChild(pacePill);
+    }
+    if (ratio !== null) {
+        var breakdown = getDeveloperPointBreakdown_(developer);
+        var denominator = Math.max(developer.capacity, developer.storyPoints);
+        var track = document.createElement('div');
+        track.className = 'relative mt-1.5 h-2.5 rounded-full bg-[#F6F6F6] border border-[#D8DADA]/60';
+        track.setAttribute('aria-hidden', 'true');
+        track.title = numberFormat.format(breakdown.completed) + ' completed · ' +
+            numberFormat.format(breakdown.inProgress) + ' in progress · ' +
+            numberFormat.format(breakdown.notStarted) + ' not started';
+        appendStackedSegments_(track, breakdown, denominator);
+        if (overCapacity && developer.storyPoints > 0) {
+            var limitMarker = document.createElement('div');
+            limitMarker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-gray-900';
+            limitMarker.setAttribute('data-marker', 'capacity-limit');
+            limitMarker.style.left = ((developer.capacity / developer.storyPoints) * 100) + '%';
+            track.appendChild(limitMarker);
+        }
+        cell.appendChild(track);
+
+        if (developer.storyPoints > 0) {
+            var captionParts = [];
+            if (breakdown.completed > 0) captionParts.push(numberFormat.format(breakdown.completed) + ' done');
+            if (breakdown.inProgress > 0) captionParts.push(numberFormat.format(breakdown.inProgress) + ' active');
+            if (breakdown.notStarted > 0) captionParts.push(numberFormat.format(breakdown.notStarted) + ' to do');
+            if (developer.unestimatedCount > 0) captionParts.push(numberFormat.format(developer.unestimatedCount) + ' unest.');
+            if (captionParts.length) {
+                var caption = document.createElement('div');
+                caption.className = 'mt-1 text-[11px] text-[#6F7171]';
+                caption.textContent = captionParts.join(' · ');
+                cell.appendChild(caption);
             }
         }
+    }
+}
 
         function renderCapacityAssignments_(container, assignments, label, numberFormat) {
             var table = document.createElement('table');

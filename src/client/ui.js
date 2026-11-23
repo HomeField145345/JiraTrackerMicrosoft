@@ -1867,13 +1867,29 @@ function syncCapacityFilterButtons_(counts) {
     });
 }
 
+var capacityGroupByPct_ = (function () {
+    try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('projecthub_capacity_group_pct_v1') === '1';
+    } catch (e) {
+        return false;
+    }
+})();
+
 function syncCapacityGroupButton_() {
     var btn = document.getElementById('capacity-group-by-manager');
-    if (!btn) return;
-    btn.setAttribute('aria-pressed', String(capacityGroupByManager_));
-    btn.className = capacityGroupByManager_ ?
-        'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
-        'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+    if (btn) {
+        btn.setAttribute('aria-pressed', String(capacityGroupByManager_));
+        btn.className = capacityGroupByManager_ ?
+            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
+            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+    }
+    var pctBtn = document.getElementById('capacity-group-by-pct');
+    if (pctBtn) {
+        pctBtn.setAttribute('aria-pressed', String(capacityGroupByPct_));
+        pctBtn.className = capacityGroupByPct_ ?
+            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
+            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+    }
 }
 
 function setActiveCapacityTab_(tabKey) {
@@ -1959,8 +1975,26 @@ function bindCapacitySubTabs_() {
         groupBtn._capGroupBound = true;
         groupBtn.addEventListener('click', function () {
             capacityGroupByManager_ = !capacityGroupByManager_;
+            if (capacityGroupByManager_) capacityGroupByPct_ = false;
             try {
                 if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('projecthub_capacity_group_manager_v1', capacityGroupByManager_ ? '1' : '0');
+                    localStorage.setItem('projecthub_capacity_group_pct_v1', capacityGroupByPct_ ? '1' : '0');
+                }
+            } catch (e) { }
+            syncCapacityGroupButton_();
+            renderCapacityView();
+        });
+    }
+    var groupPctBtn = document.getElementById('capacity-group-by-pct');
+    if (groupPctBtn && !groupPctBtn._capGroupPctBound) {
+        groupPctBtn._capGroupPctBound = true;
+        groupPctBtn.addEventListener('click', function () {
+            capacityGroupByPct_ = !capacityGroupByPct_;
+            if (capacityGroupByPct_) capacityGroupByManager_ = false;
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('projecthub_capacity_group_pct_v1', capacityGroupByPct_ ? '1' : '0');
                     localStorage.setItem('projecthub_capacity_group_manager_v1', capacityGroupByManager_ ? '1' : '0');
                 }
             } catch (e) { }
@@ -2395,6 +2429,7 @@ function renderCapacityManagerGroupRow_(body, managerName, members, numberFormat
     } else {
         wkCell.textContent = '—';
     }
+    return row;
 }
 
 function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurrentSprint) {
@@ -2509,11 +2544,36 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
     };
 
-    if (!capacityGroupByManager_) {
+    if (!capacityGroupByManager_ && !capacityGroupByPct_) {
         developers.forEach(function (developer, index) {
             renderDeveloperRow(developer, index, false);
         });
         return;
+    }
+
+    var isPctGrouping = Boolean(capacityGroupByPct_);
+    var unassignedGroupLabel = isPctGrouping ? 'No PCT assigned' : 'No manager assigned';
+    var inferredPctByDev = new Map();
+    if (isPctGrouping && APP_STATE && APP_STATE.allData) {
+        var epicPctMap = new Map();
+        (APP_STATE.allData.projects || []).forEach(function (p) {
+            var jk = String(p['Jira #'] || '').trim().toLowerCase();
+            var ap = String(p['ACT/PCT'] || '').trim();
+            if (jk && ap) epicPctMap.set(jk, ap);
+        });
+        (APP_STATE.allData.projects || []).forEach(function (p) {
+            var dev = String(p.Assignee || '').trim().toLowerCase();
+            if (!dev || dev === 'unassigned' || inferredPctByDev.has(dev)) return;
+            var direct = String(p['ACT/PCT'] || '').trim();
+            var epicLink = String(p['Epic Link'] || '').trim().toLowerCase();
+            var resolved = direct || (epicLink ? epicPctMap.get(epicLink) : '');
+            if (resolved) inferredPctByDev.set(dev, resolved);
+        });
+        (APP_STATE.allData.developerCapacity || []).forEach(function (c) {
+            if (c && c.developer && c.pct) {
+                inferredPctByDev.set(String(c.developer).trim().toLowerCase(), String(c.pct).trim());
+            }
+        });
     }
 
     var groups = new Map();
@@ -2523,21 +2583,26 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             unassignedDevs.push(developer);
             return;
         }
-        var mgr = String(developer.manager || '').trim() || 'No manager assigned';
-        var key = mgr.toLowerCase();
-        if (!groups.has(key)) groups.set(key, { name: mgr, members: [] });
+        var groupVal = isPctGrouping ?
+            (String(developer.pct || inferredPctByDev.get(developer.developer.toLowerCase()) || '').trim() || unassignedGroupLabel) :
+            (String(developer.manager || '').trim() || unassignedGroupLabel);
+        var key = groupVal.toLowerCase();
+        if (!groups.has(key)) groups.set(key, { name: groupVal, members: [] });
         groups.get(key).members.push(developer);
     });
 
     var sortedGroups = Array.from(groups.values()).sort(function (a, b) {
-        if (a.name === 'No manager assigned' && b.name !== 'No manager assigned') return 1;
-        if (b.name === 'No manager assigned' && a.name !== 'No manager assigned') return -1;
+        if (a.name === unassignedGroupLabel && b.name !== unassignedGroupLabel) return 1;
+        if (b.name === unassignedGroupLabel && a.name !== unassignedGroupLabel) return -1;
         return a.name.localeCompare(b.name);
     });
 
     var rowIndex = 0;
     sortedGroups.forEach(function (group) {
-        renderCapacityManagerGroupRow_(body, group.name, group.members, numberFormat, percentFormat);
+        var groupRow = renderCapacityManagerGroupRow_(body, group.name, group.members, numberFormat, percentFormat);
+        if (isPctGrouping && groupRow && typeof groupRow.setAttribute === 'function') {
+            groupRow.setAttribute('data-pct-group', group.name);
+        }
         group.members.forEach(function (dev) {
             renderDeveloperRow(dev, rowIndex++, true);
         });
@@ -2820,7 +2885,7 @@ function openDeveloperQuickEditModal_(developerName) {
     body.className = 'p-6 space-y-5 overflow-y-auto flex-1';
 
     var topGrid = document.createElement('div');
-    topGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+    topGrid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
 
     var mgrGroup = document.createElement('div');
     var mgrLabel = document.createElement('label');
@@ -2861,6 +2926,26 @@ function openDeveloperQuickEditModal_(developerName) {
     capGroup.appendChild(capLabel);
     capGroup.appendChild(capInput);
     topGrid.appendChild(capGroup);
+
+    var pctGroup = document.createElement('div');
+    var pctLabel = document.createElement('label');
+    pctLabel.htmlFor = 'quick-edit-dev-pct';
+    pctLabel.className = 'block text-xs font-medium text-black mb-1';
+    pctLabel.textContent = 'PCT';
+    var pctInput = document.createElement('input');
+    pctInput.id = 'quick-edit-dev-pct';
+    pctInput.type = 'text';
+    pctInput.maxLength = 128;
+    pctInput.placeholder = 'Assign PCT';
+    pctInput.value = existingEntry.pct || '';
+    if (typeof pctInput.setAttribute === 'function') {
+        pctInput.setAttribute('list', 'developer-pct-options');
+        pctInput.setAttribute('aria-label', devName + ' PCT');
+    }
+    pctInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-full text-sm bg-white text-black';
+    pctGroup.appendChild(pctLabel);
+    pctGroup.appendChild(pctInput);
+    topGrid.appendChild(pctGroup);
     body.appendChild(topGrid);
 
     var ptoContainer = document.createElement('div');

@@ -12,7 +12,7 @@
   <script>
     window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-    window.getStoredProjectHubUser = function   () {
+    window.getStoredProjectHubUser = function() {
       return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
     };
 
@@ -21,19 +21,19 @@
         return Promise.reject(new Error('Asset not allowed: ' + filename));
       }
       if (!window.__deferredDashboardAssets[filename]) {
-        window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
-          var script = document.createElement ('script');
-          script.src = './src/client/' + f ilename;
+        window.__def erredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+          var script = document.c reateElement('script');
+          script.src = './src/client/' + filename;
           script.onload = function() { resolve(); };
           script.onerror = function() {
             delete window.__deferredDashboardAssets[filename];
-            rect(new Error('Could not load ' + filename + '.'));
+            reject(new Error('Could not load ' + filename + '.'));
           };
           document.body.appendChild(script);
         });
       }
       return window.__deferredDashboardAssets[filename];
-  }
+    }
   </script>
 </head>
 
@@ -1553,31 +1553,29 @@
   <script src="./src/client/Dashboard.js"></script>
 
   <script>
-    document      tList      MContentLoaded', function() {
-        const configBtn = document.getElement      nfigBtn');
-        const configModal = document.getElementById('config-modal');
-             loseConfigBtn = document.getElementById('closeConfigBtn');
-        nst closeConfigBtnFooter = document.getElementById('closeConfigBtnFooter');
-            overlay = document.getElementById('config-modal-overlay');
+    // Config Modal L       document.addEventListener('DOMContentLoaded', function() {
+            configBtn = document.get        'configBtn');
+        const configModal         .getElementById('config-modal');
+        const closeConfigBtn = document.getElementById('closeConfigBtn');
+        c          nfig      r =      t.getElementById('closeCo        r');
+        const overlay = document      ent      nfig-modal-overlay');
 
         function openConfig() {
-            configModal.classList.remove('hidden');
-          loadDeferredDashboardAsset('Config.js')
+                   l.classList.remove('                loadDe      shboa      'Config.js')
             .then(function() {
-              if (typeof loadConfigData === 'function') {
+              if (typeof loadCo       === 'function') {
                 loadConfigData();
               }
             })
-            .catch(function(error) {
-              alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
-            });
-        }
+          .catch(function(error) {
+              alert('Failed to load      ration tools: ' + (error && error.message ? error.message : error));
+            }         }
 
         function closeConfig() {
             configModal.classList.add('hidden');
         }
 
-        if (configBtn) configBtn.addEventListener('click', function(e) {
+        i(co) configBtn.addEventListener('click', function(e) {
             e.preventDefault();
             openConfig();
         });

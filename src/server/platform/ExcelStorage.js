@@ -130,308 +130,332 @@ class ExcelStorage {
     }
   }
 
+    snapshotWorkbook(workbook, fallbackData) {
+      const map = new Map();
+      if (workbook) {
+        for (const sheet of workbook.worksheets) {
+          const rows = [];
+          sheet.eachRow((row, i) => {
+            const values = [];
+            row.eachCell((cell, j) => {
+              const v = cell.value;
+              values[j - 1] = v instanceof Date ? new Date(v.getTime()) : v;
+            });
+            while (rows.length < i - 1) rows.push([]);
+            rows.push(values);
+          });
+          map.set(sheet.name, rows);
+        }
+        return map;
+      }
+      for (const sheet of (fallbackData?.sheets || [])) {
+        map.set(sheet.name, (sheet.rows || []).map(row => (row || []).map(v => v instanceof Date ? new Date(v.getTime()) : v)));
+      }
+      return map;
+    }
+
   async save(data, item, beforeSheets) {
-    if (beforeSheets && item && item.id) {
-      const savedInPlace = await this.saveInPlace(data, item, beforeSheets);
-      if (savedInPlace) return item;
+      if (beforeSheets && item && item.id) {
+        const savedInPlace = await this.saveInPlace(data, item, beforeSheets);
+        if (savedInPlace) return item;
+      }
+      return this.upload(data, this.itemPath(item.id), item.eTag);
     }
-    return this.upload(data, this.itemPath(item.id), item.eTag);
-  }
 
-  columnLetter(index) {
-    let n = index;
-    let letters = '';
-    while (n > 0) {
-      const rem = (n - 1) % 26;
-      letters = String.fromCharCode(65 + rem) + letters;
-      n = Math.floor((n - 1) / 26);
+    columnLetter(index) {
+      let n = index;
+      let letters = '';
+      while (n > 0) {
+        const rem = (n - 1) % 26;
+        letters = String.fromCharCode(65 + rem) + letters;
+        n = Math.floor((n - 1) / 26);
+      }
+      return letters || 'A';
     }
-    return letters || 'A';
-  }
 
-  serializeGraphCell(value, sheetName, rowNumber, colNumber) {
-    if (value == null || value === '') return '';
-    if (value instanceof Date) return value.toISOString();
-    if (typeof value === 'string' && value.length > 32767) {
-      throw new Error(`${sheetName}, row ${rowNumber}, column ${colNumber} exceeds Excel's cell length limit.`);
+    serializeGraphCell(value, sheetName, rowNumber, colNumber) {
+      if (value == null || value === '') return '';
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === 'string' && value.length > 32767) {
+        throw new Error(`${sheetName}, row ${rowNumber}, column ${colNumber} exceeds Excel's cell length limit.`);
+      }
+      return value;
     }
-    return value;
-  }
 
-  normalizeSheetMatrix(rows, width, sheetName) {
-    return (rows || []).map((row, i) => {
-      const padded = Array(width).fill('');
-      (row || []).forEach((value, j) => {
-        if (j < width) padded[j] = this.serializeGraphCell(value, sheetName, i + 1, j + 1);
+    normalizeSheetMatrix(rows, width, sheetName) {
+      return (rows || []).map((row, i) => {
+        const padded = Array(width).fill('');
+        (row || []).forEach((value, j) => {
+          if (j < width) padded[j] = this.serializeGraphCell(value, sheetName, i + 1, j + 1);
+        });
+        return padded;
       });
-      return padded;
-    });
-  }
-
-  rowsEqual(a, b) {
-    if (a.length !== b.length) return false;
-    for (let i = 0; i < a.length; i++) {
-      if (a[i] !== b[i]) return false;
     }
-    return true;
-  }
+
+    rowsEqual(a, b) {
+      if (a.length !== b.length) return false;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+      }
+      return true;
+    }
 
   async saveInPlace(data, item, beforeSheets) {
-    const path = this.itemPath(item.id);
-    const schema = trackerSheetSchema();
-    const diffs = [];
+      const path = this.itemPath(item.id);
+      const schema = trackerSheetSchema();
+      const diffs = [];
 
-    for (const { name, rows } of data.sheets) {
-      const existed = beforeSheets.has(name);
-      const prevRaw = existed ? beforeSheets.get(name) : [];
-      const schemaWidth = (schema[name] || []).length;
-      const maxPrevCols = prevRaw.reduce((m, r) => Math.max(m, (r || []).length), 0);
-      const maxNextCols = (rows || []).reduce((m, r) => Math.max(m, (r || []).length), 0);
-      const width = Math.max(1, schemaWidth, maxPrevCols, maxNextCols);
+      for (const { name, rows } of data.sheets) {
+        const existed = beforeSheets.has(name);
+        const prevRaw = existed ? beforeSheets.get(name) : [];
+        const schemaWidth = (schema[name] || []).length;
+        const maxPrevCols = prevRaw.reduce((m, r) => Math.max(m, (r || []).length), 0);
+        const maxNextCols = (rows || []).reduce((m, r) => Math.max(m, (r || []).length), 0);
+        const width = Math.max(1, schemaWidth, maxPrevCols, maxNextCols);
 
-      const prevMatrix = this.normalizeSheetMatrix(prevRaw, width, name);
-      const nextMatrix = this.normalizeSheetMatrix(rows, width, name);
+        const prevMatrix = this.normalizeSheetMatrix(prevRaw, width, name);
+        const nextMatrix = this.normalizeSheetMatrix(rows, width, name);
 
-      const changedRowIndices = [];
-      for (let i = 0; i < nextMatrix.length; i++) {
-        if (!prevMatrix[i] || !this.rowsEqual(prevMatrix[i], nextMatrix[i])) {
-          changedRowIndices.push(i);
-        }
-      }
-      const clearedFrom = nextMatrix.length < prevMatrix.length ? nextMatrix.length : -1;
-      if (!existed || changedRowIndices.length > 0 || clearedFrom !== -1) {
-        diffs.push({ name, existed, width, prevCount: prevMatrix.length, nextMatrix, changedRowIndices, clearedFrom });
-      }
-    }
-
-    if (diffs.length === 0) return true;
-
-    const session = await this.graph(`${path}/workbook/createSession`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ persistChanges: true })
-    });
-    // Consumer Personal OneDrive and unsupported drives return 400/404/405/501 for /workbook APIs;
-    // fall back cleanly to whole-file upload when the Graph Excel API is unavailable.
-    if ([400, 404, 405, 501].includes(session.status)) {
-      return false;
-    }
-    this.check(session, 'start workbook save session');
-    const { id } = await session.json();
-    if (typeof id !== 'string' || !id) {
-      throw new Error('Microsoft did not return a workbook save session. Refresh before retrying.');
-    }
-
-    const requestWorkbook = async (suffix, method, body) => {
-      const response = await this.graph(`${path}/workbook/${suffix}`, {
-        method,
-        headers: { 'Content-Type': 'application/json', 'workbook-session-id': id },
-        ...(body === undefined ? {} : { body: JSON.stringify(body) })
-      });
-      this.check(response, 'save changes to the workbook');
-    };
-
-    const CHUNK_ROWS = 200;
-    let failure;
-    try {
-      for (const diff of diffs) {
-        const sheetEncoded = encodeURIComponent(diff.name);
-        const lastCol = this.columnLetter(diff.width);
-        if (!diff.existed) {
-          await requestWorkbook('worksheets/add', 'POST', { name: diff.name });
-        }
-        // Group contiguous changed rows into range PATCH calls (chunked to CHUNK_ROWS).
-        let idx = 0;
-        while (idx < diff.changedRowIndices.length) {
-          const start = diff.changedRowIndices[idx];
-          let end = start;
-          while (
-            idx + 1 < diff.changedRowIndices.length &&
-            diff.changedRowIndices[idx + 1] === end + 1 &&
-            (end - start + 1) < CHUNK_ROWS
-          ) {
-            idx++;
-            end = diff.changedRowIndices[idx];
+        const changedRowIndices = [];
+        for (let i = 0; i < nextMatrix.length; i++) {
+          if (!prevMatrix[i] || !this.rowsEqual(prevMatrix[i], nextMatrix[i])) {
+            changedRowIndices.push(i);
           }
-          const slice = diff.nextMatrix.slice(start, end + 1);
-          const address = `A${start + 1}:${lastCol}${end + 1}`;
-          await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${address}')`, 'PATCH', { values: slice });
-          idx++;
         }
-        if (diff.clearedFrom !== -1) {
-          const clearAddress = `A${diff.clearedFrom + 1}:${lastCol}${diff.prevCount}`;
-          await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${clearAddress}')/clear`, 'POST', { applyTo: 'Contents' });
+        const clearedFrom = nextMatrix.length < prevMatrix.length ? nextMatrix.length : -1;
+        if (!existed || changedRowIndices.length > 0 || clearedFrom !== -1) {
+          diffs.push({ name, existed, width, prevCount: prevMatrix.length, nextMatrix, changedRowIndices, clearedFrom });
         }
       }
-    } catch (error) {
-      failure = error;
-    }
 
-    try {
-      await requestWorkbook('closeSession', 'POST');
-    } catch (error) {
-      throw new Error(`${failure ? `${failure.message} ` : ''}Could not close the workbook save session. Refresh before retrying.`, { cause: error });
+      if (diffs.length === 0) return true;
+
+      const session = await this.graph(`${path}/workbook/createSession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ persistChanges: true })
+      });
+      // Consumer Personal OneDrive and unsupported drives return 400/404/405/501 for /workbook APIs;
+      // fall back cleanly to whole-file upload when the Graph Excel API is unavailable.
+      if ([400, 404, 405, 501].includes(session.status)) {
+        return false;
+      }
+      this.check(session, 'start workbook save session');
+      const { id } = await session.json();
+      if (typeof id !== 'string' || !id) {
+        throw new Error('Microsoft did not return a workbook save session. Refresh before retrying.');
+      }
+
+      const requestWorkbook = async (suffix, method, body) => {
+        const response = await this.graph(`${path}/workbook/${suffix}`, {
+          method,
+          headers: { 'Content-Type': 'application/json', 'workbook-session-id': id },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) })
+        });
+        this.check(response, 'save changes to the workbook');
+      };
+
+      const CHUNK_ROWS = 200;
+      let failure;
+      try {
+        for (const diff of diffs) {
+          const sheetEncoded = encodeURIComponent(diff.name);
+          const lastCol = this.columnLetter(diff.width);
+          if (!diff.existed) {
+            await requestWorkbook('worksheets/add', 'POST', { name: diff.name });
+          }
+          // Group contiguous changed rows into range PATCH calls (chunked to CHUNK_ROWS).
+          let idx = 0;
+          while (idx < diff.changedRowIndices.length) {
+            const start = diff.changedRowIndices[idx];
+            let end = start;
+            while (
+              idx + 1 < diff.changedRowIndices.length &&
+              diff.changedRowIndices[idx + 1] === end + 1 &&
+              (end - start + 1) < CHUNK_ROWS
+            ) {
+              idx++;
+              end = diff.changedRowIndices[idx];
+            }
+            const slice = diff.nextMatrix.slice(start, end + 1);
+            const address = `A${start + 1}:${lastCol}${end + 1}`;
+            await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${address}')`, 'PATCH', { values: slice });
+            idx++;
+          }
+          if (diff.clearedFrom !== -1) {
+            const clearAddress = `A${diff.clearedFrom + 1}:${lastCol}${diff.prevCount}`;
+            await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${clearAddress}')/clear`, 'POST', { applyTo: 'Contents' });
+          }
+        }
+      } catch (error) {
+        failure = error;
+      }
+
+      try {
+        await requestWorkbook('closeSession', 'POST');
+      } catch (error) {
+        throw new Error(`${failure ? `${failure.message} ` : ''}Could not close the workbook save session. Refresh before retrying.`, { cause: error });
+      }
+      if (failure) throw failure;
+      return true;
     }
-    if (failure) throw failure;
-    return true;
-  }
 
   async upload(data, path, eTag) {
-    const bytes = await this.encode(data);
-    if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
-    const session = await this.graph(`${path}/createUploadSession`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(eTag ? { 'If-Match': eTag } : {}) },
-      body: JSON.stringify({
-        deferCommit: true,
-        item: { '@microsoft.graph.conflictBehavior': eTag ? 'replace' : 'fail' }
-      })
-    });
-    this.check(session, 'start saving the workbook');
-    const url = this.httpsUrl((await session.json()).uploadUrl, 'upload');
-    const transfer = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
-    try {
-      const fragment = await this.request(url, {
-        ...transfer,
-        method: 'PUT',
-        headers: { 'Content-Range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}` },
-        body: bytes
+      const bytes = await this.encode(data);
+      if (bytes.byteLength > EXCEL_MAX_BYTES) throw new Error('The workbook exceeds the 20 MiB tracker limit.');
+      const session = await this.graph(`${path}/createUploadSession`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(eTag ? { 'If-Match': eTag } : {}) },
+        body: JSON.stringify({
+          deferCommit: true,
+          item: { '@microsoft.graph.conflictBehavior': eTag ? 'replace' : 'fail' }
+        })
       });
-      this.check(fragment, 'upload the workbook');
-      // Recheck after sending bytes, before committing the replacement.
-      if (eTag) {
-        const current = await this.graph(`${path}?$select=eTag`, { cache: 'no-store' });
-        this.check(current, 'check the workbook revision');
-        if ((await current.json()).eTag !== eTag) this.conflict();
-      }
-      const commit = await this.request(url, { ...transfer, method: 'POST', body: '' });
-      this.check(commit, 'commit the workbook');
-      const item = await commit.json();
-      if (!item.id) throw new Error('Microsoft did not confirm the workbook ID. Reconnect before retrying.');
-      return item;
-    } catch (error) {
+      this.check(session, 'start saving the workbook');
+      const url = this.httpsUrl((await session.json()).uploadUrl, 'upload');
+      const transfer = { credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer' };
       try {
-        const cancelled = await this.request(url, { ...transfer, method: 'DELETE' });
-        if (cancelled.status !== 404 && cancelled.status !== 410) {
-          this.check(cancelled, 'cancel the unfinished upload');
+        const fragment = await this.request(url, {
+          ...transfer,
+          method: 'PUT',
+          headers: { 'Content-Range': `bytes 0-${bytes.byteLength - 1}/${bytes.byteLength}` },
+          body: bytes
+        });
+        this.check(fragment, 'upload the workbook');
+        // Recheck after sending bytes, before committing the replacement.
+        if (eTag) {
+          const current = await this.graph(`${path}?$select=eTag`, { cache: 'no-store' });
+          this.check(current, 'check the workbook revision');
+          if ((await current.json()).eTag !== eTag) this.conflict();
         }
-      } catch {
-        throw new Error(`${error.message} The unfinished upload could not be cancelled. Wait for Microsoft to release it before retrying.`, { cause: error });
+        const commit = await this.request(url, { ...transfer, method: 'POST', body: '' });
+        this.check(commit, 'commit the workbook');
+        const item = await commit.json();
+        if (!item.id) throw new Error('Microsoft did not confirm the workbook ID. Reconnect before retrying.');
+        return item;
+      } catch (error) {
+        try {
+          const cancelled = await this.request(url, { ...transfer, method: 'DELETE' });
+          if (cancelled.status !== 404 && cancelled.status !== 410) {
+            this.check(cancelled, 'cancel the unfinished upload');
+          }
+        } catch {
+          throw new Error(`${error.message} The unfinished upload could not be cancelled. Wait for Microsoft to release it before retrying.`, { cause: error });
+        }
+        throw error;
       }
-      throw error;
     }
-  }
 
   async encode(data) {
-    const workbook = new ExcelJS.Workbook();
-    for (const { name, rows } of data.sheets) {
-      const sheet = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
-      rows.forEach((row, i) => {
-        row.forEach((value, j) => {
-          if (typeof value === 'string' && value.length > 32767) {
-            throw new Error(`${name}, row ${i + 1}, column ${j + 1} exceeds Excel's cell length limit.`);
-          }
-          if (value !== '' && value != null) sheet.getCell(i + 1, j + 1).value = value;
+      const workbook = new ExcelJS.Workbook();
+      for (const { name, rows } of data.sheets) {
+        const sheet = workbook.addWorksheet(name, { views: [{ state: 'frozen', ySplit: 1 }] });
+        rows.forEach((row, i) => {
+          row.forEach((value, j) => {
+            if (typeof value === 'string' && value.length > 32767) {
+              throw new Error(`${name}, row ${i + 1}, column ${j + 1} exceeds Excel's cell length limit.`);
+            }
+            if (value !== '' && value != null) sheet.getCell(i + 1, j + 1).value = value;
+          });
         });
-      });
-      sheet.getRow(1).font = { bold: true };
+        sheet.getRow(1).font = { bold: true };
+      }
+      workbook.addWorksheet(EXCEL_SCHEMA_SHEET, { state: 'veryHidden' }).getCell('A1').value = EXCEL_SCHEMA_VERSION;
+      return workbook.xlsx.writeBuffer();
     }
-    workbook.addWorksheet(EXCEL_SCHEMA_SHEET, { state: 'veryHidden' }).getCell('A1').value = EXCEL_SCHEMA_VERSION;
-    return workbook.xlsx.writeBuffer();
-  }
 
-  decode(workbook, needsSetup) {
-    const marker = workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
-    if (!needsSetup && marker?.getCell('A1').value !== EXCEL_SCHEMA_VERSION) {
-      throw new Error(`${this.fileName ?? EXCEL_FILE_NAME} already exists but is not a compatible tracker workbook. It was not changed.`);
-    }
-    const schema = trackerSheetSchema();
-    const hasUnexpectedTab = workbook.worksheets.some(sheet =>
-      !Object.hasOwn(schema, sheet.name) &&
-      sheet !== marker && !(sheet.name === 'Sheet1' && sheet.actualRowCount === 0)
-    );
-    if (hasUnexpectedTab) {
-      throw new Error('The tracker workbook has unexpected or missing tabs. It was not changed.');
-    }
-    const sheets = Object.entries(schema).map(([name, headers]) => {
-      const sheet = workbook.getWorksheet(name);
-      // Older tracker workbooks gain this sheet on their next successful save.
-      if (!sheet && name === DEVELOPER_CAPACITY_SHEET) return { name, rows: [headers] };
-      if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
-      let userColumnMap = null;
-      if (name === USERS_SHEET && sheet) {
-        const actualHeaders = Array.from({ length: sheet.columnCount }, (_, i) =>
-          String(sheet.getCell(1, i + 1).value ?? '').trim()
-        );
-        const requiredHeadersMatch = headers.slice(0, 9).every((header, i) => actualHeaders[i] === header);
-        const optionalHeaders = actualHeaders.slice(9).filter(Boolean);
-        const allowedOptionalHeaders = new Set(headers.slice(9));
-        const optionalHeadersValid = optionalHeaders.every(header => allowedOptionalHeaders.has(header)) &&
-          new Set(optionalHeaders).size === optionalHeaders.length;
-        if (!requiredHeadersMatch) {
-          throw new Error(`Users columns A-I must be ${headers.slice(0, 9).join(' | ')}. Found: ${actualHeaders.slice(0, 9).join(' | ')}.`);
+    decode(workbook, needsSetup) {
+      const marker = workbook.getWorksheet(EXCEL_SCHEMA_SHEET);
+      if (!needsSetup && marker?.getCell('A1').value !== EXCEL_SCHEMA_VERSION) {
+        throw new Error(`${this.fileName ?? EXCEL_FILE_NAME} already exists but is not a compatible tracker workbook. It was not changed.`);
+      }
+      const schema = trackerSheetSchema();
+      const hasUnexpectedTab = workbook.worksheets.some(sheet =>
+        !Object.hasOwn(schema, sheet.name) &&
+        sheet !== marker && !(sheet.name === 'Sheet1' && sheet.actualRowCount === 0)
+      );
+      if (hasUnexpectedTab) {
+        throw new Error('The tracker workbook has unexpected or missing tabs. It was not changed.');
+      }
+      const sheets = Object.entries(schema).map(([name, headers]) => {
+        const sheet = workbook.getWorksheet(name);
+        // Older tracker workbooks gain this sheet on their next successful save.
+        if (!sheet && name === DEVELOPER_CAPACITY_SHEET) return { name, rows: [headers] };
+        if (needsSetup && (!sheet || sheet.actualRowCount === 0)) return { name, rows: [headers] };
+        let userColumnMap = null;
+        if (name === USERS_SHEET && sheet) {
+          const actualHeaders = Array.from({ length: sheet.columnCount }, (_, i) =>
+            String(sheet.getCell(1, i + 1).value ?? '').trim()
+          );
+          const requiredHeadersMatch = headers.slice(0, 9).every((header, i) => actualHeaders[i] === header);
+          const optionalHeaders = actualHeaders.slice(9).filter(Boolean);
+          const allowedOptionalHeaders = new Set(headers.slice(9));
+          const optionalHeadersValid = optionalHeaders.every(header => allowedOptionalHeaders.has(header)) &&
+            new Set(optionalHeaders).size === optionalHeaders.length;
+          if (!requiredHeadersMatch) {
+            throw new Error(`Users columns A-I must be ${headers.slice(0, 9).join(' | ')}. Found: ${actualHeaders.slice(0, 9).join(' | ')}.`);
+          }
+          if (!optionalHeadersValid) {
+            throw new Error('Users columns J onward may contain "Data Sheet ID" and "Microsoft Object ID" once each. Check the header names and duplicates.');
+          }
+          if (sheet.columnCount > headers.length && actualHeaders.slice(headers.length).some(Boolean)) {
+            throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
+          }
+          userColumnMap = actualHeaders.map((header, i) => {
+            if (i < 9) return i;
+            return header ? headers.indexOf(header) : -1;
+          });
         }
-        if (!optionalHeadersValid) {
-          throw new Error('Users columns J onward may contain "Data Sheet ID" and "Microsoft Object ID" once each. Check the header names and duplicates.');
-        }
-        if (sheet.columnCount > headers.length && actualHeaders.slice(headers.length).some(Boolean)) {
+        const lastHeaderColumn = sheet ? headers.reduce((last, header, i) =>
+          sheet.getCell(1, i + 1).value !== '' && sheet.getCell(1, i + 1).value != null ? i + 1 : last, 0) : 0;
+        const headerMismatch = Array.from({ length: lastHeaderColumn }, (_, i) =>
+          (sheet?.getCell(1, i + 1).value ?? '') !== (headers[i] ?? '')
+        ).some(Boolean);
+        if (!sheet || (!userColumnMap && headerMismatch) || (!userColumnMap && sheet.columnCount > headers.length)) {
           throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
         }
-        userColumnMap = actualHeaders.map((header, i) => {
-          if (i < 9) return i;
-          return header ? headers.indexOf(header) : -1;
-        });
-      }
-      const lastHeaderColumn = sheet ? headers.reduce((last, header, i) =>
-        sheet.getCell(1, i + 1).value !== '' && sheet.getCell(1, i + 1).value != null ? i + 1 : last, 0) : 0;
-      const headerMismatch = Array.from({ length: lastHeaderColumn }, (_, i) =>
-        (sheet?.getCell(1, i + 1).value ?? '') !== (headers[i] ?? '')
-      ).some(Boolean);
-      if (!sheet || (!userColumnMap && headerMismatch) || (!userColumnMap && sheet.columnCount > headers.length)) {
-        throw new Error(`The "${name}" worksheet does not match the tracker schema. It was not changed.`);
-      }
-      const rows = [];
-      sheet.eachRow((row, i) => {
-        const values = Array(headers.length).fill('');
-        row.eachCell((cell, j) => {
-          const value = cell.value;
-          if (typeof value === 'object' && !(value instanceof Date)) {
-            throw new Error(`${name} contains a non-literal cell at ${cell.address}. The workbook was not changed.`);
-          }
-          const targetColumn = userColumnMap ? userColumnMap[j - 1] : j - 1;
-          if (targetColumn === undefined || targetColumn < 0) {
-            if (value !== '' && value != null) {
-              throw new Error(`${name} contains data in an unrecognized column. The workbook was not changed.`);
+        const rows = [];
+        sheet.eachRow((row, i) => {
+          const values = Array(headers.length).fill('');
+          row.eachCell((cell, j) => {
+            const value = cell.value;
+            if (typeof value === 'object' && !(value instanceof Date)) {
+              throw new Error(`${name} contains a non-literal cell at ${cell.address}. The workbook was not changed.`);
             }
-            return;
-          }
-          values[targetColumn] = value;
+            const targetColumn = userColumnMap ? userColumnMap[j - 1] : j - 1;
+            if (targetColumn === undefined || targetColumn < 0) {
+              if (value !== '' && value != null) {
+                throw new Error(`${name} contains data in an unrecognized column. The workbook was not changed.`);
+              }
+              return;
+            }
+            values[targetColumn] = value;
+          });
+          while (rows.length < i - 1) rows.push([]);
+          rows.push(values);
         });
-        while (rows.length < i - 1) rows.push([]);
-        rows.push(values);
+        rows[0] = headers.slice();
+        return { name, rows };
       });
-      rows[0] = headers.slice();
-      return { name, rows };
-    });
-    return { id: PRIMARY_WORKBOOK_ID, name: this.fileName ?? EXCEL_FILE_NAME, sheets };
-  }
-
-  httpsUrl(value, operation) {
-    if (typeof value !== 'string' || !value.startsWith('https://')) {
-      throw new Error(`Microsoft did not return a secure workbook ${operation} URL.`);
+      return { id: PRIMARY_WORKBOOK_ID, name: this.fileName ?? EXCEL_FILE_NAME, sheets };
     }
-    return value;
-  }
 
-  check(response, action) {
-    if (response.status === 423) {
-      throw new Error(`Could not ${action} (Microsoft HTTP 423). The workbook is locked or another upload is pending. Close Excel and other tracker tabs, wait for the lock to clear, then refresh before retrying.`);
+    httpsUrl(value, operation) {
+      if (typeof value !== 'string' || !value.startsWith('https://')) {
+        throw new Error(`Microsoft did not return a secure workbook ${operation} URL.`);
+      }
+      return value;
     }
-    if (response.status === 409 || response.status === 412) this.conflict();
-    if (!response.ok) throw new Error(`Could not ${action} (Microsoft HTTP ${response.status}).`);
-  }
 
-  conflict() {
-    throw new Error('The Excel file changed or is locked. Close Excel, refresh, and try again.');
+    check(response, action) {
+      if (response.status === 423) {
+        throw new Error(`Could not ${action} (Microsoft HTTP 423). The workbook is locked or another upload is pending. Close Excel and other tracker tabs, wait for the lock to clear, then refresh before retrying.`);
+      }
+      if (response.status === 409 || response.status === 412) this.conflict();
+      if (!response.ok) throw new Error(`Could not ${action} (Microsoft HTTP ${response.status}).`);
+    }
+
+    conflict() {
+      throw new Error('The Excel file changed or is locked. Close Excel, refresh, and try again.');
+    }
   }
-}

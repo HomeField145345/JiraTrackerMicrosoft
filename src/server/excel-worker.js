@@ -11,11 +11,8 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
   const connection = { itemId: item.id, webUrl: item.webUrl, created };
   if (needsSetup && action !== 'configure') return { ...connection, needsSetup };
   if (needsSetup) await storage.configure(workbook, item);
+  const beforeSheets = storage.snapshotWorkbook(workbook, data);
   WorkbookService.replaceAll([data]);
-  const beforeSheets = new Map((data.sheets || []).map(sheet => [
-    sheet.name,
-    (sheet.rows || []).map(row => (row || []).map(v => v instanceof Date ? new Date(v.getTime()) : v))
-  ]));
   Platform.cache().clear();
   let currentUser = null;
   if (userObjectId) {
@@ -76,7 +73,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
 self.onmessage = async function ({ data }) {
   try {
     if (!['connect', 'refresh', 'configure', 'import', 'addTask', 'mutate'].includes(data.action) ||
-        (data.action !== 'connect' && !data.itemId)) throw new Error('Connect a tracker workbook first.');
+      (data.action !== 'connect' && !data.itemId)) throw new Error('Connect a tracker workbook first.');
     if (!navigator.locks) throw new Error('Excel storage requires a browser with Web Locks support.');
     const result = await navigator.locks.request('projecthub-excel-store', () => runExcelOperation(data));
     self.postMessage({ result });

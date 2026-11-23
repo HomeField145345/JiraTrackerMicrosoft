@@ -4,949 +4,949 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204, setupFailure, workbookApiUnsupported = false } = {}) {
-  const transfer = 'https://storage.example.test';
-  const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
-  const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
-  const destinationPath = sharepoint ? '/drives/library/items/folder' : '/me/drive/items/folder';
-  const lookup = expectedLookup ?? `${folder}:/${encodeURIComponent(fileName ?? 'ProjectHub.xlsx')}`;
-  const item = { id: 'file', eTag: '"1"', file: {}, webUrl: `${transfer}/excel` };
-  let bytes = foreignWorkbook;
-  let pending;
-  let commits = 0;
-  let cancellations = 0;
-  let uploadSessions = 0;
-  let setupWrites = 0;
-  let setupSessionOpen = false;
-  let closedSetupSessions = 0;
-  let interfere = false;
-  let changeOnDownload = false;
-  const json = (value, status = 200) => Response.json(value, { status });
-  const graphFetch = async (input, init = {}) => {
-    const url = new URL(input);
-    if (url.origin === transfer) {
-      assert.equal(init.headers?.Authorization, undefined);
-      if (url.pathname === '/read') {
-        if (changeOnDownload) item.eTag = '"external-change"';
-        return new Response(bytes);
-      }
-      assert.equal(url.pathname, '/upload');
-      if (init.method === 'DELETE') {
-        cancellations++;
-        if (cancelStatus === 204) pending = undefined;
-        return new Response(null, { status: cancelStatus });
-      }
-      if (init.method === 'PUT') {
-        pending = init.body;
-        assert.equal(init.headers['Content-Range'], `bytes 0-${pending.byteLength - 1}/${pending.byteLength}`);
-        if (interfere) item.eTag = '"external-change"';
-        return json({}, 202);
-      }
-      assert.equal(init.method, 'POST');
-      assert.equal(init.body, '', 'deferred commit must send zero-length content');
-      if (commitStatus) return json({ error: { code: 'nameAlreadyExists' } }, commitStatus);
-      bytes = pending;
-      item.eTag = `"${++commits + 1}"`;
-      return json(item);
-    }
-    assert.equal(url.origin, 'https://graph.microsoft.com');
-    assert.equal(init.headers.Authorization, 'Bearer simulated');
-    const path = url.pathname.replace('/v1.0', '');
-    if (path.startsWith(`${itemPath}/workbook/`)) {
-      const operation = decodeURIComponent(path.slice(`${itemPath}/workbook/`.length));
-      if (operation === 'createSession') {
+  function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204, setupFailure, workbookApiUnsupported = false } = {}) {
+    const transfer = 'https://storage.example.test';
+    const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
+    const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
+    const destinationPath = sharepoint ? '/drives/library/items/folder' : '/me/drive/items/folder';
+    const lookup = expectedLookup ?? `${folder}:/${encodeURIComponent(fileName ?? 'ProjectHub.xlsx')}`;
+    const item = { id: 'file', eTag: '"1"', file: {}, webUrl: `${transfer}/excel` };
+    let bytes = foreignWorkbook;
+    let pending;
+    let commits = 0;
+    let cancellations = 0;
+    let uploadSessions = 0;
+    let setupWrites = 0;
+    let setupSessionOpen = false;
+    let closedSetupSessions = 0;
+    let interfere = false;
+    let changeOnDownload = false;
+    const json = (value, status = 200) => Response.json(value, { status });
+    const graphFetch = async (input, init = {}) => {
+      const url = new URL(input);
+      if (url.origin === transfer) {
+        assert.equal(init.headers?.Authorization, undefined);
+        if (url.pathname === '/read') {
+          if (changeOnDownload) item.eTag = '"external-change"';
+          return new Response(bytes);
+        }
+        assert.equal(url.pathname, '/upload');
+        if (init.method === 'DELETE') {
+          cancellations++;
+          if (cancelStatus === 204) pending = undefined;
+          return new Response(null, { status: cancelStatus });
+        }
+        if (init.method === 'PUT') {
+          pending = init.body;
+          assert.equal(init.headers['Content-Range'], `bytes 0-${pending.byteLength - 1}/${pending.byteLength}`);
+          if (interfere) item.eTag = '"external-change"';
+          return json({}, 202);
+        }
         assert.equal(init.method, 'POST');
-        assert.equal(JSON.parse(init.body).persistChanges, true);
-        if (workbookApiUnsupported) return json({ error: { code: 'notSupported' } }, 501);
-        assert.equal(setupSessionOpen, false);
-        setupSessionOpen = true;
-        return json({ id: 'setup-session' }, 201);
+        assert.equal(init.body, '', 'deferred commit must send zero-length content');
+        if (commitStatus) return json({ error: { code: 'nameAlreadyExists' } }, commitStatus);
+        bytes = pending;
+        item.eTag = `"${++commits + 1}"`;
+        return json(item);
       }
-      assert.equal(init.headers['workbook-session-id'], 'setup-session');
-      assert.equal(setupSessionOpen, true);
-      if (operation === 'closeSession') {
-        assert.equal(init.method, 'POST');
-        setupSessionOpen = false;
-        closedSetupSessions++;
-        return new Response(null, { status: 204 });
-      }
-      if (setupFailure === operation) {
-        setupFailure = undefined;
-        return json({}, 503);
-      }
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(bytes);
-      const body = init.body ? JSON.parse(init.body) : {};
-      const colToNumber = letters => {
-        let num = 0;
-        for (const ch of letters) num = num * 26 + (ch.charCodeAt(0) - 64);
-        return num;
-      };
-      const clearMatch = operation.match(/^worksheets\/([^/]+)\/range\(address='([A-Z]+)(\d+):([A-Z]+)(\d+)'\)\/clear$/);
-      if (operation === 'worksheets/add') {
-        assert.equal(init.method, 'POST');
-        workbook.addWorksheet(body.name);
-      } else if (clearMatch) {
-        assert.equal(init.method, 'POST');
-        const sheet = workbook.getWorksheet(clearMatch[1]);
-        assert.ok(sheet, 'clear must target an existing worksheet');
-        const c1 = colToNumber(clearMatch[2]);
-        const r1 = Number(clearMatch[3]);
-        const c2 = colToNumber(clearMatch[4]);
-        const r2 = Number(clearMatch[5]);
-        for (let r = r1; r <= r2; r++) {
-          for (let c = c1; c <= c2; c++) {
-            sheet.getCell(r, c).value = null;
+      assert.equal(url.origin, 'https://graph.microsoft.com');
+      assert.equal(init.headers.Authorization, 'Bearer simulated');
+      const path = url.pathname.replace('/v1.0', '');
+      if (path.startsWith(`${itemPath}/workbook/`)) {
+        const operation = decodeURIComponent(path.slice(`${itemPath}/workbook/`.length));
+        if (operation === 'createSession') {
+          assert.equal(init.method, 'POST');
+          assert.equal(JSON.parse(init.body).persistChanges, true);
+          if (workbookApiUnsupported) return json({ error: { code: 'notSupported' } }, 501);
+          assert.equal(setupSessionOpen, false);
+          setupSessionOpen = true;
+          return json({ id: 'setup-session' }, 201);
+        }
+        assert.equal(init.headers['workbook-session-id'], 'setup-session');
+        assert.equal(setupSessionOpen, true);
+        if (operation === 'closeSession') {
+          assert.equal(init.method, 'POST');
+          setupSessionOpen = false;
+          closedSetupSessions++;
+          return new Response(null, { status: 204 });
+        }
+        if (setupFailure === operation) {
+          setupFailure = undefined;
+          return json({}, 503);
+        }
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(bytes);
+        const body = init.body ? JSON.parse(init.body) : {};
+        const colToNumber = letters => {
+          let num = 0;
+          for (const ch of letters) num = num * 26 + (ch.charCodeAt(0) - 64);
+          return num;
+        };
+        const clearMatch = operation.match(/^worksheets\/([^/]+)\/range\(address='([A-Z]+)(\d+):([A-Z]+)(\d+)'\)\/clear$/);
+        if (operation === 'worksheets/add') {
+          assert.equal(init.method, 'POST');
+          workbook.addWorksheet(body.name);
+        } else if (clearMatch) {
+          assert.equal(init.method, 'POST');
+          const sheet = workbook.getWorksheet(clearMatch[1]);
+          assert.ok(sheet, 'clear must target an existing worksheet');
+          const c1 = colToNumber(clearMatch[2]);
+          const r1 = Number(clearMatch[3]);
+          const c2 = colToNumber(clearMatch[4]);
+          const r2 = Number(clearMatch[5]);
+          for (let r = r1; r <= r2; r++) {
+            for (let c = c1; c <= c2; c++) {
+              sheet.getCell(r, c).value = null;
+            }
           }
-        }
-      } else {
-        assert.equal(init.method, 'PATCH');
-        const range = operation.match(/^worksheets\/([^/]+)\/range\(address='([^']+)'\)$/);
-        if (range) {
-          const sheet = workbook.getWorksheet(range[1]);
-          assert.ok(sheet, 'range writes must target an existing worksheet');
-          const addrMatch = range[2].match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/);
-          assert.ok(addrMatch, `invalid range address: ${range[2]}`);
-          const startCol = colToNumber(addrMatch[1]);
-          const startRow = Number(addrMatch[2]);
-          body.values.forEach((rowValues, rOffset) => {
-            rowValues.forEach((value, cOffset) => {
-              sheet.getCell(startRow + rOffset, startCol + cOffset).value = value === '' ? null : value;
-            });
-          });
         } else {
-          assert.equal(operation, 'worksheets/_ProjectHub');
-          assert.equal(body.visibility, 'VeryHidden');
-          workbook.getWorksheet('_ProjectHub').state = 'veryHidden';
+          assert.equal(init.method, 'PATCH');
+          const range = operation.match(/^worksheets\/([^/]+)\/range\(address='([^']+)'\)$/);
+          if (range) {
+            const sheet = workbook.getWorksheet(range[1]);
+              assert.ok(sheet, 'range writes must target an existing worksheet');
+              const addrMatch = range[2].match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/);
+              assert.ok(addrMatch, `invalid range address: ${range[2]}`);
+              const startCol = colToNumber(addrMatch[1]);
+              const startRow = Number(addrMatch[2]);
+              body.values.forEach((rowValues, rOffset) => {
+                rowValues.forEach((value, cOffset) => {
+                  sheet.getCell(startRow + rOffset, startCol + cOffset).value = value === '' ? null : value;
+                });
+              });
+            } else {
+              assert.equal(operation, 'worksheets/_ProjectHub');
+              assert.equal(body.visibility, 'VeryHidden');
+              workbook.getWorksheet('_ProjectHub').state = 'veryHidden';
+            }
+      }
+          bytes = await workbook.xlsx.writeBuffer();
+          item.eTag = `"setup-${++setupWrites}"`;
+          return json({});
         }
-      }
-      bytes = await workbook.xlsx.writeBuffer();
-      item.eTag = `"setup-${++setupWrites}"`;
-      return json({});
-    }
-    if (path === lookup || path === itemPath) {
-      if (!bytes) return json({}, 404);
-      if (url.searchParams.get('select') === 'id,@microsoft.graph.downloadUrl') {
-        assert.equal(path, itemPath, 'download URL lookup must use the resolved item ID');
-        return json(omitItemDownloadUrl ? { id: item.id } : {
-          id: item.id, '@microsoft.graph.downloadUrl': `${transfer}/read`
-        });
-      }
-      return json(omitMetadataDownloadUrl ? item : { ...item, '@microsoft.graph.downloadUrl': `${transfer}/read` });
-    }
-    if (path === folder) return json({ id: 'folder', folder: {} });
-    if (path === `${destinationPath}:/ProjectHub.xlsx:/createUploadSession`) {
-      uploadSessions++;
-      assert.equal(fileName, undefined, 'an explicitly selected workbook must never be created');
-      assert.equal(JSON.parse(init.body).item['@microsoft.graph.conflictBehavior'], 'fail');
-      assert.equal(JSON.parse(init.body).deferCommit, true);
-      return bytes ? json({}, 409) : json({ uploadUrl: `${transfer}/upload` });
-    }
-    assert.equal(path, `${itemPath}/createUploadSession`);
-    uploadSessions++;
-    assert.equal(init.headers['If-Match'], item.eTag);
-    return json({ uploadUrl: `${transfer}/upload` });
-  };
-  const context = vm.createContext({ ExcelJS, graphFetch, Date, TextDecoder, atob, URL, crypto, console });
-  // Match browser workers, which reject fetch calls with the wrong receiver.
-  vm.runInContext(`
+        if (path === lookup || path === itemPath) {
+          if (!bytes) return json({}, 404);
+          if (url.searchParams.get('select') === 'id,@microsoft.graph.downloadUrl') {
+            assert.equal(path, itemPath, 'download URL lookup must use the resolved item ID');
+            return json(omitItemDownloadUrl ? { id: item.id } : {
+              id: item.id, '@microsoft.graph.downloadUrl': `${transfer}/read`
+            });
+          }
+          return json(omitMetadataDownloadUrl ? item : { ...item, '@microsoft.graph.downloadUrl': `${transfer}/read` });
+        }
+        if (path === folder) return json({ id: 'folder', folder: {} });
+        if (path === `${destinationPath}:/ProjectHub.xlsx:/createUploadSession`) {
+          uploadSessions++;
+          assert.equal(fileName, undefined, 'an explicitly selected workbook must never be created');
+          assert.equal(JSON.parse(init.body).item['@microsoft.graph.conflictBehavior'], 'fail');
+          assert.equal(JSON.parse(init.body).deferCommit, true);
+          return bytes ? json({}, 409) : json({ uploadUrl: `${transfer}/upload` });
+        }
+        assert.equal(path, `${itemPath}/createUploadSession`);
+        uploadSessions++;
+        assert.equal(init.headers['If-Match'], item.eTag);
+        return json({ uploadUrl: `${transfer}/upload` });
+      };
+      const context = vm.createContext({ ExcelJS, graphFetch, Date, TextDecoder, atob, URL, crypto, console });
+      // Match browser workers, which reject fetch calls with the wrong receiver.
+      vm.runInContext(`
     globalThis.fetch = function (input, init) {
       'use strict';
       if (this !== globalThis) throw new TypeError('Illegal invocation');
       return graphFetch(input, init);
     };
   `, context);
-  context.self = context;
-  context.importScripts = (...paths) => {
-    for (const path of paths) {
-      if (path.startsWith('../../vendor/')) continue;
-      vm.runInContext(readFileSync(new URL(`../src/server/${path}`, import.meta.url), 'utf8'), context, { filename: path });
+      context.self = context;
+      context.importScripts = (...paths) => {
+        for (const path of paths) {
+          if (path.startsWith('../../vendor/')) continue;
+          vm.runInContext(readFileSync(new URL(`../src/server/${path}`, import.meta.url), 'utf8'), context, { filename: path });
+        }
+      };
+      context.importScripts('excel-worker.js');
+      return {
+        run: (action, itemId, payload, userObjectId, ownerObjectId, userEmail) => context.runExcelOperation({
+          action, itemId, payload, accessToken: 'simulated',
+          userObjectId, userEmail, ownerObjectId,
+          target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
+        }),
+        revision: () => commits,
+        cancellations: () => cancellations,
+        uploadSessions: () => uploadSessions,
+        setupWrites: () => setupWrites,
+        closedSetupSessions: () => closedSetupSessions,
+        workbook: async () => {
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(bytes);
+          return workbook;
+        },
+        replaceWorkbook: async updatedBytes => {
+          bytes = updatedBytes;
+          item.eTag = '"external-change"';
+        },
+        analyzeCapacity: (items, sprintName, entries, options) => context.analyzeSprintCapacity(items, sprintName, entries, options),
+        analyzeCapacityPlan: (projects, items, entries, options) =>
+          context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries, options),
+        analyzeSprintData: items => context.analyzeSprintData(items),
+        parseSprintEntries: value => context.parseSprintEntries_(value),
+        interfere: () => { interfere = true; },
+        changeOnDownload: () => { changeOnDownload = true; }
+      };
+
     }
-  };
-  context.importScripts('excel-worker.js');
-  return {
-    run: (action, itemId, payload, userObjectId, ownerObjectId, userEmail) => context.runExcelOperation({
-      action, itemId, payload, accessToken: 'simulated',
-      userObjectId, userEmail, ownerObjectId,
-      target: { ...(sharepoint ? { driveId: 'library', folderId: 'folder' } : {}), fileName, folderPath }
-    }),
-    revision: () => commits,
-    cancellations: () => cancellations,
-    uploadSessions: () => uploadSessions,
-    setupWrites: () => setupWrites,
-    closedSetupSessions: () => closedSetupSessions,
-    workbook: async () => {
-      const workbook = new ExcelJS.Workbook();
-      await workbook.xlsx.load(bytes);
-      return workbook;
-    },
-    replaceWorkbook: async updatedBytes => {
-      bytes = updatedBytes;
-      item.eTag = '"external-change"';
-    },
-    analyzeCapacity: (items, sprintName, entries, options) => context.analyzeSprintCapacity(items, sprintName, entries, options),
-    analyzeCapacityPlan: (projects, items, entries, options) =>
-      context.analyzeSprintCapacityPlan(projects, items, context.analyzeSprintData(items), entries, options),
-    analyzeSprintData: items => context.analyzeSprintData(items),
-    parseSprintEntries: value => context.parseSprintEntries_(value),
-    interfere: () => { interfere = true; },
-    changeOnDownload: () => { changeOnDownload = true; }
-  };
 
-}
+    test('aggregates sprint assignments and remaining capacity for Jira assignees', () => {
+      const graph = harness();
+      const capacity = graph.analyzeCapacity([
+        { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
+        { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
+        { 'Jira #': 'TEAM-2', 'Issue Type': ' VZAgile Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
+        { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
+        { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
+        { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },
+        { 'Jira #': 'TEAM-3', Summary: 'Fix login', Status: 'Open', 'Issue Type': 'Bug', Assignee: 'unassigned', sprint: 'Sprint 12' },
+        { 'Issue Type': 'Epic', sprint: 'Sprint 12' },
+        { 'Issue Type': 'Bug', sprint: 'Sprint 11' }
+      ], 'Sprint 12', [
+        { developer: 'avery', capacity: 4 },
+        { developer: 'Casey', capacity: 7 },
+        { developer: 'Former developer', capacity: 5 }
+      ]);
 
-test('aggregates sprint assignments and remaining capacity for Jira assignees', () => {
-  const graph = harness();
-  const capacity = graph.analyzeCapacity([
-    { 'Jira #': 'TEAM-1', Summary: 'Update checkout', Status: 'Done', 'Issue Type': 'Story', 'Assigned Dev': 'Avery', 'Story Points': '3', sprint: 'Sprint 11, Sprint 12' },
-    { 'Issue Type': 'Bug', Assignee: 'avery', 'Story Points': 2, sprint: 'Sprint 12' },
-    { 'Jira #': 'TEAM-2', 'Issue Type': ' VZAgile Story ', Assignee: 'Blair', 'Story Points': '5', sprint: 'Sprint 12' },
-    { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 12' },
-    { 'Issue Type': 'Story', Assignee: 'Casey', 'Story Points': 9, sprint: 'Sprint 11' },
-    { 'Issue Type': 'Story', 'Story Points': '', sprint: 'Sprint 12' },
-    { 'Jira #': 'TEAM-3', Summary: 'Fix login', Status: 'Open', 'Issue Type': 'Bug', Assignee: 'unassigned', sprint: 'Sprint 12' },
-    { 'Issue Type': 'Epic', sprint: 'Sprint 12' },
-    { 'Issue Type': 'Bug', sprint: 'Sprint 11' }
-  ], 'Sprint 12', [
-    { developer: 'avery', capacity: 4 },
-    { developer: 'Casey', capacity: 7 },
-    { developer: 'Former developer', capacity: 5 }
-  ]);
-
-  assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
-    sprintName: 'Sprint 12',
-    sprintStart: null,
-    sprintEnd: null,
-    totalIssues: 5,
-    totalStoryPoints: 10,
-    completedPoints: 3,
-    inProgressPoints: 0,
-    notStartedPoints: 7,
-    completedIssues: 1,
-    unestimatedIssues: 2,
-    totalCapacity: 11,
-    pace: {
-      status: 'no_dates',
-      label: 'Dates unavailable',
-      timeElapsedPct: null,
-      timeRemainingPct: null,
-      completedPct: 0.3,
-      activePct: 0.3,
-      delta: null,
-      remainingPoints: 7,
-      remainingIssues: 4,
-      requiredPointsPerDay: null,
-      expectedPointsPerDay: null,
-      totalDays: null,
-      daysElapsed: null,
-      daysRemaining: null,
-      unit: null,
-      metricBasis: 'points'
-    },
-    developers: [
-        {
-        developer: 'Avery', issueCount: 2, storyPoints: 5, completedPoints: 3, inProgressPoints: 0, notStartedPoints: 2,
-        completedIssues: 1, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 4, manager: '', remaining: -1, pace: null,
-        issues: [
-            { issueType: 'Story', jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3, workState: 'completed' },
-          { issueType: 'Bug', jiraKey: '', summary: '', status: '', storyPoints: 2, workState: 'notStarted' }
+      assert.deepEqual(JSON.parse(JSON.stringify(capacity)), {
+        sprintName: 'Sprint 12',
+        sprintStart: null,
+        sprintEnd: null,
+        totalIssues: 5,
+        totalStoryPoints: 10,
+        completedPoints: 3,
+        inProgressPoints: 0,
+        notStartedPoints: 7,
+        completedIssues: 1,
+        unestimatedIssues: 2,
+        totalCapacity: 11,
+        pace: {
+          status: 'no_dates',
+          label: 'Dates unavailable',
+          timeElapsedPct: null,
+          timeRemainingPct: null,
+          completedPct: 0.3,
+          activePct: 0.3,
+          delta: null,
+          remainingPoints: 7,
+          remainingIssues: 4,
+          requiredPointsPerDay: null,
+          expectedPointsPerDay: null,
+          totalDays: null,
+          daysElapsed: null,
+          daysRemaining: null,
+          unit: null,
+          metricBasis: 'points'
+        },
+        developers: [
+          {
+            developer: 'Avery', issueCount: 2, storyPoints: 5, completedPoints: 3, inProgressPoints: 0, notStartedPoints: 2,
+            completedIssues: 1, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 4, manager: '', remaining: -1, pace: null,
+            issues: [
+              { issueType: 'Story', jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3, workState: 'completed' },
+              { issueType: 'Bug', jiraKey: '', summary: '', status: '', storyPoints: 2, workState: 'notStarted' }
+            ]
+          },
+          {
+            developer: 'Blair', issueCount: 1, storyPoints: 5, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 5,
+            completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null,
+            issues: [{ issueType: 'VZAgile Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5, workState: 'notStarted' }]
+          },
+          {
+            developer: 'Casey', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+            completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 7, manager: '', remaining: 7, pace: null, issues: []
+          },
+          {
+            developer: 'Unassigned', issueCount: 2, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+            completedIssues: 0, inProgressIssues: 0, notStartedIssues: 2, unestimatedCount: 2, capacity: null, manager: '', remaining: null, pace: null,
+            issues: [
+              { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0, workState: 'notStarted' },
+              { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0, workState: 'notStarted' }
+            ]
+          }
         ]
-      },
+      });
+      assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
+        sprintName: 'None', sprintStart: null, sprintEnd: null, totalIssues: 0, totalStoryPoints: 0,
+        completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0, completedIssues: 0, unestimatedIssues: 0,
+        totalCapacity: null, pace: null, developers: []
+      });
+      const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
+      assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
         {
-        developer: 'Blair', issueCount: 1, storyPoints: 5, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 5,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null,
-        issues: [{ issueType: 'VZAgile Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5, workState: 'notStarted' }]
-      },
-      {
-        developer: 'Casey', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 7, manager: '', remaining: 7, pace: null, issues: []
-      },
-      {
-        developer: 'Unassigned', issueCount: 2, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 2, unestimatedCount: 2, capacity: null, manager: '', remaining: null, pace: null,
-        issues: [
-            { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0, workState: 'notStarted' },
-          { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0, workState: 'notStarted' }
-        ]
+          developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+          completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 0, manager: '', remaining: null, pace: null, issues: []
+        }
+      ]);
+    });
+
+    test('computes stacked work states and sprint pace from elapsed workdays', () => {
+      const graph = harness();
+      const sprintField = 'com.atlassian.Sprint@1[id=40,state=ACTIVE,name=Sprint 40,startDate=2026-11-02,endDate=2026-11-13]';
+      const items = [
+        { 'Jira #': 'P-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 5, sprint: sprintField },
+        { 'Jira #': 'P-2', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 3, sprint: sprintField },
+        { 'Jira #': 'P-3', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: sprintField },
+        { 'Jira #': 'P-4', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'To Do', 'Story Points': 10, sprint: sprintField }
+      ];
+      const capacities = [{ developer: 'Avery', capacity: 8 }, { developer: 'Blair', capacity: 10 }];
+
+      // End of Friday week 1 (Nov 6, 2026 23:59) -> 5 of 10 workdays elapsed (50%)
+      const midSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-06T23:59:59') });
+      assert.equal(midSprint.completedPoints, 5);
+      assert.equal(midSprint.inProgressPoints, 3);
+      assert.equal(midSprint.notStartedPoints, 12);
+      assert.equal(midSprint.totalCapacity, 18);
+      assert.equal(midSprint.pace.status, 'at_risk'); // 25% done vs 50% elapsed (-25% delta)
+      assert.equal(midSprint.pace.label, 'At risk');
+      assert.equal(midSprint.pace.remainingPoints, 15);
+      assert.equal(midSprint.pace.totalDays, 10);
+      assert.equal(midSprint.pace.daysRemaining, 5);
+      assert.equal(midSprint.pace.requiredPointsPerDay, 3); // 15 pts left / 5 workdays left
+      assert.equal(midSprint.pace.expectedPointsPerDay, 2); // 20 total pts / 10 workdays
+
+      const avery = midSprint.developers.find(d => d.developer === 'Avery');
+      const blair = midSprint.developers.find(d => d.developer === 'Blair');
+      assert.equal(avery.completedPoints, 5);
+      assert.equal(avery.inProgressPoints, 3);
+      assert.equal(avery.notStartedPoints, 2);
+      assert.equal(avery.pace.status, 'on_track'); // 50% done vs 50% elapsed
+      assert.equal(blair.pace.status, 'behind'); // 0% done vs 50% elapsed
+
+      // Sunday of middle weekend (Nov 8, 2026) -> still 5 of 10 workdays elapsed (50%), weekend does not penalize pace
+      const weekend = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-08T12:00:00') });
+      assert.equal(Math.round(weekend.pace.timeElapsedPct * 100), 50);
+
+      // Day 9 of 10 workdays (Nov 12, 2026 23:59 -> 90% elapsed, 25% done) -> Behind
+      const lateSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-12T23:59:59') });
+      assert.equal(lateSprint.pace.status, 'behind');
+      assert.equal(lateSprint.pace.label, 'Behind');
+
+      // Before sprint starts -> Upcoming
+      const beforeStart = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-10-30T12:00:00') });
+      assert.equal(beforeStart.pace.status, 'upcoming');
+
+      // All done -> Completed
+      const doneItems = items.map(item => ({ ...item, Status: 'Done' }));
+      const finished = graph.analyzeCapacity(doneItems, 'Sprint 40', capacities, { now: new Date('2026-11-06T12:00:00') });
+      assert.equal(finished.pace.status, 'completed');
+    });
+
+    test('groups unscheduled open stories into noSprint and open past-sprint stories into pastOpen', () => {
+      const graph = harness();
+      const sprint = (n, state, dates = '') => `com.atlassian.Sprint@1[id=${n},state=${state},name=Sprint ${n}${dates}]`;
+      const items = [
+        { 'Jira #': 'CUR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 5, sprint: sprint(12, 'ACTIVE') },
+        { 'Jira #': 'FUT-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 3, sprint: sprint(13, 'FUTURE') },
+        { 'Jira #': 'NOSPR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 4, sprint: '' },
+        { 'Jira #': 'NOSPR-2', 'Issue Type': 'Story', Assignee: '', Status: 'Open', 'Story Points': 2 },
+        { 'Jira #': 'NOSPR-DONE', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 8, sprint: '' },
+        { 'Jira #': 'NOSPR-EPIC', 'Issue Type': 'Epic', Assignee: 'Avery', Status: 'Open', 'Story Points': 13, sprint: '' },
+        { 'Jira #': 'PAST-OPEN', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'In Progress', 'Story Points': 3, sprint: sprint(11, 'CLOSED') },
+        { 'Jira #': 'PAST-DONE', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'Done', 'Story Points': 5, sprint: sprint(11, 'CLOSED') },
+        { 'Jira #': 'PAST-MOVED', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: `${sprint(11, 'CLOSED')}, ${sprint(12, 'ACTIVE')}` }
+      ];
+      const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 10 }]);
+      assert.equal(plan.future.length, 1);
+      assert.equal(plan.future[0].sprintName, 'Sprint 13');
+      assert.equal(plan.noSprint.totalIssues, 2);
+      assert.equal(plan.noSprint.totalStoryPoints, 6);
+      assert.deepEqual(JSON.parse(JSON.stringify(plan.noSprint.developers.map(d => [d.developer, d.storyPoints]))), [['Avery', 4], ['Unassigned', 2]]);
+      assert.equal(plan.pastOpen.totalIssues, 1);
+      assert.equal(plan.pastOpen.totalStoryPoints, 3);
+      assert.equal(plan.pastOpen.issues[0].jiraKey, 'PAST-OPEN');
+      assert.equal(plan.pastOpen.issues[0].sprintName, 'Sprint 11');
+    });
+
+    test('plans capacity for identifiable future sprints without counting closed sprints', () => {
+      const graph = harness();
+      const sprint = (number, state, dates = '') =>
+        `com.atlassian.Sprint@1[id=${number},state=${state},name=Sprint ${number}${dates}]`;
+      const items = [
+        { 'Jira #': 'TEAM-1', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 3, sprint: sprint(12, 'ACTIVE') },
+        { 'Jira #': 'TEAM-2', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 4, sprint: `${sprint(12, 'ACTIVE')}, ${sprint(13, 'FUTURE')}` },
+        { 'Issue Type': 'Bug', Assignee: 'Blair', 'Story Points': 2, sprint: 'Sprint 14' },
+        { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 14' },
+        { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 9, sprint: sprint(15, 'CLOSED') },
+        { 'Issue Type': 'Story', 'Story Points': 1, sprint: sprint(16, 'OPEN', ',startDate=2099-01-01,endDate=2099-01-14') }
+      ];
+      const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 5 }]);
+      assert.equal(plan.current.sprintName, 'Sprint 12');
+      assert.equal(plan.current.totalStoryPoints, 7);
+      assert.deepEqual(Array.from(plan.current.developers[0].issues, issue => issue.jiraKey), ['TEAM-1', 'TEAM-2']);
+      assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
+      assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
+        developer: 'Avery', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 5, manager: '', remaining: 1, pace: null,
+        issues: [{ issueType: 'Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4, workState: 'notStarted' }]
+      });
+      assert.equal(plan.future[1].totalStoryPoints, 2);
+      assert.equal(plan.future[2].developers.find(dev => dev.developer === 'Unassigned').remaining, null);
+
+      const futureOnly = [{ Assignee: 'Avery', 'Story Points': 2, sprint: sprint(20, 'FUTURE') }];
+      const futurePlan = graph.analyzeCapacityPlan(futureOnly, futureOnly, [{ developer: 'Avery', capacity: 5 }]);
+      assert.equal(futurePlan.current.sprintName, 'None');
+      assert.equal(futurePlan.future[0].sprintName, 'Sprint 20');
+      assert.equal(futurePlan.future[0].developers[0].remaining, 3);
+
+      const unknown = [{ Assignee: 'Avery', sprint: 'Sprint 20, Sprint 21' }];
+      const unknownPlan = graph.analyzeCapacityPlan(unknown, unknown, []);
+      assert.equal(unknownPlan.current.sprintName, 'Sprint 21');
+      assert.equal(unknownPlan.future.length, 0);
+      const legacy = graph.parseSprintEntries('Sprint 22 1.01 - 1.14');
+      assert.equal(legacy[0].name, 'Sprint 22');
+      assert.equal(legacy[0].startDate.getMonth(), 0);
+      assert.equal(legacy[0].endDate.getDate(), 14);
+
+      const today = new Date();
+      const currentDate = `${today.getMonth() + 1}/${today.getDate()}`;
+      const dateBasedCurrent = graph.analyzeSprintData([
+        { sprint: 'Sprint 81' },
+        { sprint: `Sprint 80 1/1-1/2, Sprint 81 ${currentDate}-${currentDate}` },
+        { sprint: 'Sprint 82' }
+      ]);
+      assert.equal(dateBasedCurrent.currentSprintName, 'Sprint 81');
+    });
+
+    test('upgrades an older workbook when an admin saves developer capacity', async () => {
+      const graph = harness();
+      const owner = '33333333-3333-3333-3333-333333333333';
+      const member = '44444444-4444-4444-4444-444444444444';
+      await graph.run('connect', undefined, undefined, owner, owner);
+      const workbook = await graph.workbook();
+      workbook.removeWorksheet(workbook.getWorksheet('DeveloperCapacity').id);
+      const issues = workbook.getWorksheet('JiraData');
+      const headers = issues.getRow(1).values.slice(1);
+      const row = Array(headers.length).fill('');
+      Object.entries({ 'Jira #': 'ABC-1', 'Issue Type': 'Story', Assignee: 'Avery', sprint: 'Sprint 12', 'Story Points': 3 })
+        .forEach(([key, value]) => { row[headers.indexOf(key)] = value; });
+      issues.addRow(row);
+      workbook.getWorksheet('Users').addRow(['user-2', 'pm', 'pm@example.com', 'PM', 'project_manager', true, '', '', '', '', member]);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+
+      const read = await graph.run('connect', 'file', undefined, owner, owner);
+      assert.equal(read.projects.sprintCapacity.developers[0].capacity, null);
+      assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
+      const save = entries => graph.run('mutate', 'file', { method: 'saveDeveloperCapacity', args: [entries] }, owner, owner);
+      await assert.rejects(graph.run('mutate', 'file', {
+        method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: 10 }]]
+      }, member, owner), /Admin rights required/);
+      await assert.rejects(save([{ developer: 'Avery', capacity: '5bad' }]), /non-negative/);
+      assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
+      await save([{ developer: 'Avery', capacity: 5 }]);
+      let saved = await graph.workbook();
+      assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('A2').value, 'Avery');
+      assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 5);
+      saved.getWorksheet('DeveloperCapacity').addRow(['Former', 8, 'Keep note', 'old']);
+      await graph.replaceWorkbook(await saved.xlsx.writeBuffer());
+      await save([{ developer: 'avery', capacity: 0 }]);
+      saved = await graph.workbook();
+      assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 0);
+      assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('C3').value, 'Keep note');
+      const reopened = await graph.run('refresh', 'file', undefined, owner, owner);
+      assert.equal(reopened.projects.sprintCapacity.developers[0].remaining, -3);
+      await save([{ developer: 'Avery', capacity: '' }]);
+      assert.equal((await graph.run('refresh', 'file', undefined, owner, owner)).projects.sprintCapacity.developers[0].remaining, null);
+    });
+
+    test('provisions Excel once in SharePoint, then persists Jira imports and tasks', async () => {
+      const graph = harness({ sharepoint: true });
+      const connected = await graph.run('connect');
+      assert.equal(connected.created, true);
+      assert.equal((await graph.run('connect')).created, false);
+      assert.equal(graph.revision(), 1);
+      assert.equal(graph.cancellations(), 0);
+      const workbook = await graph.workbook();
+      for (const [sheet, header] of Object.entries({
+        JiraData: 'Sync Status', ManualData: 'Jira #', OptionsList: 'ACT/PCT Options',
+        IndependentTasks: 'ID', DeveloperCapacity: 'Developer', Users: 'ID', Sessions: 'Token', AdminConfigs: 'Username'
+      })) {
+        assert.equal(workbook.getWorksheet(sheet).getCell('A1').value, header);
+        assert.equal(workbook.getWorksheet(sheet).rowCount, sheet === 'Users' ? 2 : 1);
       }
-    ]
-  });
-  assert.deepEqual(JSON.parse(JSON.stringify(graph.analyzeCapacity([], 'None'))), {
-      sprintName: 'None', sprintStart: null, sprintEnd: null, totalIssues: 0, totalStoryPoints: 0,
-    completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0, completedIssues: 0, unestimatedIssues: 0,
-    totalCapacity: null, pace: null, developers: []
-  });
-  const noSprint = graph.analyzeCapacity([{ Assignee: 'Avery' }], 'None', [{ developer: 'Avery', capacity: 0 }]);
-  assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
-      {
-      developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 0, manager: '', remaining: null, pace: null, issues: []
-    }
-  ]);
-});
+      const file = Buffer.from('Issue key,Summary,Status,Assignee\nTEST-1,Example issue,Open,Example\n');
+      await graph.run('import', connected.itemId, { fileName: 'jira.csv', base64Data: file.toString('base64') });
+      await graph.run('addTask', connected.itemId, '=Literal text');
+      const reopened = await graph.run('connect');
+      assert.equal(reopened.projects.projects[0]['Jira #'], 'TEST-1');
+      assert.equal(reopened.projects.independentTasks[0].Title, '=Literal text');
+      assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').getCell('B2').type, ExcelJS.ValueType.String);
+    });
 
-test('computes stacked work states and sprint pace from elapsed workdays', () => {
-  const graph = harness();
-  const sprintField = 'com.atlassian.Sprint@1[id=40,state=ACTIVE,name=Sprint 40,startDate=2026-11-02,endDate=2026-11-13]';
-  const items = [
-    { 'Jira #': 'P-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 5, sprint: sprintField },
-    { 'Jira #': 'P-2', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 3, sprint: sprintField },
-    { 'Jira #': 'P-3', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: sprintField },
-    { 'Jira #': 'P-4', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'To Do', 'Story Points': 10, sprint: sprintField }
-  ];
-  const capacities = [{ developer: 'Avery', capacity: 8 }, { developer: 'Blair', capacity: 10 }];
+    test('persists dashboard edits and reopens workbooks with extended task columns', async () => {
+      const graph = harness();
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const memberObjectId = '44444444-4444-4444-4444-444444444444';
+      const connected = await graph.run('connect', undefined, undefined, ownerObjectId, ownerObjectId);
+      const { itemId } = connected;
+      assert.equal(connected.user.role, 'admin');
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
 
-  // End of Friday week 1 (Nov 6, 2026 23:59) -> 5 of 10 workdays elapsed (50%)
-  const midSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-06T23:59:59') });
-  assert.equal(midSprint.completedPoints, 5);
-  assert.equal(midSprint.inProgressPoints, 3);
-  assert.equal(midSprint.notStartedPoints, 12);
-  assert.equal(midSprint.totalCapacity, 18);
-  assert.equal(midSprint.pace.status, 'at_risk'); // 25% done vs 50% elapsed (-25% delta)
-  assert.equal(midSprint.pace.label, 'At risk');
-  assert.equal(midSprint.pace.remainingPoints, 15);
-  assert.equal(midSprint.pace.totalDays, 10);
-  assert.equal(midSprint.pace.daysRemaining, 5);
-  assert.equal(midSprint.pace.requiredPointsPerDay, 3); // 15 pts left / 5 workdays left
-  assert.equal(midSprint.pace.expectedPointsPerDay, 2); // 20 total pts / 10 workdays
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').addRow([
+        'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
+        '', new Date(), '', '', memberObjectId
+      ]);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-  const avery = midSprint.developers.find(d => d.developer === 'Avery');
-  const blair = midSprint.developers.find(d => d.developer === 'Blair');
-  assert.equal(avery.completedPoints, 5);
-  assert.equal(avery.inProgressPoints, 3);
-  assert.equal(avery.notStartedPoints, 2);
-  assert.equal(avery.pace.status, 'on_track'); // 50% done vs 50% elapsed
-  assert.equal(blair.pace.status, 'behind'); // 0% done vs 50% elapsed
+      const member = await graph.run('connect', itemId, undefined, memberObjectId, ownerObjectId);
+      assert.equal(member.user.role, 'project_manager');
+      await assert.rejects(graph.run('mutate', itemId, {
+        method: 'saveConfiguration', args: [{}]
+      }, memberObjectId, ownerObjectId), /Admin rights required/);
 
-  // Sunday of middle weekend (Nov 8, 2026) -> still 5 of 10 workdays elapsed (50%), weekend does not penalize pace
-  const weekend = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-08T12:00:00') });
-  assert.equal(Math.round(weekend.pace.timeElapsedPct * 100), 50);
+      const fieldUpdate = await graph.run('mutate', itemId, {
+        method: 'saveManualData',
+        args: ['TEST-1', 'Artifacts', '[{"name":"spec"}]']
+      }, ownerObjectId, ownerObjectId);
+      assert.equal(fieldUpdate.response.status, 'success');
 
-  // Day 9 of 10 workdays (Nov 12, 2026 23:59 -> 90% elapsed, 25% done) -> Behind
-  const lateSprint = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-11-12T23:59:59') });
-  assert.equal(lateSprint.pace.status, 'behind');
-  assert.equal(lateSprint.pace.label, 'Behind');
+      const taskCreate = await graph.run('mutate', itemId, {
+        method: 'createTaskAndSync',
+        args: [{ Title: 'Workbook task', Status: 'Open' }]
+      }, ownerObjectId, ownerObjectId);
+      assert.equal(taskCreate.response.status, 'success');
 
-  // Before sprint starts -> Upcoming
-  const beforeStart = graph.analyzeCapacity(items, 'Sprint 40', capacities, { now: new Date('2026-10-30T12:00:00') });
-  assert.equal(beforeStart.pace.status, 'upcoming');
+      const reopened = await graph.run('connect', itemId, undefined, ownerObjectId, ownerObjectId);
+      assert.equal(reopened.projects.independentTasks[0].Title, 'Workbook task');
+      const savedWorkbook = await graph.workbook();
+      assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
+      assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
+      assert.equal(savedWorkbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
+      assert.equal(savedWorkbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
+    });
 
-  // All done -> Completed
-  const doneItems = items.map(item => ({ ...item, Status: 'Done' }));
-  const finished = graph.analyzeCapacity(doneItems, 'Sprint 40', capacities, { now: new Date('2026-11-06T12:00:00') });
-  assert.equal(finished.pace.status, 'completed');
-});
+    test('links the configured owner to the Admin row in a workbook with the legacy Users schema', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').spliceColumns(11, 1);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-test('groups unscheduled open stories into noSprint and open past-sprint stories into pastOpen', () => {
-  const graph = harness();
-  const sprint = (n, state, dates = '') => `com.atlassian.Sprint@1[id=${n},state=${state},name=Sprint ${n}${dates}]`;
-  const items = [
-    { 'Jira #': 'CUR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 5, sprint: sprint(12, 'ACTIVE') },
-    { 'Jira #': 'FUT-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 3, sprint: sprint(13, 'FUTURE') },
-    { 'Jira #': 'NOSPR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 4, sprint: '' },
-    { 'Jira #': 'NOSPR-2', 'Issue Type': 'Story', Assignee: '', Status: 'Open', 'Story Points': 2 },
-    { 'Jira #': 'NOSPR-DONE', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 8, sprint: '' },
-    { 'Jira #': 'NOSPR-EPIC', 'Issue Type': 'Epic', Assignee: 'Avery', Status: 'Open', 'Story Points': 13, sprint: '' },
-    { 'Jira #': 'PAST-OPEN', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'In Progress', 'Story Points': 3, sprint: sprint(11, 'CLOSED') },
-    { 'Jira #': 'PAST-DONE', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'Done', 'Story Points': 5, sprint: sprint(11, 'CLOSED') },
-    { 'Jira #': 'PAST-MOVED', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: `${sprint(11, 'CLOSED')}, ${sprint(12, 'ACTIVE')}` }
-  ];
-  const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 10 }]);
-  assert.equal(plan.future.length, 1);
-  assert.equal(plan.future[0].sprintName, 'Sprint 13');
-  assert.equal(plan.noSprint.totalIssues, 2);
-  assert.equal(plan.noSprint.totalStoryPoints, 6);
-  assert.deepEqual(JSON.parse(JSON.stringify(plan.noSprint.developers.map(d => [d.developer, d.storyPoints]))), [['Avery', 4], ['Unassigned', 2]]);
-  assert.equal(plan.pastOpen.totalIssues, 1);
-  assert.equal(plan.pastOpen.totalStoryPoints, 3);
-  assert.equal(plan.pastOpen.issues[0].jiraKey, 'PAST-OPEN');
-  assert.equal(plan.pastOpen.issues[0].sprintName, 'Sprint 11');
-});
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+      assert.equal(connected.user.role, 'admin');
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+      const migrated = await graph.workbook();
+      assert.equal(migrated.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
+      assert.equal(migrated.getWorksheet('Users').getCell('K2').value, ownerObjectId);
+    });
 
-test('plans capacity for identifiable future sprints without counting closed sprints', () => {
-  const graph = harness();
-  const sprint = (number, state, dates = '') =>
-    `com.atlassian.Sprint@1[id=${number},state=${state},name=Sprint ${number}${dates}]`;
-  const items = [
-    { 'Jira #': 'TEAM-1', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 3, sprint: sprint(12, 'ACTIVE') },
-    { 'Jira #': 'TEAM-2', 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 4, sprint: `${sprint(12, 'ACTIVE')}, ${sprint(13, 'FUTURE')}` },
-    { 'Issue Type': 'Bug', Assignee: 'Blair', 'Story Points': 2, sprint: 'Sprint 14' },
-    { 'Issue Type': 'Epic', Assignee: 'Avery', 'Story Points': 8, sprint: 'Sprint 14' },
-    { 'Issue Type': 'Story', Assignee: 'Avery', 'Story Points': 9, sprint: sprint(15, 'CLOSED') },
-    { 'Issue Type': 'Story', 'Story Points': 1, sprint: sprint(16, 'OPEN', ',startDate=2099-01-01,endDate=2099-01-14') }
-  ];
-  const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 5 }]);
-  assert.equal(plan.current.sprintName, 'Sprint 12');
-  assert.equal(plan.current.totalStoryPoints, 7);
-  assert.deepEqual(Array.from(plan.current.developers[0].issues, issue => issue.jiraKey), ['TEAM-1', 'TEAM-2']);
-  assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
-  assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
-    developer: 'Avery', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4,
-    completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 5, manager: '', remaining: 1, pace: null,
-    issues: [{ issueType: 'Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4, workState: 'notStarted' }]
-  });
-  assert.equal(plan.future[1].totalStoryPoints, 2);
-  assert.equal(plan.future[2].developers.find(dev => dev.developer === 'Unassigned').remaining, null);
+    test('matches the configured owner email when multiple unassigned Admin rows exist', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').addRow([
+        'user-2', 'owner', 'owner@example.com', 'Workbook Owner', 'admin', true,
+        '', new Date(), '', '', ''
+      ]);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-  const futureOnly = [{ Assignee: 'Avery', 'Story Points': 2, sprint: sprint(20, 'FUTURE') }];
-  const futurePlan = graph.analyzeCapacityPlan(futureOnly, futureOnly, [{ developer: 'Avery', capacity: 5 }]);
-  assert.equal(futurePlan.current.sprintName, 'None');
-  assert.equal(futurePlan.future[0].sprintName, 'Sprint 20');
-  assert.equal(futurePlan.future[0].developers[0].remaining, 3);
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'owner@example.com');
+      assert.equal(connected.user.username, 'owner');
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+      const migrated = await graph.workbook();
+      assert.equal(migrated.getWorksheet('Users').getCell('K2').value, null);
+      assert.equal(migrated.getWorksheet('Users').getCell('K3').value, ownerObjectId);
+    });
 
-  const unknown = [{ Assignee: 'Avery', sprint: 'Sprint 20, Sprint 21' }];
-  const unknownPlan = graph.analyzeCapacityPlan(unknown, unknown, []);
-  assert.equal(unknownPlan.current.sprintName, 'Sprint 21');
-  assert.equal(unknownPlan.future.length, 0);
-  const legacy = graph.parseSprintEntries('Sprint 22 1.01 - 1.14');
-  assert.equal(legacy[0].name, 'Sprint 22');
-  assert.equal(legacy[0].startDate.getMonth(), 0);
-  assert.equal(legacy[0].endDate.getDate(), 14);
+    test('reads Microsoft Object ID in column K when legacy Users data lacks Data Sheet ID in column J', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      const users = workbook.getWorksheet('Users');
+      users.spliceColumns(10, 2);
+      users.getCell('K1').value = 'Microsoft Object ID';
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      users.getCell('K2').value = ownerObjectId;
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-  const today = new Date();
-  const currentDate = `${today.getMonth() + 1}/${today.getDate()}`;
-  const dateBasedCurrent = graph.analyzeSprintData([
-    { sprint: 'Sprint 81' },
-    { sprint: `Sprint 80 1/1-1/2, Sprint 81 ${currentDate}-${currentDate}` },
-    { sprint: 'Sprint 82' }
-  ]);
-  assert.equal(dateBasedCurrent.currentSprintName, 'Sprint 81');
-});
+      const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'admin@example.com');
+      assert.equal(connected.user.role, 'admin');
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+    });
 
-test('upgrades an older workbook when an admin saves developer capacity', async () => {
-  const graph = harness();
-  const owner = '33333333-3333-3333-3333-333333333333';
-  const member = '44444444-4444-4444-4444-444444444444';
-  await graph.run('connect', undefined, undefined, owner, owner);
-  const workbook = await graph.workbook();
-  workbook.removeWorksheet(workbook.getWorksheet('DeveloperCapacity').id);
-  const issues = workbook.getWorksheet('JiraData');
-  const headers = issues.getRow(1).values.slice(1);
-  const row = Array(headers.length).fill('');
-  Object.entries({ 'Jira #': 'ABC-1', 'Issue Type': 'Story', Assignee: 'Avery', sprint: 'Sprint 12', 'Story Points': 3 })
-    .forEach(([key, value]) => { row[headers.indexOf(key)] = value; });
-  issues.addRow(row);
-  workbook.getWorksheet('Users').addRow(['user-2', 'pm', 'pm@example.com', 'PM', 'project_manager', true, '', '', '', '', member]);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+    test('accepts formatted blank columns beyond the Users schema', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').getColumn(14).width = 18;
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-  const read = await graph.run('connect', 'file', undefined, owner, owner);
-  assert.equal(read.projects.sprintCapacity.developers[0].capacity, null);
-  assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
-  const save = entries => graph.run('mutate', 'file', { method: 'saveDeveloperCapacity', args: [entries] }, owner, owner);
-  await assert.rejects(graph.run('mutate', 'file', {
-    method: 'saveDeveloperCapacity', args: [[{ developer: 'Avery', capacity: 10 }]]
-  }, member, owner), /Admin rights required/);
-  await assert.rejects(save([{ developer: 'Avery', capacity: '5bad' }]), /non-negative/);
-  assert.equal((await graph.workbook()).getWorksheet('DeveloperCapacity'), undefined);
-  await save([{ developer: 'Avery', capacity: 5 }]);
-  let saved = await graph.workbook();
-  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('A2').value, 'Avery');
-  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 5);
-  saved.getWorksheet('DeveloperCapacity').addRow(['Former', 8, 'Keep note', 'old']);
-  await graph.replaceWorkbook(await saved.xlsx.writeBuffer());
-  await save([{ developer: 'avery', capacity: 0 }]);
-  saved = await graph.workbook();
-  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('B2').value, 0);
-  assert.equal(saved.getWorksheet('DeveloperCapacity').getCell('C3').value, 'Keep note');
-  const reopened = await graph.run('refresh', 'file', undefined, owner, owner);
-  assert.equal(reopened.projects.sprintCapacity.developers[0].remaining, -3);
-  await save([{ developer: 'Avery', capacity: '' }]);
-  assert.equal((await graph.run('refresh', 'file', undefined, owner, owner)).projects.sprintCapacity.developers[0].remaining, null);
-});
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+    });
 
-test('provisions Excel once in SharePoint, then persists Jira imports and tasks', async () => {
-  const graph = harness({ sharepoint: true });
-  const connected = await graph.run('connect');
-  assert.equal(connected.created, true);
-  assert.equal((await graph.run('connect')).created, false);
-  assert.equal(graph.revision(), 1);
-  assert.equal(graph.cancellations(), 0);
-  const workbook = await graph.workbook();
-  for (const [sheet, header] of Object.entries({
-    JiraData: 'Sync Status', ManualData: 'Jira #', OptionsList: 'ACT/PCT Options',
-    IndependentTasks: 'ID', DeveloperCapacity: 'Developer', Users: 'ID', Sessions: 'Token', AdminConfigs: 'Username'
-  })) {
-    assert.equal(workbook.getWorksheet(sheet).getCell('A1').value, header);
-    assert.equal(workbook.getWorksheet(sheet).rowCount, sheet === 'Users' ? 2 : 1);
-  }
-  const file = Buffer.from('Issue key,Summary,Status,Assignee\nTEST-1,Example issue,Open,Example\n');
-  await graph.run('import', connected.itemId, { fileName: 'jira.csv', base64Data: file.toString('base64') });
-  await graph.run('addTask', connected.itemId, '=Literal text');
-  const reopened = await graph.run('connect');
-  assert.equal(reopened.projects.projects[0]['Jira #'], 'TEST-1');
-  assert.equal(reopened.projects.independentTasks[0].Title, '=Literal text');
-  assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').getCell('B2').type, ExcelJS.ValueType.String);
-});
+    test('treats a textual TRUE value as an active user during owner bootstrap', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').getCell('F2').value = 'TRUE';
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-test('persists dashboard edits and reopens workbooks with extended task columns', async () => {
-  const graph = harness();
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const memberObjectId = '44444444-4444-4444-4444-444444444444';
-  const connected = await graph.run('connect', undefined, undefined, ownerObjectId, ownerObjectId);
-  const { itemId } = connected;
-  assert.equal(connected.user.role, 'admin');
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+      assert.equal(connected.user.role, 'admin');
+      assert.equal(connected.user.microsoftObjectId, ownerObjectId);
+    });
 
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').addRow([
-    'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
-    '', new Date(), '', '', memberObjectId
-  ]);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+    test('resolves the reported Admin row by Microsoft Object ID', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').getRow(2).values = [
+        '1', 'ckrablin', 'ck0779@att.com', 'Chris', 'admin', 'TRUE', '123456', '', '', '',
+        '757e8405-c7eb-4fc6-9add-dc3a4560fa1c'
+      ];
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-  const member = await graph.run('connect', itemId, undefined, memberObjectId, ownerObjectId);
-  assert.equal(member.user.role, 'project_manager');
-  await assert.rejects(graph.run('mutate', itemId, {
-    method: 'saveConfiguration', args: [{}]
-  }, memberObjectId, ownerObjectId), /Admin rights required/);
+      const objectId = '757e8405-c7eb-4fc6-9add-dc3a4560fa1c';
+      const connected = await graph.run('connect', initial.itemId, undefined, objectId, objectId, 'ck0779@att.com');
+      assert.equal(connected.user.username, 'ckrablin');
+      assert.equal(connected.user.email, 'ck0779@att.com');
+      assert.equal(connected.user.role, 'admin');
+      assert.equal(connected.user.microsoftObjectId, objectId);
+    });
 
-  const fieldUpdate = await graph.run('mutate', itemId, {
-    method: 'saveManualData',
-    args: ['TEST-1', 'Artifacts', '[{"name":"spec"}]']
-  }, ownerObjectId, ownerObjectId);
-  assert.equal(fieldUpdate.response.status, 'success');
+    test('allows admins to manage workbook users without exposing passwords or deleting rows', async () => {
+      const graph = harness();
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const initial = await graph.run('connect');
+      await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
 
-  const taskCreate = await graph.run('mutate', itemId, {
-    method: 'createTaskAndSync',
-    args: [{ Title: 'Workbook task', Status: 'Open' }]
-  }, ownerObjectId, ownerObjectId);
-  assert.equal(taskCreate.response.status, 'success');
+      const listUsers = () => graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, ownerObjectId, ownerObjectId);
+      const saveUsers = users => graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [users] }, ownerObjectId, ownerObjectId);
+      const listed = JSON.parse(JSON.stringify((await listUsers()).response));
+      assert.equal(listed.length, 1);
+      assert.equal(listed[0].role, 'admin');
+      assert.equal(Object.hasOwn(listed[0], 'password'), false);
 
-  const reopened = await graph.run('connect', itemId, undefined, ownerObjectId, ownerObjectId);
-  assert.equal(reopened.projects.independentTasks[0].Title, 'Workbook task');
-  const savedWorkbook = await graph.workbook();
-  assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J1').value, 'Artifacts');
-  assert.equal(savedWorkbook.getWorksheet('ManualData').getCell('J2').value, '[{"name":"spec"}]');
-  assert.equal(savedWorkbook.getWorksheet('IndependentTasks').getCell('K1').value, 'Recurrence');
-  assert.equal(savedWorkbook.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
-});
+      const memberObjectId = '44444444-4444-4444-4444-444444444444';
+      await saveUsers([...listed, {
+        id: '',
+        username: 'member',
+        email: 'member@example.com',
+        displayName: 'Member',
+        role: 'user',
+        isActive: true,
+        microsoftObjectId: memberObjectId
+      }]);
 
-test('links the configured owner to the Admin row in a workbook with the legacy Users schema', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').spliceColumns(11, 1);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      const workbook = await graph.workbook();
+      const usersSheet = workbook.getWorksheet('Users');
+      assert.equal(usersSheet.getCell('B3').value, 'member');
+      assert.equal(usersSheet.getCell('F3').value, true);
+      assert.equal(usersSheet.getCell('G3').value ?? '', '');
+      assert.equal(usersSheet.getCell('K3').value, memberObjectId);
 
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
-  assert.equal(connected.user.role, 'admin');
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
-  const migrated = await graph.workbook();
-  assert.equal(migrated.getWorksheet('Users').getCell('K1').value, 'Microsoft Object ID');
-  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, ownerObjectId);
-});
+      const afterAdd = JSON.parse(JSON.stringify((await listUsers()).response));
+      await assert.rejects(saveUsers(afterAdd.map(user => ({
+        ...user,
+        role: user.username === 'member' ? 'admin' : user.role,
+        isActive: user.username === 'member' ? user.isActive : false
+      }))), /cannot deactivate or demote your own admin account/);
+      await saveUsers(afterAdd.map(user => ({
+        ...user,
+        isActive: user.username === 'member' ? false : user.isActive
+      })));
+      const afterDeactivate = JSON.parse(JSON.stringify((await listUsers()).response));
+      assert.equal(afterDeactivate.length, 2);
+      assert.equal(afterDeactivate.find(user => user.username === 'member').isActive, false);
 
-test('matches the configured owner email when multiple unassigned Admin rows exist', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').addRow([
-    'user-2', 'owner', 'owner@example.com', 'Workbook Owner', 'admin', true,
-    '', new Date(), '', '', ''
-  ]);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      await assert.rejects(saveUsers(afterDeactivate.map(user => ({
+        ...user,
+        isActive: user.role === 'admin' ? false : user.isActive
+      }))), /At least one active admin must remain/);
+    });
 
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'owner@example.com');
-  assert.equal(connected.user.username, 'owner');
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
-  const migrated = await graph.workbook();
-  assert.equal(migrated.getWorksheet('Users').getCell('K2').value, null);
-  assert.equal(migrated.getWorksheet('Users').getCell('K3').value, ownerObjectId);
-});
+    test('restricts workbook user management to admins', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      const memberObjectId = '44444444-4444-4444-4444-444444444444';
+      workbook.getWorksheet('Users').addRow([
+        'user-2', 'member', 'member@example.com', 'Member', 'user', true, '', new Date(), '', '', memberObjectId
+      ]);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      await graph.run('connect', initial.itemId, undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
 
-test('reads Microsoft Object ID in column K when legacy Users data lacks Data Sheet ID in column J', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  const users = workbook.getWorksheet('Users');
-  users.spliceColumns(10, 2);
-  users.getCell('K1').value = 'Microsoft Object ID';
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  users.getCell('K2').value = ownerObjectId;
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      await assert.rejects(
+        graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
+        /Admin rights required/
+      );
+      await assert.rejects(
+        graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [[]] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
+        /Admin rights required/
+      );
+    });
 
-  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId, 'admin@example.com');
-  assert.equal(connected.user.role, 'admin');
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
-});
+    test('reports the connected workbook when the signed-in owner has no matching row', async () => {
+      const graph = harness();
+      const initial = await graph.run('connect');
+      const workbook = await graph.workbook();
+      workbook.getWorksheet('Users').getCell('K2').value = '44444444-4444-4444-4444-444444444444';
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      const revision = graph.revision();
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
 
-test('accepts formatted blank columns beyond the Users schema', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').getColumn(14).width = 18;
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      await assert.rejects(
+        graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId),
+        error => {
+          assert.match(error.message, /does not match an active user/);
+          assert.equal(error.workbookUrl, 'https://storage.example.test/excel');
+          return true;
+        }
+      );
+      assert.equal(graph.revision(), revision);
+    });
 
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
-});
+    test('filters project data and capacity to the mapped non-admin workbook user', async () => {
+      const graph = harness();
+      await graph.run('connect');
+      const workbook = await graph.workbook();
+      const users = workbook.getWorksheet('Users');
+      const issues = workbook.getWorksheet('JiraData');
+      const headers = issues.getRow(1).values.slice(1);
+      const addIssue = (jiraId, owner, developer, points, sprint = 'Sprint 12') => {
+        const row = Array(headers.length).fill('');
+        const values = {
+          'Jira #': jiraId,
+          Summary: jiraId,
+          'Issue Type': 'Story',
+          Assignee: developer,
+          'Assigned Dev': developer,
+          Owner: owner,
+          'Story Points': points,
+          sprint
+        };
+        Object.entries(values).forEach(([header, value]) => { row[headers.indexOf(header)] = value; });
+        issues.addRow(row);
+      };
+      addIssue('TEAM-1', 'pm', 'Avery', 3);
+      addIssue('TEAM-2', 'someone-else', 'Blair', 8);
+      addIssue('TEAM-3', 'pm', 'Avery', 2, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
+      addIssue('TEAM-4', 'someone-else', 'Blair', 9, 'com.atlassian.Sprint@1[id=14,state=FUTURE,name=Sprint 14]');
+      addIssue('TEAM-5', 'someone-else', 'Avery', 6, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
+      const memberObjectId = '44444444-4444-4444-4444-444444444444';
+      users.addRow([
+        'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
+        '', new Date(), '', '', memberObjectId
+      ]);
+      await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
 
-test('treats a textual TRUE value as an active user during owner bootstrap', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').getCell('F2').value = 'TRUE';
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+      const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
+      assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1', 'TEAM-3']);
+      assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
+        {
+          developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
+          completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null, issues: []
+        }
+      ]);
+      assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');
+      assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.futureSprintCapacity.map(sprint => sprint.sprintName))), ['Sprint 13']);
+      assert.equal(memberData.projects.futureSprintCapacity[0].developers[0].storyPoints, 2);
+      assert.deepEqual(Array.from(memberData.projects.futureSprintCapacity[0].developers[0].issues, issue => issue.jiraKey), ['TEAM-3']);
+    });
 
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const connected = await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
-  assert.equal(connected.user.role, 'admin');
-  assert.equal(connected.user.microsoftObjectId, ownerObjectId);
-});
+    test('does not replace an unrelated file at the OneDrive destination', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Another workbook').getCell('A1').value = 'Keep this';
+      const graph = harness({ foreignWorkbook: await workbook.xlsx.writeBuffer() });
+      await assert.rejects(graph.run('connect'), /not a compatible tracker workbook/);
+      assert.equal(graph.revision(), 0);
+    });
 
-test('resolves the reported Admin row by Microsoft Object ID', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').getRow(2).values = [
-    '1', 'ckrablin', 'ck0779@att.com', 'Chris', 'admin', 'TRUE', '123456', '', '', '',
-    '757e8405-c7eb-4fc6-9add-dc3a4560fa1c'
-  ];
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
+    test('opens a file in a OneDrive subfolder without writing, then sets it up in place on request', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1');
+      workbook.addWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
+      const tasks = workbook.addWorksheet('IndependentTasks');
+      tasks.addRow(['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner']);
+      tasks.addRow(['existing', 'Keep this task', '', 'Not started']);
+      tasks.getColumn(2).width = 45;
+      tasks.getCell('B2').font = { italic: true };
+      const graph = harness({
+        foreignWorkbook: await workbook.xlsx.writeBuffer(),
+        folderPath: 'Documents/Team #1',
+        fileName: 'Tracker.xlsx',
+        expectedLookup: '/me/drive/root:/Documents/Team%20%231/Tracker.xlsx',
+        omitMetadataDownloadUrl: true
+      });
+      const { itemId, needsSetup, created } = await graph.run('connect');
+      assert.equal(needsSetup, true);
+      assert.equal(created, false);
+      assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
+      await assert.rejects(graph.run('addTask', itemId, 'Not yet'), /Set up the workbook/);
+      assert.equal(graph.revision(), 0);
 
-  const objectId = '757e8405-c7eb-4fc6-9add-dc3a4560fa1c';
-  const connected = await graph.run('connect', initial.itemId, undefined, objectId, objectId, 'ck0779@att.com');
-  assert.equal(connected.user.username, 'ckrablin');
-  assert.equal(connected.user.email, 'ck0779@att.com');
-  assert.equal(connected.user.role, 'admin');
-  assert.equal(connected.user.microsoftObjectId, objectId);
-});
+      const configured = await graph.run('configure', itemId);
+      assert.equal(configured.itemId, itemId);
+      assert.equal(configured.projects.independentTasks[0].Title, 'Keep this task');
+      const saved = await graph.workbook();
+      assert.equal(saved.getWorksheet('JiraData').getCell('A1').value, 'Sync Status');
+      assert.equal(saved.getWorksheet('ManualData').getCell('A1').value, 'Jira #');
+      assert.ok(saved.getWorksheet('Sheet1'), 'setup must not delete existing worksheets');
+      assert.equal(saved.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
+      assert.equal(saved.getWorksheet('IndependentTasks').getColumn(2).width, 45);
+      assert.equal(saved.getWorksheet('IndependentTasks').getCell('B2').font.italic, true);
+      assert.equal(saved.getWorksheet('_ProjectHub').state, 'veryHidden');
+      assert.equal(graph.uploadSessions(), 0, 'setup must never upload a replacement file');
+      assert.equal(graph.closedSetupSessions(), 1);
+      const setupWrites = graph.setupWrites();
+      assert.equal((await graph.run('connect')).projects.independentTasks.length, 1);
+      assert.equal((await graph.run('configure', itemId)).message, 'Workbook is already set up.');
+      assert.equal(graph.setupWrites(), setupWrites);
+      assert.equal(graph.revision(), 0);
+    });
 
-test('allows admins to manage workbook users without exposing passwords or deleting rows', async () => {
-  const graph = harness();
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const initial = await graph.run('connect');
-  await graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId);
+    test('sets up an existing SharePoint workbook without creating an upload session', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1');
+      const graph = harness({
+        sharepoint: true, fileName: 'Existing.xlsx',
+        foreignWorkbook: await workbook.xlsx.writeBuffer()
+      });
+      const { itemId } = await graph.run('connect');
+      await graph.run('configure', itemId);
+      assert.equal(graph.uploadSessions(), 0);
+      assert.equal(graph.closedSetupSessions(), 1);
+      assert.equal((await graph.workbook()).getWorksheet('JiraData').getCell('B1').value, 'Jira #');
+    });
 
-  const listUsers = () => graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, ownerObjectId, ownerObjectId);
-  const saveUsers = users => graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [users] }, ownerObjectId, ownerObjectId);
-  const listed = JSON.parse(JSON.stringify((await listUsers()).response));
-  assert.equal(listed.length, 1);
-  assert.equal(listed[0].role, 'admin');
-  assert.equal(Object.hasOwn(listed[0], 'password'), false);
+    test('refuses setup if the workbook changed after it was read', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1');
+      const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
+      const { itemId } = await graph.run('connect');
+      graph.changeOnDownload();
+      await assert.rejects(graph.run('configure', itemId), /file changed/);
+      assert.equal(graph.setupWrites(), 0);
+      assert.equal(graph.uploadSessions(), 0);
+      assert.equal(graph.closedSetupSessions(), 0);
+    });
 
-  const memberObjectId = '44444444-4444-4444-4444-444444444444';
-  await saveUsers([...listed, {
-    id: '',
-    username: 'member',
-    email: 'member@example.com',
-    displayName: 'Member',
-    role: 'user',
-    isActive: true,
-    microsoftObjectId: memberObjectId
-  }]);
+    test('closes a failed setup session and resumes partial setup without duplicating tabs', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1');
+      const graph = harness({
+        fileName: 'Existing.xlsx',
+        foreignWorkbook: await workbook.xlsx.writeBuffer(),
+        setupFailure: "worksheets/_ProjectHub/range(address='A1')"
+      });
+      const { itemId } = await graph.run('connect');
+      await assert.rejects(graph.run('configure', itemId), /Microsoft HTTP 503.*Setup may be incomplete/);
+      assert.equal(graph.closedSetupSessions(), 1);
+      assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
+      const partial = await graph.workbook();
+      assert.equal(partial.getWorksheet('_ProjectHub').getCell('A1').value, null);
+      await graph.run('configure', itemId);
+      assert.equal(graph.closedSetupSessions(), 2);
+      assert.equal(graph.uploadSessions(), 0);
+      const saved = await graph.workbook();
+      assert.equal(saved.worksheets.length, partial.worksheets.length);
+      assert.equal(saved.getWorksheet('_ProjectHub').getCell('A1').value, 'ProjectHub/1');
+      assert.notEqual((await graph.run('refresh', itemId)).needsSetup, true);
+    });
 
-  const workbook = await graph.workbook();
-  const usersSheet = workbook.getWorksheet('Users');
-  assert.equal(usersSheet.getCell('B3').value, 'member');
-  assert.equal(usersSheet.getCell('F3').value, true);
-  assert.equal(usersSheet.getCell('G3').value ?? '', '');
-  assert.equal(usersSheet.getCell('K3').value, memberObjectId);
+    test('does not create an explicitly selected workbook when it is missing', async () => {
+      const graph = harness({ fileName: 'Missing.xlsx' });
+      await assert.rejects(graph.run('connect'), /could not find the configured workbook/i);
+      assert.equal(graph.revision(), 0);
+    });
 
-  const afterAdd = JSON.parse(JSON.stringify((await listUsers()).response));
-  await assert.rejects(saveUsers(afterAdd.map(user => ({
-    ...user,
-    role: user.username === 'member' ? 'admin' : user.role,
-    isActive: user.username === 'member' ? user.isActive : false
-  }))), /cannot deactivate or demote your own admin account/);
-  await saveUsers(afterAdd.map(user => ({
-    ...user,
-    isActive: user.username === 'member' ? false : user.isActive
-  })));
-  const afterDeactivate = JSON.parse(JSON.stringify((await listUsers()).response));
-  assert.equal(afterDeactivate.length, 2);
-  assert.equal(afterDeactivate.find(user => user.username === 'member').isActive, false);
+    test('reports when Graph does not provide a download URL and makes no workbook changes', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1');
+      const graph = harness({
+        fileName: 'Existing.xlsx',
+        foreignWorkbook: await workbook.xlsx.writeBuffer(),
+        omitMetadataDownloadUrl: true,
+        omitItemDownloadUrl: true
+      });
+      await assert.rejects(graph.run('connect'), /did not return a secure workbook download URL/);
+      assert.equal(graph.revision(), 0);
+    });
 
-  await assert.rejects(saveUsers(afterDeactivate.map(user => ({
-    ...user,
-    isActive: user.role === 'admin' ? false : user.isActive
-  }))), /At least one active admin must remain/);
-});
+    test('refuses to configure a workbook with an unrelated populated sheet', async () => {
+      const workbook = new ExcelJS.Workbook();
+      workbook.addWorksheet('Sheet1').getCell('A1').value = 'Keep this';
+      const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
+      await assert.rejects(graph.run('connect'), /unexpected or missing tabs/);
+      await assert.rejects(graph.run('configure', 'file'), /unexpected or missing tabs/);
+      assert.equal(graph.revision(), 0);
+    });
 
-test('restricts workbook user management to admins', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  const memberObjectId = '44444444-4444-4444-4444-444444444444';
-  workbook.getWorksheet('Users').addRow([
-    'user-2', 'member', 'member@example.com', 'Member', 'user', true, '', new Date(), '', '', memberObjectId
-  ]);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
-  await graph.run('connect', initial.itemId, undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
+    test('does not commit when the workbook changes during upload', async () => {
+      const graph = harness({ workbookApiUnsupported: true });
+      const { itemId } = await graph.run('connect');
+      graph.interfere();
+      await assert.rejects(graph.run('addTask', itemId, 'Conflicting task'), /file changed/);
+      assert.equal(graph.revision(), 1);
+      assert.equal(graph.cancellations(), 1);
+      assert.equal((await graph.run('refresh', itemId)).projects.independentTasks.length, 0);
+    });
 
-  await assert.rejects(
-    graph.run('mutate', initial.itemId, { method: 'listUsers', args: [] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
-    /Admin rights required/
-  );
-  await assert.rejects(
-    graph.run('mutate', initial.itemId, { method: 'saveUsers', args: [[]] }, memberObjectId, '33333333-3333-3333-3333-333333333333'),
-    /Admin rights required/
-  );
-});
-
-test('reports the connected workbook when the signed-in owner has no matching row', async () => {
-  const graph = harness();
-  const initial = await graph.run('connect');
-  const workbook = await graph.workbook();
-  workbook.getWorksheet('Users').getCell('K2').value = '44444444-4444-4444-4444-444444444444';
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
-  const revision = graph.revision();
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-
-  await assert.rejects(
-    graph.run('connect', initial.itemId, undefined, ownerObjectId, ownerObjectId),
-    error => {
-      assert.match(error.message, /does not match an active user/);
-      assert.equal(error.workbookUrl, 'https://storage.example.test/excel');
-      return true;
-    }
-  );
-  assert.equal(graph.revision(), revision);
-});
-
-test('filters project data and capacity to the mapped non-admin workbook user', async () => {
-  const graph = harness();
-  await graph.run('connect');
-  const workbook = await graph.workbook();
-  const users = workbook.getWorksheet('Users');
-  const issues = workbook.getWorksheet('JiraData');
-  const headers = issues.getRow(1).values.slice(1);
-  const addIssue = (jiraId, owner, developer, points, sprint = 'Sprint 12') => {
-    const row = Array(headers.length).fill('');
-    const values = {
-      'Jira #': jiraId,
-      Summary: jiraId,
-      'Issue Type': 'Story',
-      Assignee: developer,
-      'Assigned Dev': developer,
-      Owner: owner,
-      'Story Points': points,
-      sprint
-    };
-    Object.entries(values).forEach(([header, value]) => { row[headers.indexOf(header)] = value; });
-    issues.addRow(row);
-  };
-  addIssue('TEAM-1', 'pm', 'Avery', 3);
-  addIssue('TEAM-2', 'someone-else', 'Blair', 8);
-  addIssue('TEAM-3', 'pm', 'Avery', 2, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
-  addIssue('TEAM-4', 'someone-else', 'Blair', 9, 'com.atlassian.Sprint@1[id=14,state=FUTURE,name=Sprint 14]');
-  addIssue('TEAM-5', 'someone-else', 'Avery', 6, 'com.atlassian.Sprint@1[id=13,state=FUTURE,name=Sprint 13]');
-  const memberObjectId = '44444444-4444-4444-4444-444444444444';
-  users.addRow([
-    'user-2', 'pm', 'pm@example.com', 'Project Manager', 'project_manager', true,
-    '', new Date(), '', '', memberObjectId
-  ]);
-  await graph.replaceWorkbook(await workbook.xlsx.writeBuffer());
-
-  const memberData = await graph.run('connect', 'file', undefined, memberObjectId, '33333333-3333-3333-3333-333333333333');
-  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.projects.map(issue => issue['Jira #']))), ['TEAM-1', 'TEAM-3']);
-  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
-    {
-      developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null, issues: []
-    }
-  ]);
-  assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');
-  assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.futureSprintCapacity.map(sprint => sprint.sprintName))), ['Sprint 13']);
-  assert.equal(memberData.projects.futureSprintCapacity[0].developers[0].storyPoints, 2);
-  assert.deepEqual(Array.from(memberData.projects.futureSprintCapacity[0].developers[0].issues, issue => issue.jiraKey), ['TEAM-3']);
-});
-
-test('does not replace an unrelated file at the OneDrive destination', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Another workbook').getCell('A1').value = 'Keep this';
-  const graph = harness({ foreignWorkbook: await workbook.xlsx.writeBuffer() });
-  await assert.rejects(graph.run('connect'), /not a compatible tracker workbook/);
-  assert.equal(graph.revision(), 0);
-});
-
-test('opens a file in a OneDrive subfolder without writing, then sets it up in place on request', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
-  workbook.addWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
-  const tasks = workbook.addWorksheet('IndependentTasks');
-  tasks.addRow(['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner']);
-  tasks.addRow(['existing', 'Keep this task', '', 'Not started']);
-  tasks.getColumn(2).width = 45;
-  tasks.getCell('B2').font = { italic: true };
-  const graph = harness({
-    foreignWorkbook: await workbook.xlsx.writeBuffer(),
-    folderPath: 'Documents/Team #1',
-    fileName: 'Tracker.xlsx',
-    expectedLookup: '/me/drive/root:/Documents/Team%20%231/Tracker.xlsx',
-    omitMetadataDownloadUrl: true
-  });
-  const { itemId, needsSetup, created } = await graph.run('connect');
-  assert.equal(needsSetup, true);
-  assert.equal(created, false);
-  assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
-  await assert.rejects(graph.run('addTask', itemId, 'Not yet'), /Set up the workbook/);
-  assert.equal(graph.revision(), 0);
-
-  const configured = await graph.run('configure', itemId);
-  assert.equal(configured.itemId, itemId);
-  assert.equal(configured.projects.independentTasks[0].Title, 'Keep this task');
-  const saved = await graph.workbook();
-  assert.equal(saved.getWorksheet('JiraData').getCell('A1').value, 'Sync Status');
-  assert.equal(saved.getWorksheet('ManualData').getCell('A1').value, 'Jira #');
-  assert.ok(saved.getWorksheet('Sheet1'), 'setup must not delete existing worksheets');
-  assert.equal(saved.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
-  assert.equal(saved.getWorksheet('IndependentTasks').getColumn(2).width, 45);
-  assert.equal(saved.getWorksheet('IndependentTasks').getCell('B2').font.italic, true);
-  assert.equal(saved.getWorksheet('_ProjectHub').state, 'veryHidden');
-  assert.equal(graph.uploadSessions(), 0, 'setup must never upload a replacement file');
-  assert.equal(graph.closedSetupSessions(), 1);
-  const setupWrites = graph.setupWrites();
-  assert.equal((await graph.run('connect')).projects.independentTasks.length, 1);
-  assert.equal((await graph.run('configure', itemId)).message, 'Workbook is already set up.');
-  assert.equal(graph.setupWrites(), setupWrites);
-  assert.equal(graph.revision(), 0);
-});
-
-test('sets up an existing SharePoint workbook without creating an upload session', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
-  const graph = harness({
-    sharepoint: true, fileName: 'Existing.xlsx',
-    foreignWorkbook: await workbook.xlsx.writeBuffer()
-  });
-  const { itemId } = await graph.run('connect');
-  await graph.run('configure', itemId);
-  assert.equal(graph.uploadSessions(), 0);
-  assert.equal(graph.closedSetupSessions(), 1);
-  assert.equal((await graph.workbook()).getWorksheet('JiraData').getCell('B1').value, 'Jira #');
-});
-
-test('refuses setup if the workbook changed after it was read', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
-  const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
-  const { itemId } = await graph.run('connect');
-  graph.changeOnDownload();
-  await assert.rejects(graph.run('configure', itemId), /file changed/);
-  assert.equal(graph.setupWrites(), 0);
-  assert.equal(graph.uploadSessions(), 0);
-  assert.equal(graph.closedSetupSessions(), 0);
-});
-
-test('closes a failed setup session and resumes partial setup without duplicating tabs', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
-  const graph = harness({
-    fileName: 'Existing.xlsx',
-    foreignWorkbook: await workbook.xlsx.writeBuffer(),
-    setupFailure: "worksheets/_ProjectHub/range(address='A1')"
-  });
-  const { itemId } = await graph.run('connect');
-  await assert.rejects(graph.run('configure', itemId), /Microsoft HTTP 503.*Setup may be incomplete/);
-  assert.equal(graph.closedSetupSessions(), 1);
-  assert.equal((await graph.run('refresh', itemId)).needsSetup, true);
-  const partial = await graph.workbook();
-  assert.equal(partial.getWorksheet('_ProjectHub').getCell('A1').value, null);
-  await graph.run('configure', itemId);
-  assert.equal(graph.closedSetupSessions(), 2);
-  assert.equal(graph.uploadSessions(), 0);
-  const saved = await graph.workbook();
-  assert.equal(saved.worksheets.length, partial.worksheets.length);
-  assert.equal(saved.getWorksheet('_ProjectHub').getCell('A1').value, 'ProjectHub/1');
-  assert.notEqual((await graph.run('refresh', itemId)).needsSetup, true);
-});
-
-test('does not create an explicitly selected workbook when it is missing', async () => {
-  const graph = harness({ fileName: 'Missing.xlsx' });
-  await assert.rejects(graph.run('connect'), /could not find the configured workbook/i);
-  assert.equal(graph.revision(), 0);
-});
-
-test('reports when Graph does not provide a download URL and makes no workbook changes', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1');
-  const graph = harness({
-    fileName: 'Existing.xlsx',
-    foreignWorkbook: await workbook.xlsx.writeBuffer(),
-    omitMetadataDownloadUrl: true,
-    omitItemDownloadUrl: true
-  });
-  await assert.rejects(graph.run('connect'), /did not return a secure workbook download URL/);
-  assert.equal(graph.revision(), 0);
-});
-
-test('refuses to configure a workbook with an unrelated populated sheet', async () => {
-  const workbook = new ExcelJS.Workbook();
-  workbook.addWorksheet('Sheet1').getCell('A1').value = 'Keep this';
-  const graph = harness({ fileName: 'Existing.xlsx', foreignWorkbook: await workbook.xlsx.writeBuffer() });
-  await assert.rejects(graph.run('connect'), /unexpected or missing tabs/);
-  await assert.rejects(graph.run('configure', 'file'), /unexpected or missing tabs/);
-  assert.equal(graph.revision(), 0);
-});
-
-test('does not commit when the workbook changes during upload', async () => {
-  const graph = harness({ workbookApiUnsupported: true });
-  const { itemId } = await graph.run('connect');
-  graph.interfere();
-  await assert.rejects(graph.run('addTask', itemId, 'Conflicting task'), /file changed/);
-  assert.equal(graph.revision(), 1);
-  assert.equal(graph.cancellations(), 1);
-  assert.equal((await graph.run('refresh', itemId)).projects.independentTasks.length, 0);
-});
-
-test('cancels a locked upload without replacing the workbook', async () => {
-  const source = harness();
-  await source.run('connect');
-  const workbook = await source.workbook();
-  const graph = harness({
-    fileName: 'Existing.xlsx',
-    foreignWorkbook: await workbook.xlsx.writeBuffer(),
+    test('cancels a locked upload without replacing the workbook', async () => {
+      const source = harness();
+      await source.run('connect');
+      const workbook = await source.workbook();
+      const graph = harness({
+        fileName: 'Existing.xlsx',
+        foreignWorkbook: await workbook.xlsx.writeBuffer(),
     commitStatus: 423,
-    workbookApiUnsupported: true
-  });
-  const { itemId } = await graph.run('connect');
-  await assert.rejects(graph.run('addTask', itemId, 'Not saved'), /Microsoft HTTP 423/);
-  assert.equal(graph.cancellations(), 1);
-  assert.equal(graph.revision(), 0);
-  assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').rowCount, 1);
-});
+        workbookApiUnsupported: true
+      });
+      const { itemId } = await graph.run('connect');
+      await assert.rejects(graph.run('addTask', itemId, 'Not saved'), /Microsoft HTTP 423/);
+      assert.equal(graph.cancellations(), 1);
+      assert.equal(graph.revision(), 0);
+      assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').rowCount, 1);
+    });
 
-test('saves edits in place via workbook session API without replacing the file or losing formatting', async () => {
-  const source = harness();
-  await source.run('connect');
-  const workbook = await source.workbook();
-  workbook.getWorksheet('JiraData').getColumn(2).width = 42;
-  workbook.getWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
-  const graph = harness({
-    fileName: 'Shared.xlsx',
-    foreignWorkbook: await workbook.xlsx.writeBuffer()
-  });
+    test('saves edits in place via workbook session API without replacing the file or losing formatting', async () => {
+      const source = harness();
+      await source.run('connect');
+      const workbook = await source.workbook();
+      workbook.getWorksheet('JiraData').getColumn(2).width = 42;
+      workbook.getWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
+      const graph = harness({
+        fileName: 'Shared.xlsx',
+        foreignWorkbook: await workbook.xlsx.writeBuffer()
+      });
 
-  const { itemId } = await graph.run('connect');
-  const added = await graph.run('addTask', itemId, 'Co-authored task');
-  assert.equal(added.projects.independentTasks.length, 1);
-  assert.equal(added.projects.independentTasks[0].Title, 'Co-authored task');
-  // Must have used workbook session API, never whole-file createUploadSession
-  assert.equal(graph.uploadSessions(), 0);
-  assert.equal(graph.closedSetupSessions(), 1);
-  assert.ok(graph.setupWrites() >= 1);
+      const { itemId } = await graph.run('connect');
+      const added = await graph.run('addTask', itemId, 'Co-authored task');
+      assert.equal(added.projects.independentTasks.length, 1);
+      assert.equal(added.projects.independentTasks[0].Title, 'Co-authored task');
+      // Must have used workbook session API, never whole-file createUploadSession
+      assert.equal(graph.uploadSessions(), 0);
+      assert.equal(graph.closedSetupSessions(), 1);
+      assert.ok(graph.setupWrites() >= 1);
 
-  // Untouched sheet formatting and column width are preserved
-  const afterEdit = await graph.workbook();
-  assert.equal(afterEdit.getWorksheet('JiraData').getColumn(2).width, 42);
-  assert.equal(afterEdit.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
+      // Untouched sheet formatting and column width are preserved
+      const afterEdit = await graph.workbook();
+      assert.equal(afterEdit.getWorksheet('JiraData').getColumn(2).width, 42);
+      assert.equal(afterEdit.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
 
-  // Deleting the task clears the trailing row cleanly via /clear
-  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
-  const taskId = added.projects.independentTasks[0].ID;
-  const deleted = await graph.run('mutate', itemId, { method: 'deleteTaskAndSync', args: [taskId] }, ownerObjectId, ownerObjectId);
-  assert.equal(deleted.projects.independentTasks.length, 0);
-  assert.equal(graph.uploadSessions(), 0);
-});
+      // Deleting the task clears the trailing row cleanly via /clear
+      const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+      const taskId = added.projects.independentTasks[0].ID;
+      const deleted = await graph.run('mutate', itemId, { method: 'deleteTaskAndSync', args: [taskId] }, ownerObjectId, ownerObjectId);
+      assert.equal(deleted.projects.independentTasks.length, 0);
+      assert.equal(graph.uploadSessions(), 0);
+    });
 
-test('reports cleanup failure along with the original commit failure', async () => {
-  const graph = harness({ commitStatus: 423, cancelStatus: 503 });
-  await assert.rejects(graph.run('connect'), error =>
-    /Microsoft HTTP 423/.test(error.message) && /upload.*could not be cancelled/i.test(error.message));
-  assert.equal(graph.cancellations(), 1);
-  assert.equal(graph.revision(), 0);
-});
+    test('reports cleanup failure along with the original commit failure', async () => {
+      const graph = harness({ commitStatus: 423, cancelStatus: 503 });
+      await assert.rejects(graph.run('connect'), error =>
+        /Microsoft HTTP 423/.test(error.message) && /upload.*could not be cancelled/i.test(error.message));
+      assert.equal(graph.cancellations(), 1);
+      assert.equal(graph.revision(), 0);
+    });

@@ -45,14 +45,14 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
       // --- Add missing columns to JiraData if missing ---
       if (sheetName === JIRA_DATA_SHEET) {
         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-        
+
         // Add Acceptance Criteria column (O) if missing
         if (headers.indexOf('Acceptance Criteria') === -1) {
           sheet.insertColumnAfter(headers.length);
           sheet.getRange(1, headers.length + 1).setValue('Acceptance Criteria');
           logs.push('Added "Acceptance Criteria" to JiraData.');
         }
-        
+
         // Add Target Date column (P) if missing
         const updatedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         if (updatedHeaders.indexOf('Target Date') === -1) {
@@ -60,7 +60,7 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
           sheet.getRange(1, updatedHeaders.length + 1).setValue('Target Date');
           logs.push('Added "Target Date" to JiraData.');
         }
-        
+
         // Add Fix Version column (Q) if missing
         const updatedHeaders2 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         if (updatedHeaders2.indexOf('Fix Version') === -1) {
@@ -68,7 +68,7 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
           sheet.getRange(1, updatedHeaders2.length + 1).setValue('Fix Version');
           logs.push('Added "Fix Version" to JiraData.');
         }
-        
+
         // Add Owner column if missing
         const updatedHeaders3 = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
         if (updatedHeaders3.indexOf('Owner') === -1) {
@@ -93,22 +93,22 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
           logs.push('Added "Description" to JiraData.');
         }
       }
-      
+
       // --- Add missing columns to Users if missing ---
       if (sheetName === USERS_SHEET) {
-         const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-         if (headers.indexOf('Data Sheet ID') === -1) {
-           sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
-           headers.push('Data Sheet ID');
-           logs.push('Added "Data Sheet ID" to Users.');
-         }
-         if (headers.indexOf('Microsoft Object ID') === -1) {
-           sheet.getRange(1, headers.length + 1).setValue('Microsoft Object ID').setFontWeight('bold');
-           logs.push('Added "Microsoft Object ID" to Users.');
-         }
+        const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+        if (headers.indexOf('Data Sheet ID') === -1) {
+          sheet.getRange(1, headers.length + 1).setValue('Data Sheet ID').setFontWeight('bold');
+          headers.push('Data Sheet ID');
+          logs.push('Added "Data Sheet ID" to Users.');
+        }
+        if (headers.indexOf('Microsoft Object ID') === -1) {
+          sheet.getRange(1, headers.length + 1).setValue('Microsoft Object ID').setFontWeight('bold');
+          logs.push('Added "Microsoft Object ID" to Users.');
+        }
       }
     }
-    
+
     // Create default admin user if Users sheet is empty
     if (seedLocalAdmin && sheetName === USERS_SHEET) {
       const userSheet = ss.getSheetByName(USERS_SHEET);
@@ -119,6 +119,6 @@ function setupSheets(targetSpreadsheet, seedLocalAdmin = true) {
       }
     }
   }
-  
+
   return logs.length > 0 ? logs : ['All sheets and headers are up to date.'];
 }

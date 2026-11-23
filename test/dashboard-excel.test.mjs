@@ -526,3 +526,54 @@ test('capacity view groups developers by manager with rolled-up workload when to
   assert.equal(groupRows[0].children[3].textContent, '10'); // 5 + 5 cap
   assert.equal(groupRows[0].children[4].textContent, '0');  // 0 remaining
 });
+
+test('capacity planner displays PTO, holiday, and manual override breakdowns per sprint', () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'future-sprint-capacities'
+  ].map(id => [id, new Element()]));
+  const state = {
+    allData: {
+      sprintCapacity: {
+        sprintName: 'Sprint 12', totalStoryPoints: 6, totalIssues: 1, totalCapacity: 7, holidayDays: 1, totalPtoDays: 2,
+        developers: [
+          {
+            developer: 'Avery', issueCount: 1, storyPoints: 6, capacity: 7, baseCapacity: 10,
+            ptoDays: 2, holidayDays: 1, overrideNotes: 'Vacation May 26-27', remaining: 1, issues: []
+          },
+          {
+            developer: 'Blair', issueCount: 0, storyPoints: 0, capacity: 5, baseCapacity: 10,
+            capacityOverride: 5, overrideNotes: '50% Auth team', remaining: 5, issues: []
+          }
+        ]
+      },
+      futureSprintCapacity: []
+    }
+  };
+  const context = vm.createContext({
+    window: { addEventListener() { } }, APP_STATE: state,
+    Intl: { NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); } },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+  const [averyRow, , blairRow] = elements['capacity-table-body'].children;
+  assert.equal(averyRow.children[3].children[0].textContent, '7');
+  assert.equal(averyRow.children[3].children[1].textContent, 'of 10 (-2d PTO, -1d Hol)');
+  assert.equal(averyRow.children[3].children[1].title, 'Vacation May 26-27');
+  assert.equal(blairRow.children[3].children[0].textContent, '5');
+  assert.equal(blairRow.children[3].children[1].textContent, 'of 10 (Override)');
+});

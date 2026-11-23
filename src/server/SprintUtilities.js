@@ -230,439 +230,439 @@ function analyzeSprintData(items) {
   return stats;
 }
 
-  var DEFAULT_CLOSED_STATUSES_ = [
-    'done', 'closed', 'resolved', 'fixed', 'complete', 'completed',
-    'ready for production', 'in production', 'canceled', 'cancelled'
-  ];
-  var DEFAULT_CLOSED_STAGES_ = [
-    'done', 'production', 'in production', 'prod', 'fixed', 'canceled', 'cancelled'
-  ];
-  var DEFAULT_NOT_STARTED_STATUSES_ = [
-    '', 'to do', 'todo', 'open', 'new', 'backlog', 'not started', 'ready',
-    'ready for dev', 'ready for development', 'groomed', 'refined',
-    'selected for development', 'intake', 'triage'
-  ];
+var DEFAULT_CLOSED_STATUSES_ = [
+  'done', 'closed', 'resolved', 'fixed', 'complete', 'completed',
+  'ready for production', 'in production', 'canceled', 'cancelled'
+];
+var DEFAULT_CLOSED_STAGES_ = [
+  'done', 'production', 'in production', 'prod', 'fixed', 'canceled', 'cancelled'
+];
+var DEFAULT_NOT_STARTED_STATUSES_ = [
+  '', 'to do', 'todo', 'open', 'new', 'backlog', 'not started', 'ready',
+  'ready for dev', 'ready for development', 'groomed', 'refined',
+  'selected for development', 'intake', 'triage'
+];
 
-  function classifyIssueWorkState_(item, config) {
-    var status = String((item && (item.Status !== undefined ? item.Status : item.status)) || '').trim().toLowerCase();
-    var stage = String((item && (item['Project Stage'] !== undefined ? item['Project Stage'] : item.projectStage)) || '').trim().toLowerCase();
-    var closedStatuses = DEFAULT_CLOSED_STATUSES_.slice();
-    var closedStages = DEFAULT_CLOSED_STAGES_.slice();
-    var notStartedStatuses = DEFAULT_NOT_STARTED_STATUSES_.slice();
+function classifyIssueWorkState_(item, config) {
+  var status = String((item && (item.Status !== undefined ? item.Status : item.status)) || '').trim().toLowerCase();
+  var stage = String((item && (item['Project Stage'] !== undefined ? item['Project Stage'] : item.projectStage)) || '').trim().toLowerCase();
+  var closedStatuses = DEFAULT_CLOSED_STATUSES_.slice();
+  var closedStages = DEFAULT_CLOSED_STAGES_.slice();
+  var notStartedStatuses = DEFAULT_NOT_STARTED_STATUSES_.slice();
 
-    if (config) {
-      if (Array.isArray(config.closedStatuses)) {
-        config.closedStatuses.forEach(function (s) {
-          var norm = String(s || '').trim().toLowerCase();
-          if (norm && closedStatuses.indexOf(norm) === -1) closedStatuses.push(norm);
-        });
-      }
-      if (Array.isArray(config.closedProjectStages)) {
-        config.closedProjectStages.forEach(function (s) {
-          var norm = String(s || '').trim().toLowerCase();
-          if (norm && closedStages.indexOf(norm) === -1) closedStages.push(norm);
-        });
-      }
-      if (Array.isArray(config.notInProgressStatuses)) {
-        config.notInProgressStatuses.forEach(function (s) {
-          var norm = String(s || '').trim().toLowerCase();
-          if (norm && notStartedStatuses.indexOf(norm) === -1) notStartedStatuses.push(norm);
-        });
-      }
+  if (config) {
+    if (Array.isArray(config.closedStatuses)) {
+      config.closedStatuses.forEach(function (s) {
+        var norm = String(s || '').trim().toLowerCase();
+        if (norm && closedStatuses.indexOf(norm) === -1) closedStatuses.push(norm);
+      });
     }
-
-    if (closedStatuses.indexOf(status) !== -1 || (stage && closedStages.indexOf(stage) !== -1)) {
-      return 'completed';
+    if (Array.isArray(config.closedProjectStages)) {
+      config.closedProjectStages.forEach(function (s) {
+        var norm = String(s || '').trim().toLowerCase();
+        if (norm && closedStages.indexOf(norm) === -1) closedStages.push(norm);
+      });
     }
-    if (notStartedStatuses.indexOf(status) !== -1) {
-      return 'notStarted';
+    if (Array.isArray(config.notInProgressStatuses)) {
+      config.notInProgressStatuses.forEach(function (s) {
+        var norm = String(s || '').trim().toLowerCase();
+        if (norm && notStartedStatuses.indexOf(norm) === -1) notStartedStatuses.push(norm);
+      });
     }
-    return 'inProgress';
   }
 
-  function calculateWorkdayProgress_(startDate, endDate, now) {
-    var startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    var endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-    var totalWorkdays = 0;
-    var elapsedWorkdays = 0;
-    var remainingWorkdays = 0;
-    var cursor = new Date(startDay.getTime());
-    var guard = 0;
+  if (closedStatuses.indexOf(status) !== -1 || (stage && closedStages.indexOf(stage) !== -1)) {
+    return 'completed';
+  }
+  if (notStartedStatuses.indexOf(status) !== -1) {
+    return 'notStarted';
+  }
+  return 'inProgress';
+}
 
-    while (cursor <= endDay && guard < 400) {
-      guard++;
-      var dayOfWeek = cursor.getDay();
-      if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-        totalWorkdays++;
-        var dayStart = cursor.getTime();
-        var dayEnd = dayStart + 86400000;
-        if (now.getTime() >= dayEnd) {
-          elapsedWorkdays += 1;
-        } else if (now.getTime() > dayStart) {
-          var fraction = Math.max(0, Math.min(1, (now.getTime() - dayStart) / 86400000));
-          elapsedWorkdays += fraction;
-          remainingWorkdays += (1 - fraction);
-        } else {
-          remainingWorkdays += 1;
-        }
+function calculateWorkdayProgress_(startDate, endDate, now) {
+  var startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+  var endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+  var totalWorkdays = 0;
+  var elapsedWorkdays = 0;
+  var remainingWorkdays = 0;
+  var cursor = new Date(startDay.getTime());
+  var guard = 0;
+
+  while (cursor <= endDay && guard < 400) {
+    guard++;
+    var dayOfWeek = cursor.getDay();
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      totalWorkdays++;
+      var dayStart = cursor.getTime();
+      var dayEnd = dayStart + 86400000;
+      if (now.getTime() >= dayEnd) {
+        elapsedWorkdays += 1;
+      } else if (now.getTime() > dayStart) {
+        var fraction = Math.max(0, Math.min(1, (now.getTime() - dayStart) / 86400000));
+        elapsedWorkdays += fraction;
+        remainingWorkdays += (1 - fraction);
+      } else {
+        remainingWorkdays += 1;
       }
-      cursor.setDate(cursor.getDate() + 1);
     }
+    cursor.setDate(cursor.getDate() + 1);
+  }
 
-    if (totalWorkdays > 0) {
-      return {
-        timeElapsedPct: Math.max(0, Math.min(1, elapsedWorkdays / totalWorkdays)),
-        totalDays: totalWorkdays,
-        daysElapsed: Math.min(totalWorkdays, Math.max(0, Math.ceil(elapsedWorkdays))),
-        daysRemaining: Math.max(0, Math.ceil(remainingWorkdays - 0.01)),
-        unit: 'workdays'
-      };
-    }
-
-    var totalMs = Math.max(1, endDate.getTime() - startDate.getTime());
-    var elapsedMs = Math.max(0, Math.min(totalMs, now.getTime() - startDate.getTime()));
-    var totalCalDays = Math.max(1, Math.round(totalMs / 86400000));
+  if (totalWorkdays > 0) {
     return {
-      timeElapsedPct: elapsedMs / totalMs,
-      totalDays: totalCalDays,
-      daysElapsed: Math.min(totalCalDays, Math.max(0, Math.ceil(elapsedMs / 86400000))),
-      daysRemaining: now > endDate ? 0 : Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / 86400000)),
-      unit: 'days'
+      timeElapsedPct: Math.max(0, Math.min(1, elapsedWorkdays / totalWorkdays)),
+      totalDays: totalWorkdays,
+      daysElapsed: Math.min(totalWorkdays, Math.max(0, Math.ceil(elapsedWorkdays))),
+      daysRemaining: Math.max(0, Math.ceil(remainingWorkdays - 0.01)),
+      unit: 'workdays'
     };
   }
 
-  function calculateSprintPace_(startDate, endDate, metrics, nowDate) {
-    var totalPoints = Number(metrics.totalStoryPoints) || 0;
-    var completedPoints = Number(metrics.completedPoints) || 0;
-    var inProgressPoints = Number(metrics.inProgressPoints) || 0;
-    var remainingPoints = Math.max(0, totalPoints - completedPoints);
-    var totalIssues = Number(metrics.totalIssues) || 0;
-    var completedIssues = Number(metrics.completedIssues) || 0;
-    var inProgressIssues = Number(metrics.inProgressIssues) || 0;
-    var remainingIssues = Math.max(0, totalIssues - completedIssues);
+  var totalMs = Math.max(1, endDate.getTime() - startDate.getTime());
+  var elapsedMs = Math.max(0, Math.min(totalMs, now.getTime() - startDate.getTime()));
+  var totalCalDays = Math.max(1, Math.round(totalMs / 86400000));
+  return {
+    timeElapsedPct: elapsedMs / totalMs,
+    totalDays: totalCalDays,
+    daysElapsed: Math.min(totalCalDays, Math.max(0, Math.ceil(elapsedMs / 86400000))),
+    daysRemaining: now > endDate ? 0 : Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / 86400000)),
+    unit: 'days'
+  };
+}
 
-    var usePoints = totalPoints > 0;
-    var completedPct = usePoints ? completedPoints / totalPoints : (totalIssues > 0 ? completedIssues / totalIssues : 0);
-    var activePct = usePoints ? (completedPoints + inProgressPoints) / totalPoints : (totalIssues > 0 ? (completedIssues + inProgressIssues) / totalIssues : 0);
-    var metricBasis = usePoints ? 'points' : 'issues';
+function calculateSprintPace_(startDate, endDate, metrics, nowDate) {
+  var totalPoints = Number(metrics.totalStoryPoints) || 0;
+  var completedPoints = Number(metrics.completedPoints) || 0;
+  var inProgressPoints = Number(metrics.inProgressPoints) || 0;
+  var remainingPoints = Math.max(0, totalPoints - completedPoints);
+  var totalIssues = Number(metrics.totalIssues) || 0;
+  var completedIssues = Number(metrics.completedIssues) || 0;
+  var inProgressIssues = Number(metrics.inProgressIssues) || 0;
+  var remainingIssues = Math.max(0, totalIssues - completedIssues);
 
-    if (totalPoints === 0 && totalIssues === 0) {
-      return {
-        status: 'no_work',
-        label: 'No work',
-        timeElapsedPct: null,
-        timeRemainingPct: null,
-        completedPct: 0,
-        activePct: 0,
-        delta: null,
-        remainingPoints: 0,
-        remainingIssues: 0,
-        requiredPointsPerDay: null,
-        expectedPointsPerDay: null,
-        totalDays: null,
-        daysElapsed: null,
-        daysRemaining: null,
-        unit: null,
-        metricBasis: metricBasis
-      };
-    }
+  var usePoints = totalPoints > 0;
+  var completedPct = usePoints ? completedPoints / totalPoints : (totalIssues > 0 ? completedIssues / totalIssues : 0);
+  var activePct = usePoints ? (completedPoints + inProgressPoints) / totalPoints : (totalIssues > 0 ? (completedIssues + inProgressIssues) / totalIssues : 0);
+  var metricBasis = usePoints ? 'points' : 'issues';
 
-    var start = startDate instanceof Date && !isNaN(startDate.getTime()) ? startDate : (startDate ? new Date(startDate) : null);
-    var end = endDate instanceof Date && !isNaN(endDate.getTime()) ? endDate : (endDate ? new Date(endDate) : null);
-    if (start && isNaN(start.getTime())) start = null;
-    if (end && isNaN(end.getTime())) end = null;
-
-    if (!start || !end || end < start) {
-      return {
-        status: completedPct >= 1 ? 'completed' : 'no_dates',
-        label: completedPct >= 1 ? 'Completed' : 'Dates unavailable',
-        timeElapsedPct: null,
-        timeRemainingPct: null,
-        completedPct: completedPct,
-        activePct: activePct,
-        delta: null,
-        remainingPoints: remainingPoints,
-        remainingIssues: remainingIssues,
-        requiredPointsPerDay: null,
-        expectedPointsPerDay: null,
-        totalDays: null,
-        daysElapsed: null,
-        daysRemaining: null,
-        unit: null,
-        metricBasis: metricBasis
-      };
-    }
-
-    var now = nowDate instanceof Date && !isNaN(nowDate.getTime()) ? nowDate : new Date();
-    var timing = calculateWorkdayProgress_(start, end, now);
-    var timeRemainingPct = Math.max(0, Math.min(1, 1 - timing.timeElapsedPct));
-    var delta = completedPct - timing.timeElapsedPct;
-    var remainingWork = usePoints ? remainingPoints : remainingIssues;
-    var totalWork = usePoints ? totalPoints : totalIssues;
-    var requiredPointsPerDay = remainingWork <= 0 ? 0 : (timing.daysRemaining > 0 ? remainingWork / timing.daysRemaining : null);
-    var expectedPointsPerDay = timing.totalDays > 0 ? totalWork / timing.totalDays : null;
-    var status;
-    var label;
-
-    if (completedPct >= 1) {
-      status = 'completed';
-      label = 'Completed';
-    } else if (now < start) {
-      status = 'upcoming';
-      label = 'Upcoming';
-    } else if (now > end) {
-      status = 'behind';
-      label = 'Behind';
-    } else if (timing.timeElapsedPct <= 0.2) {
-      if (completedPct >= timing.timeElapsedPct || activePct >= timing.timeElapsedPct) {
-        status = 'on_track';
-        label = 'On track';
-      } else {
-        status = 'at_risk';
-        label = 'At risk';
-      }
-    } else if (delta >= -0.1) {
-      status = 'on_track';
-      label = 'On track';
-    } else if (delta >= -0.25) {
-      status = 'at_risk';
-      label = 'At risk';
-    } else {
-      status = 'behind';
-      label = 'Behind';
-    }
-
+  if (totalPoints === 0 && totalIssues === 0) {
     return {
-      status: status,
-      label: label,
-      timeElapsedPct: timing.timeElapsedPct,
-      timeRemainingPct: timeRemainingPct,
-      completedPct: completedPct,
-      activePct: activePct,
-      delta: delta,
-      remainingPoints: remainingPoints,
-      remainingIssues: remainingIssues,
-      requiredPointsPerDay: requiredPointsPerDay,
-      expectedPointsPerDay: expectedPointsPerDay,
-      totalDays: timing.totalDays,
-      daysElapsed: timing.daysElapsed,
-      daysRemaining: timing.daysRemaining,
-      unit: timing.unit,
+      status: 'no_work',
+      label: 'No work',
+      timeElapsedPct: null,
+      timeRemainingPct: null,
+      completedPct: 0,
+      activePct: 0,
+      delta: null,
+      remainingPoints: 0,
+      remainingIssues: 0,
+      requiredPointsPerDay: null,
+      expectedPointsPerDay: null,
+      totalDays: null,
+      daysElapsed: null,
+      daysRemaining: null,
+      unit: null,
       metricBasis: metricBasis
     };
   }
 
-  function analyzeSprintCapacity(items, currentSprintName, capacityEntries, options) {
-    var opts = options || {};
-    var sprintName = String(currentSprintName || '').trim();
-    var capacityByDeveloper = new Map();
-    var totalIssues = 0;
-    var totalStoryPoints = 0;
-    var totalCompletedPoints = 0;
-    var totalInProgressPoints = 0;
-    var totalNotStartedPoints = 0;
-    var totalCompletedIssues = 0;
-    var totalInProgressIssues = 0;
-    var totalUnestimatedIssues = 0;
-    var hasSprint = Boolean(sprintName && sprintName !== 'None' && sprintName !== '—');
-    var sprintStart = opts.startDate ? new Date(opts.startDate) : null;
-    var sprintEnd = opts.endDate ? new Date(opts.endDate) : null;
-    if (sprintStart && isNaN(sprintStart.getTime())) sprintStart = null;
-    if (sprintEnd && isNaN(sprintEnd.getTime())) sprintEnd = null;
+  var start = startDate instanceof Date && !isNaN(startDate.getTime()) ? startDate : (startDate ? new Date(startDate) : null);
+  var end = endDate instanceof Date && !isNaN(endDate.getTime()) ? endDate : (endDate ? new Date(endDate) : null);
+  if (start && isNaN(start.getTime())) start = null;
+  if (end && isNaN(end.getTime())) end = null;
 
-    var createDeveloperEntry = function (developer) {
-      return {
-        developer: developer,
-        storyPoints: 0,
-        completedPoints: 0,
-        inProgressPoints: 0,
-        notStartedPoints: 0,
-        completedIssues: 0,
-        inProgressIssues: 0,
-        notStartedIssues: 0,
-        unestimatedCount: 0,
-        issues: []
-      };
+  if (!start || !end || end < start) {
+    return {
+      status: completedPct >= 1 ? 'completed' : 'no_dates',
+      label: completedPct >= 1 ? 'Completed' : 'Dates unavailable',
+      timeElapsedPct: null,
+      timeRemainingPct: null,
+      completedPct: completedPct,
+      activePct: activePct,
+      delta: null,
+      remainingPoints: remainingPoints,
+      remainingIssues: remainingIssues,
+      requiredPointsPerDay: null,
+      expectedPointsPerDay: null,
+      totalDays: null,
+      daysElapsed: null,
+      daysRemaining: null,
+      unit: null,
+      metricBasis: metricBasis
     };
+  }
 
-    // Configured capacity per developer (from the DeveloperCapacity sheet), keyed case-insensitively.
-    var configuredCapacity = new Map();
-    (capacityEntries || []).forEach(function (config) {
-      if (!config || !config.developer) return;
-      var name = String(config.developer).trim();
-      if (!name) return;
-      var points = config.capacity;
-      configuredCapacity.set(name.toLowerCase(), {
-        developer: name,
-        capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null,
+  var now = nowDate instanceof Date && !isNaN(nowDate.getTime()) ? nowDate : new Date();
+  var timing = calculateWorkdayProgress_(start, end, now);
+  var timeRemainingPct = Math.max(0, Math.min(1, 1 - timing.timeElapsedPct));
+  var delta = completedPct - timing.timeElapsedPct;
+  var remainingWork = usePoints ? remainingPoints : remainingIssues;
+  var totalWork = usePoints ? totalPoints : totalIssues;
+  var requiredPointsPerDay = remainingWork <= 0 ? 0 : (timing.daysRemaining > 0 ? remainingWork / timing.daysRemaining : null);
+  var expectedPointsPerDay = timing.totalDays > 0 ? totalWork / timing.totalDays : null;
+  var status;
+  var label;
+
+  if (completedPct >= 1) {
+    status = 'completed';
+    label = 'Completed';
+  } else if (now < start) {
+    status = 'upcoming';
+    label = 'Upcoming';
+  } else if (now > end) {
+    status = 'behind';
+    label = 'Behind';
+  } else if (timing.timeElapsedPct <= 0.2) {
+    if (completedPct >= timing.timeElapsedPct || activePct >= timing.timeElapsedPct) {
+      status = 'on_track';
+      label = 'On track';
+    } else {
+      status = 'at_risk';
+      label = 'At risk';
+    }
+  } else if (delta >= -0.1) {
+    status = 'on_track';
+    label = 'On track';
+  } else if (delta >= -0.25) {
+    status = 'at_risk';
+    label = 'At risk';
+  } else {
+    status = 'behind';
+    label = 'Behind';
+  }
+
+  return {
+    status: status,
+    label: label,
+    timeElapsedPct: timing.timeElapsedPct,
+    timeRemainingPct: timeRemainingPct,
+    completedPct: completedPct,
+    activePct: activePct,
+    delta: delta,
+    remainingPoints: remainingPoints,
+    remainingIssues: remainingIssues,
+    requiredPointsPerDay: requiredPointsPerDay,
+    expectedPointsPerDay: expectedPointsPerDay,
+    totalDays: timing.totalDays,
+    daysElapsed: timing.daysElapsed,
+    daysRemaining: timing.daysRemaining,
+    unit: timing.unit,
+    metricBasis: metricBasis
+  };
+}
+
+function analyzeSprintCapacity(items, currentSprintName, capacityEntries, options) {
+  var opts = options || {};
+  var sprintName = String(currentSprintName || '').trim();
+  var capacityByDeveloper = new Map();
+  var totalIssues = 0;
+  var totalStoryPoints = 0;
+  var totalCompletedPoints = 0;
+  var totalInProgressPoints = 0;
+  var totalNotStartedPoints = 0;
+  var totalCompletedIssues = 0;
+  var totalInProgressIssues = 0;
+  var totalUnestimatedIssues = 0;
+  var hasSprint = Boolean(sprintName && sprintName !== 'None' && sprintName !== '—');
+  var sprintStart = opts.startDate ? new Date(opts.startDate) : null;
+  var sprintEnd = opts.endDate ? new Date(opts.endDate) : null;
+  if (sprintStart && isNaN(sprintStart.getTime())) sprintStart = null;
+  if (sprintEnd && isNaN(sprintEnd.getTime())) sprintEnd = null;
+
+  var createDeveloperEntry = function (developer) {
+    return {
+      developer: developer,
+      storyPoints: 0,
+      completedPoints: 0,
+      inProgressPoints: 0,
+      notStartedPoints: 0,
+      completedIssues: 0,
+      inProgressIssues: 0,
+      notStartedIssues: 0,
+      unestimatedCount: 0,
+      issues: []
+    };
+  };
+
+  // Configured capacity per developer (from the DeveloperCapacity sheet), keyed case-insensitively.
+  var configuredCapacity = new Map();
+  (capacityEntries || []).forEach(function (config) {
+    if (!config || !config.developer) return;
+    var name = String(config.developer).trim();
+    if (!name) return;
+    var points = config.capacity;
+    configuredCapacity.set(name.toLowerCase(), {
+      developer: name,
+      capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null,
         manager: config.manager == null ? '' : String(config.manager).trim(),
-        sprintOverrides: config.sprintOverrides && typeof config.sprintOverrides === 'object' ? config.sprintOverrides : null
-      });
+      sprintOverrides: config.sprintOverrides && typeof config.sprintOverrides === 'object' ? config.sprintOverrides : null
     });
+  });
 
-    var capacitySettings = (opts && opts.capacitySettings) || {};
-    var sprintWorkdays = Number(capacitySettings.sprintWorkdays) > 0 ? Number(capacitySettings.sprintWorkdays) : 10;
-    var matchedHolidays = [];
-    var sprintHolidayDays = 0;
-    if (hasSprint && Array.isArray(capacitySettings.companyHolidays)) {
-      capacitySettings.companyHolidays.forEach(function (h) {
-        if (!h || typeof h !== 'object') return;
-        var hSprint = String(h.sprint == null ? '' : h.sprint).trim();
-        var hDays = Number(h.days);
-        if (hSprint && hSprint.toLowerCase() === sprintName.toLowerCase() && Number.isFinite(hDays) && hDays > 0) {
-          matchedHolidays.push({ name: String(h.name || 'Company Holiday').trim(), sprint: hSprint, days: hDays });
-          sprintHolidayDays += hDays;
-        }
-      });
+  var capacitySettings = (opts && opts.capacitySettings) || {};
+  var sprintWorkdays = Number(capacitySettings.sprintWorkdays) > 0 ? Number(capacitySettings.sprintWorkdays) : 10;
+  var matchedHolidays = [];
+  var sprintHolidayDays = 0;
+  if (hasSprint && Array.isArray(capacitySettings.companyHolidays)) {
+    capacitySettings.companyHolidays.forEach(function (h) {
+      if (!h || typeof h !== 'object') return;
+      var hSprint = String(h.sprint == null ? '' : h.sprint).trim();
+      var hDays = Number(h.days);
+      if (hSprint && hSprint.toLowerCase() === sprintName.toLowerCase() && Number.isFinite(hDays) && hDays > 0) {
+        matchedHolidays.push({ name: String(h.name || 'Company Holiday').trim(), sprint: hSprint, days: hDays });
+        sprintHolidayDays += hDays;
+      }
+    });
+  }
+
+  (items || []).forEach(function (item) {
+    var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+    if (developer && developer.toLowerCase() !== 'unassigned' && !capacityByDeveloper.has(developer.toLowerCase())) {
+      capacityByDeveloper.set(developer.toLowerCase(), createDeveloperEntry(developer));
+    }
+    if (!hasSprint) return;
+    var issueType = String(item['Issue Type'] || '').trim();
+    if (issueType.toLowerCase() === 'epic') return;
+
+    var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
+    var matchedSprintEntry = null;
+    var belongsToCurrentSprint = sprintEntries.some(function (entry) {
+      var entryName = formatSprint(entry.name);
+      var matches = (entryName === '—' ? entry.name : entryName).toLowerCase() === sprintName.toLowerCase();
+      if (matches && !matchedSprintEntry) matchedSprintEntry = entry;
+      return matches;
+    });
+    if (!belongsToCurrentSprint) return;
+
+    if (matchedSprintEntry) {
+      if (matchedSprintEntry.startDate && (!sprintStart || matchedSprintEntry.startDate < sprintStart)) {
+        sprintStart = matchedSprintEntry.startDate;
+      }
+      if (matchedSprintEntry.endDate && (!sprintEnd || matchedSprintEntry.endDate > sprintEnd)) {
+        sprintEnd = matchedSprintEntry.endDate;
+      }
     }
 
-    (items || []).forEach(function (item) {
-      var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
-      if (developer && developer.toLowerCase() !== 'unassigned' && !capacityByDeveloper.has(developer.toLowerCase())) {
-        capacityByDeveloper.set(developer.toLowerCase(), createDeveloperEntry(developer));
-      }
-      if (!hasSprint) return;
-      var issueType = String(item['Issue Type'] || '').trim();
-      if (issueType.toLowerCase() === 'epic') return;
+    developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
+    var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+    var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
+    var points = parseFloat(rawPoints);
+    var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
+    if (!Number.isFinite(points)) points = 0;
 
-      var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint);
-      var matchedSprintEntry = null;
-      var belongsToCurrentSprint = sprintEntries.some(function (entry) {
-        var entryName = formatSprint(entry.name);
-        var matches = (entryName === '—' ? entry.name : entryName).toLowerCase() === sprintName.toLowerCase();
-        if (matches && !matchedSprintEntry) matchedSprintEntry = entry;
-        return matches;
-      });
-      if (!belongsToCurrentSprint) return;
-
-      if (matchedSprintEntry) {
-        if (matchedSprintEntry.startDate && (!sprintStart || matchedSprintEntry.startDate < sprintStart)) {
-          sprintStart = matchedSprintEntry.startDate;
-        }
-        if (matchedSprintEntry.endDate && (!sprintEnd || matchedSprintEntry.endDate > sprintEnd)) {
-          sprintEnd = matchedSprintEntry.endDate;
-        }
-      }
-
-      developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
-      var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
-      var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
-      var points = parseFloat(rawPoints);
-      var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
-      if (!Number.isFinite(points)) points = 0;
-
-      var workState = classifyIssueWorkState_(item, opts.config);
-      var key = developer.toLowerCase();
-      var entry = capacityByDeveloper.get(key);
-      if (!entry) {
-        entry = createDeveloperEntry(developer);
-        capacityByDeveloper.set(key, entry);
-      }
-      entry.storyPoints += points;
-      if (workState === 'completed') {
-        entry.completedPoints += points;
-        entry.completedIssues++;
-        totalCompletedPoints += points;
-        totalCompletedIssues++;
-      } else if (workState === 'inProgress') {
-        entry.inProgressPoints += points;
-        entry.inProgressIssues++;
-        totalInProgressPoints += points;
-        totalInProgressIssues++;
-      } else {
-        entry.notStartedPoints += points;
-        entry.notStartedIssues++;
-        totalNotStartedPoints += points;
-      }
-      if (isUnestimated) {
-        entry.unestimatedCount++;
-        totalUnestimatedIssues++;
-      }
-      entry.issues.push({
-        jiraKey: String(item['Jira #'] || '').trim(),
-        summary: String(item.Summary || '').trim(),
-        issueType: issueType,
-        status: String(item.Status || '').trim(),
+    var workState = classifyIssueWorkState_(item, opts.config);
+    var key = developer.toLowerCase();
+    var entry = capacityByDeveloper.get(key);
+    if (!entry) {
+      entry = createDeveloperEntry(developer);
+      capacityByDeveloper.set(key, entry);
+    }
+    entry.storyPoints += points;
+    if (workState === 'completed') {
+      entry.completedPoints += points;
+      entry.completedIssues++;
+      totalCompletedPoints += points;
+      totalCompletedIssues++;
+    } else if (workState === 'inProgress') {
+      entry.inProgressPoints += points;
+      entry.inProgressIssues++;
+      totalInProgressPoints += points;
+      totalInProgressIssues++;
+    } else {
+      entry.notStartedPoints += points;
+      entry.notStartedIssues++;
+      totalNotStartedPoints += points;
+    }
+    if (isUnestimated) {
+      entry.unestimatedCount++;
+      totalUnestimatedIssues++;
+    }
+    entry.issues.push({
+      jiraKey: String(item['Jira #'] || '').trim(),
+      summary: String(item.Summary || '').trim(),
+      issueType: issueType,
+      status: String(item.Status || '').trim(),
       storyPoints: points,
-        workState: workState
-      });
-      totalIssues++;
-      totalStoryPoints += points;
+      workState: workState
     });
+    totalIssues++;
+    totalStoryPoints += points;
+  });
 
-    var totalCapacity = 0;
-    var hasConfiguredCapacity = false;
-    var totalPtoDays = 0;
-    var findSprintOverride = function (overrides) {
-      if (!hasSprint || !overrides || typeof overrides !== 'object') return null;
-      var target = sprintName.toLowerCase();
-      var keys = Object.keys(overrides);
-      for (var i = 0; i < keys.length; i++) {
-        if (String(keys[i] || '').trim().toLowerCase() === target) {
-          return overrides[keys[i]];
-        }
+  var totalCapacity = 0;
+  var hasConfiguredCapacity = false;
+  var totalPtoDays = 0;
+  var findSprintOverride = function (overrides) {
+    if (!hasSprint || !overrides || typeof overrides !== 'object') return null;
+    var target = sprintName.toLowerCase();
+    var keys = Object.keys(overrides);
+    for (var i = 0; i < keys.length; i++) {
+      if (String(keys[i] || '').trim().toLowerCase() === target) {
+        return overrides[keys[i]];
       }
-      return null;
-    };
-    var developers = Array.from(capacityByDeveloper.values()).map(function (entry) {
-      var config = entry.developer === 'Unassigned' ? null : configuredCapacity.get(entry.developer.toLowerCase());
-      var baseCapacity = config && config.capacity != null ? config.capacity : null;
-      var sprintOverride = config ? findSprintOverride(config.sprintOverrides) : null;
-      var ptoDays = sprintOverride && Number.isFinite(Number(sprintOverride.ptoDays)) && Number(sprintOverride.ptoDays) > 0 ?
-        Number(sprintOverride.ptoDays) : 0;
-      var rawManual = sprintOverride ? sprintOverride.capacityOverride : null;
-      var manualOverride = rawManual !== null && rawManual !== undefined && rawManual !== '' &&
-        Number.isFinite(Number(rawManual)) && Number(rawManual) >= 0 ? Number(rawManual) : null;
-      var overrideNotes = sprintOverride && sprintOverride.notes ? String(sprintOverride.notes).trim() : '';
+    }
+    return null;
+  };
+  var developers = Array.from(capacityByDeveloper.values()).map(function (entry) {
+    var config = entry.developer === 'Unassigned' ? null : configuredCapacity.get(entry.developer.toLowerCase());
+    var baseCapacity = config && config.capacity != null ? config.capacity : null;
+    var sprintOverride = config ? findSprintOverride(config.sprintOverrides) : null;
+    var ptoDays = sprintOverride && Number.isFinite(Number(sprintOverride.ptoDays)) && Number(sprintOverride.ptoDays) > 0 ?
+      Number(sprintOverride.ptoDays) : 0;
+    var rawManual = sprintOverride ? sprintOverride.capacityOverride : null;
+    var manualOverride = rawManual !== null && rawManual !== undefined && rawManual !== '' &&
+      Number.isFinite(Number(rawManual)) && Number(rawManual) >= 0 ? Number(rawManual) : null;
+    var overrideNotes = sprintOverride && sprintOverride.notes ? String(sprintOverride.notes).trim() : '';
 
-      var capacity = baseCapacity;
-      if (hasSprint && manualOverride !== null) {
-        capacity = manualOverride;
-      } else if (hasSprint && baseCapacity !== null && (ptoDays > 0 || sprintHolidayDays > 0)) {
-        var availableDays = Math.max(0, sprintWorkdays - sprintHolidayDays - ptoDays);
-        capacity = Math.round((baseCapacity * (availableDays / sprintWorkdays)) * 100) / 100;
-      }
+    var capacity = baseCapacity;
+    if (hasSprint && manualOverride !== null) {
+      capacity = manualOverride;
+    } else if (hasSprint && baseCapacity !== null && (ptoDays > 0 || sprintHolidayDays > 0)) {
+      var availableDays = Math.max(0, sprintWorkdays - sprintHolidayDays - ptoDays);
+      capacity = Math.round((baseCapacity * (availableDays / sprintWorkdays)) * 100) / 100;
+    }
 
-      if (capacity != null) {
-        totalCapacity += capacity;
-        hasConfiguredCapacity = true;
-      }
-      if (ptoDays > 0) {
-        totalPtoDays += ptoDays;
-      }
-      entry.issueCount = entry.issues.length;
-      entry.capacity = capacity;
-      entry.manager = config && config.manager ? config.manager : '';
-      if (hasSprint && entry.developer !== 'Unassigned' && (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride !== null || overrideNotes)) {
-        entry.baseCapacity = baseCapacity;
-        if (ptoDays > 0) entry.ptoDays = ptoDays;
-        if (sprintHolidayDays > 0) entry.holidayDays = sprintHolidayDays;
-        if (manualOverride !== null) entry.capacityOverride = manualOverride;
-        if (overrideNotes) entry.overrideNotes = overrideNotes;
-      }
-      entry.remaining = capacity == null || !hasSprint ? null : Math.round((capacity - entry.storyPoints) * 100) / 100;
-      entry.pace = hasSprint && entry.issueCount > 0 && sprintStart && sprintEnd ?
-        calculateSprintPace_(sprintStart, sprintEnd, {
-          totalStoryPoints: entry.storyPoints,
-          completedPoints: entry.completedPoints,
-          inProgressPoints: entry.inProgressPoints,
-          totalIssues: entry.issueCount,
-          completedIssues: entry.completedIssues,
-          inProgressIssues: entry.inProgressIssues
-        }, opts.now) : null;
-      return entry;
-    }).sort(function (a, b) {
-      return b.storyPoints - a.storyPoints || a.developer.localeCompare(b.developer);
-    });
+    if (capacity != null) {
+      totalCapacity += capacity;
+      hasConfiguredCapacity = true;
+    }
+    if (ptoDays > 0) {
+      totalPtoDays += ptoDays;
+    }
+    entry.issueCount = entry.issues.length;
+    entry.capacity = capacity;
+    entry.manager = config && config.manager ? config.manager : '';
+    if (hasSprint && entry.developer !== 'Unassigned' && (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride !== null || overrideNotes)) {
+      entry.baseCapacity = baseCapacity;
+      if (ptoDays > 0) entry.ptoDays = ptoDays;
+      if (sprintHolidayDays > 0) entry.holidayDays = sprintHolidayDays;
+      if (manualOverride !== null) entry.capacityOverride = manualOverride;
+      if (overrideNotes) entry.overrideNotes = overrideNotes;
+    }
+    entry.remaining = capacity == null || !hasSprint ? null : Math.round((capacity - entry.storyPoints) * 100) / 100;
+    entry.pace = hasSprint && entry.issueCount > 0 && sprintStart && sprintEnd ?
+      calculateSprintPace_(sprintStart, sprintEnd, {
+        totalStoryPoints: entry.storyPoints,
+        completedPoints: entry.completedPoints,
+        inProgressPoints: entry.inProgressPoints,
+        totalIssues: entry.issueCount,
+        completedIssues: entry.completedIssues,
+        inProgressIssues: entry.inProgressIssues
+      }, opts.now) : null;
+    return entry;
+  }).sort(function (a, b) {
+    return b.storyPoints - a.storyPoints || a.developer.localeCompare(b.developer);
+  });
 
-    var pace = hasSprint ? calculateSprintPace_(sprintStart, sprintEnd, {
-      totalStoryPoints: totalStoryPoints,
-      completedPoints: totalCompletedPoints,
-      inProgressPoints: totalInProgressPoints,
-      totalIssues: totalIssues,
-      completedIssues: totalCompletedIssues,
-      inProgressIssues: totalInProgressIssues
-    }, opts.now) : null;
+  var pace = hasSprint ? calculateSprintPace_(sprintStart, sprintEnd, {
+    totalStoryPoints: totalStoryPoints,
+    completedPoints: totalCompletedPoints,
+    inProgressPoints: totalInProgressPoints,
+    totalIssues: totalIssues,
+    completedIssues: totalCompletedIssues,
+    inProgressIssues: totalInProgressIssues
+  }, opts.now) : null;
 
     var result = {
       sprintName: hasSprint ? sprintName : 'None',
@@ -679,263 +679,263 @@ function analyzeSprintData(items) {
       pace: pace,
       developers: developers
     };
-    if (sprintHolidayDays > 0) {
-      result.holidayDays = sprintHolidayDays;
-      result.holidays = matchedHolidays;
-    }
-    if (totalPtoDays > 0) {
-      result.totalPtoDays = totalPtoDays;
-    }
-    if (sprintHolidayDays > 0 || totalPtoDays > 0) {
-      result.sprintWorkdays = sprintWorkdays;
-    }
-    return result;
+    if(sprintHolidayDays > 0) {
+    result.holidayDays = sprintHolidayDays;
+    result.holidays = matchedHolidays;
   }
-
-  function analyzeNoSprintCapacity_(projects, config) {
-    var byDeveloper = new Map();
-    var totalIssues = 0;
-    var totalStoryPoints = 0;
-    var unestimatedIssues = 0;
-
-    (projects || []).forEach(function (item) {
-      var issueType = String(item['Issue Type'] || '').trim();
-      if (issueType.toLowerCase() === 'epic') return;
-
-      var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint).filter(function (entry) {
-        var name = formatSprint(entry.name);
-        var resolved = name === '—' ? String(entry.name || '').trim() : name;
-        return Boolean(resolved && resolved !== '—');
-      });
-      if (sprintEntries.length > 0) return;
-
-      var workState = classifyIssueWorkState_(item, config);
-      if (workState === 'completed') return;
-
-      var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
-      developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
-
-      var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
-      var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
-      var points = parseFloat(rawPoints);
-      var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
-      if (!Number.isFinite(points)) points = 0;
-
-      var key = developer.toLowerCase();
-      var entry = byDeveloper.get(key);
-      if (!entry) {
-        entry = {
-          developer: developer,
-          storyPoints: 0,
-          completedPoints: 0,
-          inProgressPoints: 0,
-          notStartedPoints: 0,
-          unestimatedCount: 0,
-          issues: []
-        };
-        byDeveloper.set(key, entry);
-      }
-      entry.storyPoints += points;
-      if (workState === 'inProgress') entry.inProgressPoints += points;
-      else entry.notStartedPoints += points;
-      if (isUnestimated) {
-        entry.unestimatedCount++;
-        unestimatedIssues++;
-      }
-      entry.issues.push({
-        jiraKey: String(item['Jira #'] || '').trim(),
-        summary: String(item.Summary || '').trim(),
-        issueType: issueType,
-        status: String(item.Status || '').trim(),
-        storyPoints: points,
-        workState: workState
-      });
-      totalIssues++;
-      totalStoryPoints += points;
-    });
-
-    var developers = Array.from(byDeveloper.values()).map(function (entry) {
-      entry.issueCount = entry.issues.length;
-      return entry;
-    }).sort(function (a, b) {
-      if (a.developer === 'Unassigned' && b.developer !== 'Unassigned') return 1;
-      if (b.developer === 'Unassigned' && a.developer !== 'Unassigned') return -1;
-      return b.storyPoints - a.storyPoints || b.issueCount - a.issueCount || a.developer.localeCompare(b.developer);
-    });
-
-    return {
-      totalIssues: totalIssues,
-      totalStoryPoints: totalStoryPoints,
-      unestimatedIssues: unestimatedIssues,
-      developers: developers
-    };
+  if (totalPtoDays > 0) {
+    result.totalPtoDays = totalPtoDays;
   }
+  if (sprintHolidayDays > 0 || totalPtoDays > 0) {
+    result.sprintWorkdays = sprintWorkdays;
+  }
+  return result;
+}
 
-  function analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, config, now) {
-    var currentKey = String(currentName || '').toLowerCase();
-    var currentNumberMatch = String(currentName || '').match(/^Sprint\s*(\d+)$/i);
-    var currentNumber = currentNumberMatch ? Number(currentNumberMatch[1]) : null;
-    var pastClosedStages = new Set(
-      ((config && Array.isArray(config.pastSprintClosedStages)) ? config.pastSprintClosedStages : [])
-        .map(function (s) { return String(s || '').trim().toLowerCase(); })
-        .filter(Boolean)
-    );
+function analyzeNoSprintCapacity_(projects, config) {
+  var byDeveloper = new Map();
+  var totalIssues = 0;
+  var totalStoryPoints = 0;
+  var unestimatedIssues = 0;
 
-    var isPastSprintKey = function (key) {
-      if (!key || key === currentKey || futureKeySet.has(key)) return false;
+  (projects || []).forEach(function (item) {
+    var issueType = String(item['Issue Type'] || '').trim();
+    if (issueType.toLowerCase() === 'epic') return;
+
+    var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint).filter(function (entry) {
+      var name = formatSprint(entry.name);
+      var resolved = name === '—' ? String(entry.name || '').trim() : name;
+      return Boolean(resolved && resolved !== '—');
+    });
+    if (sprintEntries.length > 0) return;
+
+    var workState = classifyIssueWorkState_(item, config);
+    if (workState === 'completed') return;
+
+    var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+    developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
+
+    var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+    var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
+    var points = parseFloat(rawPoints);
+    var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
+    if (!Number.isFinite(points)) points = 0;
+
+    var key = developer.toLowerCase();
+    var entry = byDeveloper.get(key);
+    if (!entry) {
+      entry = {
+        developer: developer,
+        storyPoints: 0,
+        completedPoints: 0,
+        inProgressPoints: 0,
+        notStartedPoints: 0,
+        unestimatedCount: 0,
+        issues: []
+      };
+      byDeveloper.set(key, entry);
+    }
+    entry.storyPoints += points;
+    if (workState === 'inProgress') entry.inProgressPoints += points;
+    else entry.notStartedPoints += points;
+    if (isUnestimated) {
+      entry.unestimatedCount++;
+      unestimatedIssues++;
+    }
+    entry.issues.push({
+      jiraKey: String(item['Jira #'] || '').trim(),
+      summary: String(item.Summary || '').trim(),
+      issueType: issueType,
+      status: String(item.Status || '').trim(),
+      storyPoints: points,
+      workState: workState
+    });
+    totalIssues++;
+    totalStoryPoints += points;
+  });
+
+  var developers = Array.from(byDeveloper.values()).map(function (entry) {
+    entry.issueCount = entry.issues.length;
+    return entry;
+  }).sort(function (a, b) {
+    if (a.developer === 'Unassigned' && b.developer !== 'Unassigned') return 1;
+    if (b.developer === 'Unassigned' && a.developer !== 'Unassigned') return -1;
+    return b.storyPoints - a.storyPoints || b.issueCount - a.issueCount || a.developer.localeCompare(b.developer);
+  });
+
+  return {
+    totalIssues: totalIssues,
+    totalStoryPoints: totalStoryPoints,
+    unestimatedIssues: unestimatedIssues,
+    developers: developers
+  };
+}
+
+function analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, config, now) {
+  var currentKey = String(currentName || '').toLowerCase();
+  var currentNumberMatch = String(currentName || '').match(/^Sprint\s*(\d+)$/i);
+  var currentNumber = currentNumberMatch ? Number(currentNumberMatch[1]) : null;
+  var pastClosedStages = new Set(
+    ((config && Array.isArray(config.pastSprintClosedStages)) ? config.pastSprintClosedStages : [])
+      .map(function (s) { return String(s || '').trim().toLowerCase(); })
+      .filter(Boolean)
+  );
+
+  var isPastSprintKey = function (key) {
+    if (!key || key === currentKey || futureKeySet.has(key)) return false;
+    var sprint = sprints.get(key);
+    if (!sprint) return false;
+    if (sprint.states.has('ACTIVE') || sprint.states.has('FUTURE')) return false;
+    if (sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED')) return true;
+    if (sprint.endDate && sprint.endDate < now) return true;
+    if (currentNumber !== null) {
+      var numMatch = sprint.name.match(/^Sprint\s*(\d+)$/i);
+      if (numMatch && Number(numMatch[1]) < currentNumber) return true;
+    }
+    return false;
+  };
+
+  var issues = [];
+  var totalStoryPoints = 0;
+  var unestimatedIssues = 0;
+
+  (projects || []).forEach(function (item) {
+    var issueType = String(item['Issue Type'] || '').trim();
+    if (issueType.toLowerCase() === 'epic') return;
+
+    var workState = classifyIssueWorkState_(item, config);
+    if (workState === 'completed') return;
+    var stage = String(item['Project Stage'] || '').trim().toLowerCase();
+    if (stage && pastClosedStages.has(stage)) return;
+
+    var sprintNames = [];
+    var sprintKeys = [];
+    parseSprintEntries_(item.sprint || item.Sprint).forEach(function (entry) {
+      var formatted = formatSprint(entry.name);
+      var name = formatted === '—' ? String(entry.name || '').trim() : formatted;
+      if (!name || name === '—') return;
+      var key = name.toLowerCase();
+      if (sprintKeys.indexOf(key) === -1) {
+        sprintKeys.push(key);
+        sprintNames.push(name);
+      }
+    });
+    if (!sprintKeys.length) return;
+
+    var inCurrentOrFuture = sprintKeys.some(function (key) {
+      return key === currentKey || futureKeySet.has(key);
+    });
+    if (inCurrentOrFuture) return;
+
+    var pastNames = sprintNames.filter(function (name) {
+      return isPastSprintKey(name.toLowerCase());
+    });
+    if (!pastNames.length) return;
+
+    var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+    var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
+    var points = parseFloat(rawPoints);
+    var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
+    if (!Number.isFinite(points)) points = 0;
+    if (isUnestimated) unestimatedIssues++;
+
+    var assignee = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+    assignee = assignee && assignee.toLowerCase() !== 'unassigned' ? assignee : 'Unassigned';
+
+    totalStoryPoints += points;
+    issues.push({
+      jiraKey: String(item['Jira #'] || '').trim(),
+      summary: String(item.Summary || '').trim(),
+      issueType: issueType,
+      status: String(item.Status || '').trim(),
+      assignee: assignee,
+      sprintName: pastNames[pastNames.length - 1],
+      storyPoints: points,
+      workState: workState
+    });
+  });
+
+  issues.sort(function (a, b) {
+    return b.storyPoints - a.storyPoints || a.sprintName.localeCompare(b.sprintName, undefined, { numeric: true }) || a.jiraKey.localeCompare(b.jiraKey);
+  });
+
+  return {
+    totalIssues: issues.length,
+    totalStoryPoints: totalStoryPoints,
+    unestimatedIssues: unestimatedIssues,
+    issues: issues
+  };
+}
+
+function analyzeSprintCapacityPlan(projects, sprintItems, sprintStats, capacityEntries, options) {
+  var opts = options || {};
+  var now = opts.now instanceof Date && !isNaN(opts.now.getTime()) ? opts.now : new Date();
+  var sprints = new Map();
+  (sprintItems || []).forEach(function (item) {
+    parseSprintEntries_(item.sprint || item.Sprint).forEach(function (entry) {
+      var name = formatSprint(entry.name);
+      if (name === '—') name = entry.name;
+      if (!name) return;
+      var key = name.toLowerCase();
       var sprint = sprints.get(key);
-      if (!sprint) return false;
-      if (sprint.states.has('ACTIVE') || sprint.states.has('FUTURE')) return false;
-      if (sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED')) return true;
-      if (sprint.endDate && sprint.endDate < now) return true;
-      if (currentNumber !== null) {
-        var numMatch = sprint.name.match(/^Sprint\s*(\d+)$/i);
-        if (numMatch && Number(numMatch[1]) < currentNumber) return true;
+      if (!sprint) {
+        sprint = { name: name, states: new Set(), startDate: null, endDate: null };
+        sprints.set(key, sprint);
       }
-      return false;
-    };
-
-    var issues = [];
-    var totalStoryPoints = 0;
-    var unestimatedIssues = 0;
-
-    (projects || []).forEach(function (item) {
-      var issueType = String(item['Issue Type'] || '').trim();
-      if (issueType.toLowerCase() === 'epic') return;
-
-      var workState = classifyIssueWorkState_(item, config);
-      if (workState === 'completed') return;
-      var stage = String(item['Project Stage'] || '').trim().toLowerCase();
-      if (stage && pastClosedStages.has(stage)) return;
-
-      var sprintNames = [];
-      var sprintKeys = [];
-      parseSprintEntries_(item.sprint || item.Sprint).forEach(function (entry) {
-        var formatted = formatSprint(entry.name);
-        var name = formatted === '—' ? String(entry.name || '').trim() : formatted;
-        if (!name || name === '—') return;
-        var key = name.toLowerCase();
-        if (sprintKeys.indexOf(key) === -1) {
-          sprintKeys.push(key);
-          sprintNames.push(name);
-        }
-      });
-      if (!sprintKeys.length) return;
-
-      var inCurrentOrFuture = sprintKeys.some(function (key) {
-        return key === currentKey || futureKeySet.has(key);
-      });
-      if (inCurrentOrFuture) return;
-
-      var pastNames = sprintNames.filter(function (name) {
-        return isPastSprintKey(name.toLowerCase());
-      });
-      if (!pastNames.length) return;
-
-      var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
-      var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
-      var points = parseFloat(rawPoints);
-      var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
-      if (!Number.isFinite(points)) points = 0;
-      if (isUnestimated) unestimatedIssues++;
-
-      var assignee = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
-      assignee = assignee && assignee.toLowerCase() !== 'unassigned' ? assignee : 'Unassigned';
-
-      totalStoryPoints += points;
-      issues.push({
-        jiraKey: String(item['Jira #'] || '').trim(),
-        summary: String(item.Summary || '').trim(),
-        issueType: issueType,
-        status: String(item.Status || '').trim(),
-        assignee: assignee,
-        sprintName: pastNames[pastNames.length - 1],
-        storyPoints: points,
-        workState: workState
-      });
+      if (entry.state) sprint.states.add(entry.state);
+      if (entry.startDate && (!sprint.startDate || entry.startDate < sprint.startDate)) {
+        sprint.startDate = entry.startDate;
+      }
+      if (entry.endDate && (!sprint.endDate || entry.endDate > sprint.endDate)) {
+        sprint.endDate = entry.endDate;
+      }
     });
+  });
 
-    issues.sort(function (a, b) {
-      return b.storyPoints - a.storyPoints || a.sprintName.localeCompare(b.sprintName, undefined, { numeric: true }) || a.jiraKey.localeCompare(b.jiraKey);
-    });
-
-    return {
-      totalIssues: issues.length,
-      totalStoryPoints: totalStoryPoints,
-      unestimatedIssues: unestimatedIssues,
-      issues: issues
-    };
+  var currentName = String((sprintStats && sprintStats.currentSprintName) || 'None');
+  var current = sprints.get(currentName.toLowerCase());
+  var isClosed = function (sprint) {
+    return sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED');
+  };
+  if (current && !current.states.has('ACTIVE') && !isClosed(current) &&
+    (current.states.has('FUTURE') || (current.startDate && current.startDate > now))) {
+    currentName = 'None';
+    current = null;
   }
+  var currentNumber = currentName.match(/^Sprint\s*(\d+)$/i);
+  var future = Array.from(sprints.values()).filter(function (sprint) {
+    if (sprint.name.toLowerCase() === currentName.toLowerCase() ||
+      sprint.states.has('ACTIVE') || isClosed(sprint)) return false;
+    if (sprint.states.has('FUTURE')) return true;
+    if (sprint.startDate) return sprint.startDate > now;
+    var number = sprint.name.match(/^Sprint\s*(\d+)$/i);
+    return Boolean(currentNumber && number && Number(number[1]) > Number(currentNumber[1]));
+  }).sort(function (a, b) {
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
 
-    function analyzeSprintCapacityPlan(projects, sprintItems, sprintStats, capacityEntries, options) {
-      var opts = options || {};
-      var now = opts.now instanceof Date && !isNaN(opts.now.getTime()) ? opts.now : new Date();
-      var sprints = new Map();
-      (sprintItems || []).forEach(function (item) {
-        parseSprintEntries_(item.sprint || item.Sprint).forEach(function (entry) {
-          var name = formatSprint(entry.name);
-          if (name === '—') name = entry.name;
-          if (!name) return;
-          var key = name.toLowerCase();
-          var sprint = sprints.get(key);
-          if (!sprint) {
-            sprint = { name: name, states: new Set(), startDate: null, endDate: null };
-            sprints.set(key, sprint);
-          }
-          if (entry.state) sprint.states.add(entry.state);
-          if (entry.startDate && (!sprint.startDate || entry.startDate < sprint.startDate)) {
-            sprint.startDate = entry.startDate;
-          }
-          if (entry.endDate && (!sprint.endDate || entry.endDate > sprint.endDate)) {
-            sprint.endDate = entry.endDate;
-          }
-        });
+  var futureKeySet = new Set(future.map(function (sprint) { return sprint.name.toLowerCase(); }));
+  var currentStart = (current && current.startDate) || (sprintStats && sprintStats.currentSprintStart) || null;
+  var currentEnd = (current && current.endDate) || (sprintStats && sprintStats.currentSprintEnd) || null;
+
+  return {
+    current: analyzeSprintCapacity(projects, currentName, capacityEntries, {
+      startDate: currentStart,
+      endDate: currentEnd,
+      config: opts.config,
+      capacitySettings: opts.capacitySettings,
+      now: now
+    }),
+    future: future.map(function (sprint) {
+      return analyzeSprintCapacity(projects, sprint.name, capacityEntries, {
+        startDate: sprint.startDate,
+        endDate: sprint.endDate,
+        config: opts.config,
+        capacitySettings: opts.capacitySettings,
+        now: now
       });
-
-      var currentName = String((sprintStats && sprintStats.currentSprintName) || 'None');
-      var current = sprints.get(currentName.toLowerCase());
-      var isClosed = function (sprint) {
-        return sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED');
-      };
-      if (current && !current.states.has('ACTIVE') && !isClosed(current) &&
-        (current.states.has('FUTURE') || (current.startDate && current.startDate > now))) {
-        currentName = 'None';
-        current = null;
-      }
-      var currentNumber = currentName.match(/^Sprint\s*(\d+)$/i);
-      var future = Array.from(sprints.values()).filter(function (sprint) {
-        if (sprint.name.toLowerCase() === currentName.toLowerCase() ||
-          sprint.states.has('ACTIVE') || isClosed(sprint)) return false;
-        if (sprint.states.has('FUTURE')) return true;
-        if (sprint.startDate) return sprint.startDate > now;
-        var number = sprint.name.match(/^Sprint\s*(\d+)$/i);
-        return Boolean(currentNumber && number && Number(number[1]) > Number(currentNumber[1]));
-      }).sort(function (a, b) {
-        return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
-      });
-
-      var futureKeySet = new Set(future.map(function (sprint) { return sprint.name.toLowerCase(); }));
-      var currentStart = (current && current.startDate) || (sprintStats && sprintStats.currentSprintStart) || null;
-      var currentEnd = (current && current.endDate) || (sprintStats && sprintStats.currentSprintEnd) || null;
-
-      return {
-        current: analyzeSprintCapacity(projects, currentName, capacityEntries, {
-          startDate: currentStart,
-          endDate: currentEnd,
-          config: opts.config,
-          capacitySettings: opts.capacitySettings,
-          now: now
-        }),
-        future: future.map(function (sprint) {
-          return analyzeSprintCapacity(projects, sprint.name, capacityEntries, {
-            startDate: sprint.startDate,
-            endDate: sprint.endDate,
-            config: opts.config,
-            capacitySettings: opts.capacitySettings,
-            now: now
-          });
-        }),
-        noSprint: analyzeNoSprintCapacity_(projects, opts.config),
-        pastOpen: analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, opts.config, now)
-      };
-    }
+    }),
+    noSprint: analyzeNoSprintCapacity_(projects, opts.config),
+    pastOpen: analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, opts.config, now)
+  };
+}

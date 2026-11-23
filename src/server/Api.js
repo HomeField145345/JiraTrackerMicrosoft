@@ -5,7 +5,7 @@
 
 function doGet(e) {
   var template;
-  
+
   // Simple routing
   if (e.parameter.page === 'dashboard') {
     template = HtmlService.createTemplateFromFile('Dashboard.html');
@@ -13,7 +13,7 @@ function doGet(e) {
     // Default to Login page if no page param or unknown
     template = HtmlService.createTemplateFromFile('Login.html');
   }
-  
+
   template.url = ScriptApp.getService().getUrl();
   return template.evaluate()
     .setTitle("Project Tracker")
@@ -36,7 +36,7 @@ function getPageHtml(page) {
   } else {
     template = HtmlService.createTemplateFromFile('Login.html');
   }
-  
+
   template.url = ScriptApp.getService().getUrl();
   return template.evaluate()
     .setTitle("Project Tracker")
@@ -95,7 +95,7 @@ function resolveDataContextUser(authUser, targetUsername) {
   }
 
   const users = getUsers();
-  const targetUser = users.find(function(u) { return u.username === targetUsername; });
+  const targetUser = users.find(function (u) { return u.username === targetUsername; });
   if (!targetUser) {
     throw new Error('Target workspace user not found: ' + targetUsername);
   }
@@ -111,24 +111,24 @@ function forceGetProjectData(token, targetUsername) {
 function getProjectData(token, targetUsername) {
   const auth = requireAuth(token);
   var result = getProjectData_(auth.user, targetUsername);
-  
+
   if (result === null) {
-      return null;
+    return null;
   }
-  
+
   // Force JSON serialization to avoid transport layer issues with complex objects
   try {
-      var jsonString = JSON.stringify(result);
-      // Quick sample of first project's timestamps to confirm server values pre-UI
-      try {
-        var parsed = JSON.parse(jsonString);
-        if (parsed && parsed.projects && parsed.projects.length) {
-          var p0 = parsed.projects[0];
-        }
-      } catch (inner) {}
-      return jsonString;
+    var jsonString = JSON.stringify(result);
+    // Quick sample of first project's timestamps to confirm server values pre-UI
+    try {
+      var parsed = JSON.parse(jsonString);
+      if (parsed && parsed.projects && parsed.projects.length) {
+        var p0 = parsed.projects[0];
+      }
+    } catch (inner) { }
+    return jsonString;
   } catch (e) {
-      throw e;
+    throw e;
   }
 }
 
@@ -157,241 +157,241 @@ function saveConfiguration(token, optionsData) {
   return saveConfiguration_(optionsData);
 }
 
-function saveDeveloperCapacity(token, entries, settings) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') throw new Error('Access denied: Admin rights required.');
-  return saveDeveloperCapacity_(entries, settings);
-}
-
-function saveManualData(token, jiraId, field, value, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return saveManualData_(jiraId, field, value, contextUser);
-}
-
-function createProjectFolder(token, jiraId, epicTitle, existingFolderId) {
-  requireAuth(token);
-  return createProjectFolder_(jiraId, epicTitle, existingFolderId || null);
-}
-
-function saveIndependentTask(token, taskData, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return saveIndependentTask_(taskData, contextUser);
-}
-
-function getGoogleTaskLists(token) {
-  requireAuth(token);
-  return listGoogleTaskLists_();
-}
-
-function syncGoogleTasksToIndependent(token, taskListId, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return syncGoogleTasksToIndependent_(taskListId, contextUser);
-}
-
-function syncAllGoogleTaskLists(token, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return syncAllGoogleTaskLists_(contextUser);
-}
-
-function createTaskAndSync(token, taskData, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return createTaskAndSync_(taskData, contextUser);
-}
-
-function updateTaskAndSync(token, taskData, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return updateTaskAndSync_(taskData, contextUser);
-}
-
-function deleteTaskAndSync(token, taskId, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return deleteTaskAndSync_(taskId, contextUser);
-}
-
-function toggleTaskComplete(token, taskId, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return toggleTaskComplete_(taskId, contextUser);
-}
-
-function updateLastChecked(token, jiraId, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return updateLastChecked_(jiraId, contextUser);
-}
-
-function updateSyncIndicators(token, mappingData) {
-  requireAuth(token);
-  // This function doesn't need to do much server-side processing
-  // The main purpose is to acknowledge the change and potentially
-  // trigger any server-side cache updates if needed
-  
-  // Could trigger any server-side updates here if needed
-  // For now, just acknowledge the change
-  return { status: 'success', message: 'Sync indicators updated' };
-}
-
-function updateDriveLink(token, jiraId, driveLink, targetUsername) {
-  const auth = requireAuth(token);
-  const contextUser = resolveDataContextUser(auth.user, targetUsername);
-  return updateDriveLink_(jiraId, driveLink, contextUser);
-}
-
-// --- User Management API ---
-
-function getUsersList(token) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') {
-    throw new Error("Access denied: Admin rights required.");
+  function saveDeveloperCapacity(token, entries, settings) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') throw new Error('Access denied: Admin rights required.');
+    return saveDeveloperCapacity_(entries, settings);
   }
-  return getUsers();
-}
 
-function getGlobalSheetUrl(token) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') {
-    throw new Error("Access denied: Admin rights required.");
+  function saveManualData(token, jiraId, field, value, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return saveManualData_(jiraId, field, value, contextUser);
   }
-  return WorkbookService.getActiveWorkbook().getUrl();
-}
 
-function getWorkspaceOwners(token) {
-  const auth = requireAuth(token);
-  // Allow all authenticated users to see the list of workspace owners
-  const allUsers = getUsers();
-  // Filter for Admins and Project Managers (Case Insensitive)
-  return allUsers.filter(u => {
-    const r = String(u.role || '').toLowerCase().replace(/\s+/g, '_');
-    return (r === 'admin' || r === 'project_manager') && u.isActive !== false;
-  }).map(u => ({ username: u.username, displayName: u.displayName }));
-}
+  function createProjectFolder(token, jiraId, epicTitle, existingFolderId) {
+    requireAuth(token);
+    return createProjectFolder_(jiraId, epicTitle, existingFolderId || null);
+  }
 
-function saveUser(token, user) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') {
-    throw new Error("Access denied: Admin rights required.");
+  function saveIndependentTask(token, taskData, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return saveIndependentTask_(taskData, contextUser);
   }
-  
-  if (user.id) {
-    // Update existing
-    return updateUser(user.id, user);
-  } else {
-    // Create new
-    return createUser(user);
-  }
-}
 
-function deleteUser(token, userId) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') {
-    throw new Error("Access denied: Admin rights required.");
+  function getGoogleTaskLists(token) {
+    requireAuth(token);
+    return listGoogleTaskLists_();
   }
+
+  function syncGoogleTasksToIndependent(token, taskListId, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return syncGoogleTasksToIndependent_(taskListId, contextUser);
+  }
+
+  function syncAllGoogleTaskLists(token, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return syncAllGoogleTaskLists_(contextUser);
+  }
+
+  function createTaskAndSync(token, taskData, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return createTaskAndSync_(taskData, contextUser);
+  }
+
+  function updateTaskAndSync(token, taskData, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return updateTaskAndSync_(taskData, contextUser);
+  }
+
+  function deleteTaskAndSync(token, taskId, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return deleteTaskAndSync_(taskId, contextUser);
+  }
+
+  function toggleTaskComplete(token, taskId, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return toggleTaskComplete_(taskId, contextUser);
+  }
+
+  function updateLastChecked(token, jiraId, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return updateLastChecked_(jiraId, contextUser);
+  }
+
+  function updateSyncIndicators(token, mappingData) {
+    requireAuth(token);
+    // This function doesn't need to do much server-side processing
+    // The main purpose is to acknowledge the change and potentially
+    // trigger any server-side cache updates if needed
+
+    // Could trigger any server-side updates here if needed
+    // For now, just acknowledge the change
+    return { status: 'success', message: 'Sync indicators updated' };
+  }
+
+  function updateDriveLink(token, jiraId, driveLink, targetUsername) {
+    const auth = requireAuth(token);
+    const contextUser = resolveDataContextUser(auth.user, targetUsername);
+    return updateDriveLink_(jiraId, driveLink, contextUser);
+  }
+
+  // --- User Management API ---
+
+  function getUsersList(token) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') {
+      throw new Error("Access denied: Admin rights required.");
+    }
+    return getUsers();
+  }
+
+  function getGlobalSheetUrl(token) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') {
+      throw new Error("Access denied: Admin rights required.");
+    }
+    return WorkbookService.getActiveWorkbook().getUrl();
+  }
+
+  function getWorkspaceOwners(token) {
+    const auth = requireAuth(token);
+    // Allow all authenticated users to see the list of workspace owners
+    const allUsers = getUsers();
+    // Filter for Admins and Project Managers (Case Insensitive)
+    return allUsers.filter(u => {
+      const r = String(u.role || '').toLowerCase().replace(/\s+/g, '_');
+      return (r === 'admin' || r === 'project_manager') && u.isActive !== false;
+    }).map(u => ({ username: u.username, displayName: u.displayName }));
+  }
+
+  function saveUser(token, user) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') {
+      throw new Error("Access denied: Admin rights required.");
+    }
+
+    if (user.id) {
+      // Update existing
+      return updateUser(user.id, user);
+    } else {
+      // Create new
+      return createUser(user);
+    }
+  }
+
+  function deleteUser(token, userId) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') {
+      throw new Error("Access denied: Admin rights required.");
+    }
     // Soft delete by setting isActive = false
-  return updateUser(userId, { isActive: false });
-}
-
-function impersonateUser(token, targetUserId) {
-  // Auth check is inside the implementation to verify admin status
-  return impersonateUser_(token, targetUserId);
-}
-
-function runDatabaseMaintenance(token, targetSheetId) {
-  const auth = requireAuth(token);
-  if (auth.role !== 'admin') {
-    throw new Error("Access denied: Admin rights required.");
+    return updateUser(userId, { isActive: false });
   }
-  
-  let targetSS = null;
-  if (targetSheetId) {
-    try {
-      targetSS = WorkbookService.openById(targetSheetId);
-    } catch (e) {
-      return { success: false, message: 'Could not open spreadsheet with ID: ' + targetSheetId };
-    }
+
+  function impersonateUser(token, targetUserId) {
+    // Auth check is inside the implementation to verify admin status
+    return impersonateUser_(token, targetUserId);
   }
-  
-  const logs = setupSheets(targetSS);
-  return { success: true, logs: logs };
-}
 
-/**
- * Time-driven trigger entrypoint.
- * Kept intentionally defensive: no uncaught errors, bounded runtime,
- * and independent step failures so one issue doesn't fail the whole trigger.
- */
-function runScheduledSync() {
-  var lock = Platform.lock();
-  var summary = {
-    ok: true,
-    startedAt: new Date().toISOString(),
-    steps: [],
-    errors: []
-  };
-
-  try {
-    lock.tryLock(10000);
-    if (!lock.hasLock()) {
-      summary.ok = false;
-      summary.errors.push('Skipped: another scheduled sync is already running.');
-      return summary;
+  function runDatabaseMaintenance(token, targetSheetId) {
+    const auth = requireAuth(token);
+    if (auth.role !== 'admin') {
+      throw new Error("Access denied: Admin rights required.");
     }
 
-    var started = Date.now();
-    var maxMs = 4 * 60 * 1000; // keep well below trigger hard limits
-
-    function canContinue_() {
-      return (Date.now() - started) < maxMs;
-    }
-
-    function runStep_(name, fn) {
-      if (!canContinue_()) {
-        summary.ok = false;
-        summary.steps.push({ step: name, status: 'skipped_timeout' });
-        return;
-      }
-
-      var t0 = Date.now();
+    let targetSS = null;
+    if (targetSheetId) {
       try {
-        fn();
-        summary.steps.push({ step: name, status: 'ok', ms: Date.now() - t0 });
+        targetSS = WorkbookService.openById(targetSheetId);
       } catch (e) {
-        summary.ok = false;
-        var msg = (e && e.message) ? e.message : String(e);
-        summary.steps.push({ step: name, status: 'error', ms: Date.now() - t0, message: msg });
-        summary.errors.push(name + ': ' + msg);
+        return { success: false, message: 'Could not open spreadsheet with ID: ' + targetSheetId };
       }
     }
 
-    // 1) Expired sessions cleanup
-    runStep_('cleanupSessions', function() {
-      cleanupSessions();
-    });
-
-    // 2) Clear core caches to avoid stale dashboard data across long-running apps
-    runStep_('clearCaches', function() {
-      clearProjectCache();
-      clearUsersCache();
-      clearConfigCache();
-    });
-
-    summary.finishedAt = new Date().toISOString();
-    summary.durationMs = Date.now() - started;
-    return summary;
-  } catch (fatal) {
-    summary.ok = false;
-    summary.finishedAt = new Date().toISOString();
-    summary.errors.push('fatal: ' + ((fatal && fatal.message) ? fatal.message : String(fatal)));
-    return summary;
-  } finally {
-    try {
-      if (lock && lock.hasLock()) lock.releaseLock();
-    } catch (e) {}
+    const logs = setupSheets(targetSS);
+    return { success: true, logs: logs };
   }
-}
+
+  /**
+   * Time-driven trigger entrypoint.
+   * Kept intentionally defensive: no uncaught errors, bounded runtime,
+   * and independent step failures so one issue doesn't fail the whole trigger.
+   */
+  function runScheduledSync() {
+    var lock = Platform.lock();
+    var summary = {
+      ok: true,
+      startedAt: new Date().toISOString(),
+      steps: [],
+      errors: []
+    };
+
+    try {
+      lock.tryLock(10000);
+      if (!lock.hasLock()) {
+        summary.ok = false;
+        summary.errors.push('Skipped: another scheduled sync is already running.');
+        return summary;
+      }
+
+      var started = Date.now();
+      var maxMs = 4 * 60 * 1000; // keep well below trigger hard limits
+
+      function canContinue_() {
+        return (Date.now() - started) < maxMs;
+      }
+
+      function runStep_(name, fn) {
+        if (!canContinue_()) {
+          summary.ok = false;
+          summary.steps.push({ step: name, status: 'skipped_timeout' });
+          return;
+        }
+
+        var t0 = Date.now();
+        try {
+          fn();
+          summary.steps.push({ step: name, status: 'ok', ms: Date.now() - t0 });
+        } catch (e) {
+          summary.ok = false;
+          var msg = (e && e.message) ? e.message : String(e);
+          summary.steps.push({ step: name, status: 'error', ms: Date.now() - t0, message: msg });
+          summary.errors.push(name + ': ' + msg);
+        }
+      }
+
+      // 1) Expired sessions cleanup
+      runStep_('cleanupSessions', function () {
+        cleanupSessions();
+      });
+
+      // 2) Clear core caches to avoid stale dashboard data across long-running apps
+      runStep_('clearCaches', function () {
+        clearProjectCache();
+        clearUsersCache();
+        clearConfigCache();
+      });
+
+      summary.finishedAt = new Date().toISOString();
+      summary.durationMs = Date.now() - started;
+      return summary;
+    } catch (fatal) {
+      summary.ok = false;
+      summary.finishedAt = new Date().toISOString();
+      summary.errors.push('fatal: ' + ((fatal && fatal.message) ? fatal.message : String(fatal)));
+      return summary;
+    } finally {
+      try {
+        if (lock && lock.hasLock()) lock.releaseLock();
+      } catch (e) { }
+    }
+  }

@@ -454,6 +454,78 @@ import ExcelJS from 'exceljs/dist/exceljs.min.js';
       assert.equal((await graph.run('refresh', 'file', undefined, owner, owner)).projects.sprintCapacity.developers[0].remaining, null);
     });
 
+    test('calculates per-sprint effective capacity from developer PTO, company holidays, and sprint overrides', async () => {
+      const graph = harness();
+      const owner = '33333333-3333-3333-3333-333333333333';
+      const connected = await graph.run('connect', undefined, undefined, owner, owner);
+      const csv = Buffer.from([
+        'Issue key,Summary,Status,Issue Type,Assignee,Sprint,Story Points',
+        'TEAM-101,Active work,In Progress,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12]",6',
+        'TEAM-102,Next sprint work,To Do,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13]",4',
+        'TEAM-103,Blair active,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12]",5',
+        'TEAM-104,Blair future,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13]",5'
+      ].join('\n'));
+      await graph.run('import', connected.itemId, { fileName: 'jira.csv', base64Data: csv.toString('base64') }, owner, owner);
+
+      await graph.run('mutate', connected.itemId, {
+        method: 'saveDeveloperCapacity',
+        args: [
+          [
+            {
+              developer: 'Avery',
+              capacity: 10,
+              manager: 'Jordan',
+              sprintOverrides: {
+                'Sprint 12': { ptoDays: 2, capacityOverride: null, notes: 'Vacation May 26-27' }
+              }
+            },
+            {
+              developer: 'Blair',
+              capacity: 10,
+              manager: 'Jordan',
+              sprintOverrides: {
+                'Sprint 13': { ptoDays: 0, capacityOverride: 5, notes: '50% loaned to Auth' }
+              }
+            }
+          ],
+          {
+            sprintWorkdays: 10,
+            companyHolidays: [{ name: 'Memorial Day', sprint: 'Sprint 12', days: 1 }]
+          }
+        ]
+      }, owner, owner);
+
+      const reopened = await graph.run('refresh', connected.itemId, undefined, owner, owner);
+      const current = reopened.projects.sprintCapacity;
+      assert.equal(current.sprintName, 'Sprint 12');
+      assert.equal(current.holidayDays, 1);
+      assert.equal(current.totalPtoDays, 2);
+      assert.equal(current.totalCapacity, 16); // 7 + 9
+      const averyCurrent = current.developers.find(d => d.developer === 'Avery');
+      const blairCurrent = current.developers.find(d => d.developer === 'Blair');
+      assert.equal(averyCurrent.baseCapacity, 10);
+      assert.equal(averyCurrent.ptoDays, 2);
+      assert.equal(averyCurrent.holidayDays, 1);
+      assert.equal(averyCurrent.capacity, 7);
+      assert.equal(averyCurrent.remaining, 1);
+      assert.equal(blairCurrent.baseCapacity, 10);
+      assert.equal(blairCurrent.holidayDays, 1);
+      assert.equal(blairCurrent.capacity, 9);
+      assert.equal(blairCurrent.remaining, 4);
+
+      const future = reopened.projects.futureSprintCapacity[0];
+      assert.equal(future.sprintName, 'Sprint 13');
+      assert.equal(future.totalCapacity, 15); // 10 (Avery untouched!) + 5 (Blair override)
+      const averyFuture = future.developers.find(d => d.developer === 'Avery');
+      const blairFuture = future.developers.find(d => d.developer === 'Blair');
+      assert.equal(averyFuture.capacity, 10);
+      assert.equal(averyFuture.remaining, 6);
+      assert.equal(blairFuture.baseCapacity, 10);
+      assert.equal(blairFuture.capacityOverride, 5);
+      assert.equal(blairFuture.capacity, 5);
+      assert.equal(blairFuture.remaining, 0);
+    });
+
     test('provisions Excel once in SharePoint, then persists Jira imports and tasks', async () => {
       const graph = harness({ sharepoint: true });
       const connected = await graph.run('connect');

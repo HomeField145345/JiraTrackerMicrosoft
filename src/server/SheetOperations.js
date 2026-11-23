@@ -13,25 +13,25 @@
 function createUserDataSpreadsheet(user) {
   const ss = WorkbookService.getActiveWorkbook();
   const newSSName = `Jira Tracker Data - ${user.username}`;
-  
+
   // Create new Spreadsheet
   const newSS = WorkbookService.create(newSSName);
   const newSSId = newSS.getId();
-  
+
   // NOTE: We do NOT share the sheet with the user.
   // The application runs as the script owner ("Execute as Me"), 
   // so the script has access to the file it created.
   // The user interacts with the data solely through the Web App UI.
-  
+
   // Copy Sheets
   const sheetsToCopy = [JIRA_DATA_SHEET, MANUAL_DATA_SHEET, INDEPENDENT_TASKS_SHEET];
-  
+
   sheetsToCopy.forEach(sheetName => {
     const sourceSheet = ss.getSheetByName(sheetName);
     if (sourceSheet) {
       const newSheet = sourceSheet.copyTo(newSS);
       newSheet.setName(sheetName);
-      
+
       // Clear Data (keep headers)
       // For JiraData, we might want to keep it empty initially
       // For ManualData, definitely empty
@@ -45,11 +45,11 @@ function createUserDataSpreadsheet(user) {
       console.warn(`Source sheet ${sheetName} not found in template.`);
     }
   });
-  
+
   // Delete default "Sheet1"
   const defaultSheet = newSS.getSheetByName('Sheet1');
   if (defaultSheet) newSS.deleteSheet(defaultSheet);
-  
+
   return newSSId;
 }
 
@@ -78,7 +78,7 @@ function getTimestampDisplayColumns_(sheet, headers, rowCount) {
 
     displayColumns[header] = sheet.getRange(2, headerIndex + 1, rowCount, 1)
       .getDisplayValues()
-      .map(function(row) { return row[0] || ''; });
+      .map(function (row) { return row[0] || ''; });
   }
 
   return displayColumns;
@@ -136,14 +136,14 @@ function readJiraData(sheet) {
   const range = sheet.getDataRange();
   const data = range.getValues();
   if (data.length < 2) return [];
-  
+
   const headers = data[0].map(h => (h ? String(h).trim() : ''));
   const rows = data.slice(1);
   const timestampDisplayColumns = getTimestampDisplayColumns_(sheet, headers, rows.length);
-  
+
   // Timestamp fields to preserve as display values
   const timestampFields = ['Updated', 'Created', 'Last Checked'];
-  
+
   return rows.map((row, rowIdx) => {
     const obj = {};
     headers.forEach((header, index) => {
@@ -171,50 +171,50 @@ function readManualData(sheet) {
   const range = sheet.getDataRange();
   const data = range.getValues();
   if (data.length < 2) return {};
-  
+
   const headers = data[0];
   const rows = data.slice(1);
   const timestampDisplayColumns = getTimestampDisplayColumns_(sheet, headers, rows.length);
   const map = {};
   var manualLogCount = 0;
-  
+
   // Find "Jira #" column index
   const idIndex = headers.indexOf("Jira #");
   if (idIndex === -1) return {};
-  
+
   rows.forEach((row, rowIdx) => {
     const jiraId = row[idIndex];
     if (jiraId) {
       const obj = {};
       headers.forEach((header, index) => {
         if (header && index !== idIndex) {
-           // For all timestamp fields, use display value to prevent any conversion
-           const timestampFields = ['Updated', 'Created', 'Last Checked'];
-           if (timestampFields.indexOf(header) !== -1) {
-             var rawVal = row[index];
-             var displayVal = timestampDisplayColumns[header] ? timestampDisplayColumns[header][rowIdx] : '';
-             var assignedVal = displayVal || '';
-             obj[header] = assignedVal;
+          // For all timestamp fields, use display value to prevent any conversion
+          const timestampFields = ['Updated', 'Created', 'Last Checked'];
+          if (timestampFields.indexOf(header) !== -1) {
+            var rawVal = row[index];
+            var displayVal = timestampDisplayColumns[header] ? timestampDisplayColumns[header][rowIdx] : '';
+            var assignedVal = displayVal || '';
+            obj[header] = assignedVal;
 
-             if (header === 'Last Checked' && manualLogCount < 5) {
-               logTimestampOperation('ManualData Last Checked (read)', {
-                 jiraId: jiraId,
-                 rawType: rawVal === null ? 'null' : typeof rawVal,
-                 rawValue: rawVal instanceof Date ? rawVal.toString() : rawVal,
-                 displayValue: displayVal,
-                 assignedValue: assignedVal
-               });
-               manualLogCount++;
-             }
-           } else {
-             obj[header] = normalizeSheetCellValue_(row[index], header);
-           }
-         }
+            if (header === 'Last Checked' && manualLogCount < 5) {
+              logTimestampOperation('ManualData Last Checked (read)', {
+                jiraId: jiraId,
+                rawType: rawVal === null ? 'null' : typeof rawVal,
+                rawValue: rawVal instanceof Date ? rawVal.toString() : rawVal,
+                displayValue: displayVal,
+                assignedValue: assignedVal
+              });
+              manualLogCount++;
+            }
+          } else {
+            obj[header] = normalizeSheetCellValue_(row[index], header);
+          }
+        }
       });
       map[jiraId] = obj;
     }
   });
-  
+
   return map;
 }
 
@@ -346,21 +346,21 @@ function readDeveloperCapacity(sheet) {
     if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
       throw new Error('DeveloperCapacity contains an invalid capacity.');
     }
-    const entry = {
-      developer: developer,
-      capacity: capacity,
-      notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim(),
-      manager: managerIndex === -1 ? '' : String(row[managerIndex] == null ? '' : row[managerIndex]).trim()
-    };
-    if (sprintOverridesIndex !== -1) {
-      const overrides = normalizeDeveloperSprintOverrides_(row[sprintOverridesIndex]);
-      if (Object.keys(overrides).length > 0) {
-        entry.sprintOverrides = overrides;
-      }
+      const entry = {
+        developer: developer,
+        capacity: capacity,
+        notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim(),
+        manager: managerIndex === -1 ? '' : String(row[managerIndex] == null ? '' : row[managerIndex]).trim()
+  };
+  if (sprintOverridesIndex !== -1) {
+    const overrides = normalizeDeveloperSprintOverrides_(row[sprintOverridesIndex]);
+    if (Object.keys(overrides).length > 0) {
+      entry.sprintOverrides = overrides;
     }
-    entries.push(entry);
-  });
-  return entries;
+  }
+  entries.push(entry);
+});
+return entries;
 }
 
 /**
@@ -372,10 +372,10 @@ function readIndependentTasks(sheet) {
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return [];
-  
+
   const headers = data[0];
   const rows = data.slice(1);
-  
+
   return rows.map(row => {
     const obj = {};
     headers.forEach((header, index) => {

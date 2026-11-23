@@ -1634,6 +1634,22 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
 }
 
 var activeCapacityTab_ = 'current';
+var capacityGroupByManager_ = (function () {
+    try {
+        return typeof localStorage !== 'undefined' && localStorage.getItem('projecthub_capacity_group_manager_v1') === '1';
+    } catch (e) {
+        return false;
+    }
+})();
+
+function syncCapacityGroupButton_() {
+    var btn = document.getElementById('capacity-group-by-manager');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', String(capacityGroupByManager_));
+    btn.className = capacityGroupByManager_ ?
+        'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
+        'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+}
 
 function setActiveCapacityTab_(tabKey) {
     var keys = ['current', 'future', 'nosprint', 'pastopen'];
@@ -1672,6 +1688,21 @@ function bindCapacitySubTabs_() {
         tilePastOpen._capTabBound = true;
         tilePastOpen.addEventListener('click', function () { setActiveCapacityTab_('pastopen'); });
     }
+    var groupBtn = document.getElementById('capacity-group-by-manager');
+    if (groupBtn && !groupBtn._capGroupBound) {
+        groupBtn._capGroupBound = true;
+        groupBtn.addEventListener('click', function () {
+            capacityGroupByManager_ = !capacityGroupByManager_;
+            try {
+                if (typeof localStorage !== 'undefined') {
+                    localStorage.setItem('projecthub_capacity_group_manager_v1', capacityGroupByManager_ ? '1' : '0');
+                }
+            } catch (e) { }
+            syncCapacityGroupButton_();
+            renderCapacityView();
+        });
+    }
+    syncCapacityGroupButton_();
 }
 
 function renderCapacityFooter_(tfoot, capacity, numberFormat) {

@@ -584,6 +584,7 @@ function analyzeSprintData(items) {
       }
       entry.issueCount = entry.issues.length;
       entry.capacity = capacity;
+      entry.manager = config && config.manager ? config.manager : '';
       entry.remaining = capacity == null || !hasSprint ? null : capacity - entry.storyPoints;
       entry.pace = hasSprint && entry.issueCount > 0 && sprintStart && sprintEnd ?
         calculateSprintPace_(sprintStart, sprintEnd, {

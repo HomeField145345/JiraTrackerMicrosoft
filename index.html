@@ -12,7 +12,7 @@
   <script>
     window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-    window.getStoredProjectHubUser = function  () {
+    window.getStoredProjectHubUser = function   () {
       return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
     };
 
@@ -21,13 +21,13 @@
         return Promise.reject(new Error('Asset not allowed: ' + filename));
       }
       if (!window.__deferredDashboardAssets[filename]) {
-        window.__deferredDashboardAssets[filename] = new Promise(functio n (resolve, reject) {
-          var script = document.createElement('script');
-          script.src = './src/client/' + filename;
-          script.onload = functi on () { resolve(); };
-          script.onerror = funct ion () {
+        window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+          var script = document.createElement ('script');
+          script.src = './src/client/' + f ilename;
+          script.onload = function() { resolve(); };
+          script.onerror = function() {
             delete window.__deferredDashboardAssets[filename];
-            reject(new Error('Could not load ' + filename + '.'));
+            rect(new Error('Could not load ' + filename + '.'));
           };
           document.body.appendChild(script);
         });
@@ -1553,32 +1553,40 @@
   <script src="./src/client/Dashboard.js"></script>
 
   <script>
-    // Config Modal Logic
-    document.addEventListener('DOMContentLoad ed',        () {
-      const configBtn = document.getElementById('c      ');
-      const configModal = document.getElementById('config      ;
-      const closeConfigBtn = document.getElementById('closeConfi            const closeConfigBtnFooter = document.getElementById('closeConfigBtnFoot          const overlay = document.getElementById('config-modal-overlay'        function openConfig()         nfigModal.classList.remove('hidden');
-          DeferredDashboardAsset('Config.js')
-              function () {
-                  eof loadConfigData === 'function') {
-                     gData();
-                      }          .ca           (error) {
-             al             load configuration tools: ' + (error && error.message ? error.message : error));
-          });
-             fun      ose       {
-        configModal.cl        'hidden');
-      }
+    document      tList      MContentLoaded', function() {
+        const configBtn = document.getElement      nfigBtn');
+        const configModal = document.getElementById('config-modal');
+             loseConfigBtn = document.getElementById('closeConfigBtn');
+        nst closeConfigBtnFooter = document.getElementById('closeConfigBtnFooter');
+            overlay = document.getElementById('config-modal-overlay');
 
-      if (configB      igB      entListener('click', function (e) {
-        e.preventDefaul t();
-         onfig();
-      });
+        function openConfig() {
+            configModal.classList.remove('hidden');
+          loadDeferredDashboardAsset('Config.js')
+            .then(function() {
+              if (typeof loadConfigData === 'function') {
+                loadConfigData();
+              }
+            })
+            .catch(function(error) {
+              alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
+            });
+        }
 
-        oseConfigBtn)       figBt      ntListener('click', closeConfig);
-      if (closeConfigBtnFooter) closeConf      ter.addEventListener('click', closeConfig);
-      if (overlay) overlay.addEventListener      , closeConfig);
-      const developerCapacityForm = document.      ntById('developer-capacity-form');
-      if (developerCapacityForm) developerCapac      addEventListener('submit', saveDeveloperCapacity);
+        function closeConfig() {
+            configModal.classList.add('hidden');
+        }
+
+        if (configBtn) configBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            openConfig();
+        });
+
+        if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
+        if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
+        if (overlay) overlay.addEventListener('click', closeConfig);
+        const developerCapacityForm = document.getElementById('developer-capacity-form');
+        if (developerCapacityForm) developerCapacityForm.addEventListener('submit', saveDeveloperCapacity);
     });
   </script>
 </body>

@@ -1633,43 +1633,154 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
     }
 }
 
-function renderCapacityView() {
-        var rawCapacity = APP_STATE.allData.sprintCapacity || {
-            sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
-        };
-        var capacity = resolveSprintCapacityWithDates_(rawCapacity);
-        var sprintName = document.getElementById('capacity-sprint-name');
-        var totalPoints = document.getElementById('capacity-total-points');
-        var totalIssues = document.getElementById('capacity-total-issues');
-        var body = document.getElementById('capacity-table-body');
-        if(!body) return;
+var activeCapacityTab_ = 'current';
 
-        var numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
-        var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
-        if(sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
-        if(totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
-        if(totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
-        renderCapacityPace_(capacity, numberFormat, percentFormat);
+function setActiveCapacityTab_(tabKey) {
+    var keys = ['current', 'future', 'nosprint', 'pastopen'];
+    activeCapacityTab_ = keys.indexOf(tabKey) !== -1 ? tabKey : 'current';
+    keys.forEach(function (key) {
+        var btn = document.getElementById('capacity-tab-' + key);
+        var panel = document.getElementById('capacity-panel-' + key);
+        var isActive = key === activeCapacityTab_;
+        if (btn) {
+            btn.setAttribute('aria-selected', String(isActive));
+            btn.className = isActive ?
+                'inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors' :
+                'inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        }
+        if (panel) {
+            panel.className = isActive ? 'px-4 pb-6' : 'px-4 pb-6 hidden';
+        }
+    });
+}
+
+function bindCapacitySubTabs_() {
+    ['current', 'future', 'nosprint', 'pastopen'].forEach(function (key) {
+        var btn = document.getElementById('capacity-tab-' + key);
+        if (btn && !btn._capTabBound) {
+            btn._capTabBound = true;
+            btn.addEventListener('click', function () { setActiveCapacityTab_(key); });
+        }
+    });
+    var tileNoSprint = document.getElementById('capacity-tile-nosprint');
+    if (tileNoSprint && !tileNoSprint._capTabBound) {
+        tileNoSprint._capTabBound = true;
+        tileNoSprint.addEventListener('click', function () { setActiveCapacityTab_('nosprint'); });
+    }
+    var tilePastOpen = document.getElementById('capacity-tile-pastopen');
+    if (tilePastOpen && !tilePastOpen._capTabBound) {
+        tilePastOpen._capTabBound = true;
+        tilePastOpen.addEventListener('click', function () { setActiveCapacityTab_('pastopen'); });
+    }
+}
+
+function renderCapacityFooter_(tfoot, capacity, numberFormat) {
+    if (!tfoot) return;
+    tfoot.replaceChildren();
+    if (!capacity || !capacity.developers || !capacity.developers.length) return;
+    var row = tfoot.insertRow();
+    row.className = 'bg-[#F6F6F6] border-t border-[#D8DADA] text-xs font-semibold text-black';
+    var labelCell = row.insertCell();
+    labelCell.className = 'px-4 py-2.5';
+    labelCell.textContent = 'Team total';
+    var issuesCell = row.insertCell();
+    issuesCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    issuesCell.textContent = numberFormat.format(capacity.totalIssues || 0);
+    var pointsCell = row.insertCell();
+    pointsCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    pointsCell.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
+    var capCell = row.insertCell();
+    capCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    capCell.textContent = capacity.totalCapacity == null ? '—' : numberFormat.format(capacity.totalCapacity);
+    var remCell = row.insertCell();
+    var teamRem = capacity.totalCapacity == null ? null : capacity.totalCapacity - (capacity.totalStoryPoints || 0);
+    remCell.className = 'px-3 py-2.5 text-right tabular-nums ' + (teamRem == null ? 'text-[#6F7171]' : teamRem < 0 ? 'text-[#B95319]' : teamRem > 0 ? 'text-[#008331]' : 'text-[#6F7171]');
+    remCell.textContent = teamRem == null ? '—' : numberFormat.format(teamRem);
+    var wkCell = row.insertCell();
+    wkCell.className = 'px-4 py-2.5 text-[#6F7171] font-normal';
+    if (capacity.totalCapacity != null && capacity.totalCapacity > 0) {
+        var pct = Math.round(((capacity.totalStoryPoints || 0) / capacity.totalCapacity) * 100);
+        wkCell.textContent = pct + '% of configured team capacity';
+    } else {
+        wkCell.textContent = '';
+    }
+}
+
+function renderCapacityView() {
+    var rawCapacity = APP_STATE.allData.sprintCapacity || {
+        sprintName: 'None', totalIssues: 0, totalStoryPoints: 0, developers: []
+    };
+    var capacity = resolveSprintCapacityWithDates_(rawCapacity);
+    var sprintName = document.getElementById('capacity-sprint-name');
+    var totalPoints = document.getElementById('capacity-total-points');
+    var totalIssues = document.getElementById('capacity-total-issues');
+    var body = document.getElementById('capacity-table-body');
+    if (!body) return;
+
+    var numberFormat = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+    var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
+    bindCapacitySubTabs_();
+    if (sprintName) sprintName.textContent = capacity.sprintName && capacity.sprintName !== 'None' ? capacity.sprintName : 'No current sprint detected';
+    if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
+    if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
+    renderCapacityPace_(capacity, numberFormat, percentFormat);
     renderCapacityRows_(body, capacity.developers, numberFormat, 'current', true);
+    renderCapacityFooter_(document.getElementById('capacity-table-footer'), capacity, numberFormat);
+
+    var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
+    var noSprint = APP_STATE.allData.noSprintCapacity || { totalIssues: 0, totalStoryPoints: 0, developers: [] };
+    var pastOpen = APP_STATE.allData.pastSprintOpenCapacity || { totalIssues: 0, totalStoryPoints: 0, issues: [] };
+
+    var noSprintStat = document.getElementById('capacity-stat-nosprint');
+    var noSprintSub = document.getElementById('capacity-stat-nosprint-sub');
+    if (noSprintStat) noSprintStat.textContent = numberFormat.format(noSprint.totalIssues || 0);
+    if (noSprintSub) noSprintSub.textContent = numberFormat.format(noSprint.totalStoryPoints || 0) + ' pts unscheduled';
+
+    var pastOpenStat = document.getElementById('capacity-stat-pastopen');
+    var pastOpenSub = document.getElementById('capacity-stat-pastopen-sub');
+    var pastOpenTile = document.getElementById('capacity-tile-pastopen');
+    if (pastOpenStat) {
+        pastOpenStat.textContent = numberFormat.format(pastOpen.totalIssues || 0);
+        pastOpenStat.className = 'mt-1 text-2xl font-semibold tabular-nums ' + ((pastOpen.totalIssues || 0) > 0 ? 'text-[#B95319]' : 'text-black');
+    }
+    if (pastOpenSub) pastOpenSub.textContent = numberFormat.format(pastOpen.totalStoryPoints || 0) + ' pts in past sprints';
+    if (pastOpenTile) {
+        pastOpenTile.className = (pastOpen.totalIssues || 0) > 0 ?
+            'text-left rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/60 px-3.5 py-3 hover:border-[#B95319] transition-colors' :
+            'text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors';
+    }
+
+    var futureCountEl = document.getElementById('capacity-tab-future-count');
+    var noSprintCountEl = document.getElementById('capacity-tab-nosprint-count');
+    var pastOpenCountEl = document.getElementById('capacity-tab-pastopen-count');
+    if (futureCountEl) futureCountEl.textContent = numberFormat.format(futureSprints.length);
+    if (noSprintCountEl) noSprintCountEl.textContent = numberFormat.format(noSprint.totalIssues || 0);
+    if (pastOpenCountEl) {
+        pastOpenCountEl.textContent = numberFormat.format(pastOpen.totalIssues || 0);
+        pastOpenCountEl.className = (pastOpen.totalIssues || 0) > 0 ?
+            'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]' :
+            'rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]';
+    }
 
     var futureContainer = document.getElementById('future-sprint-capacities');
+    var futureEmpty = document.getElementById('future-sprint-empty');
     if (futureContainer) {
         futureContainer.replaceChildren();
-        var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
         if (futureSprints.length) {
+            if (futureEmpty) futureEmpty.className = 'hidden';
             var futureHeading = document.createElement('h2');
-            futureHeading.className = 'text-xl font-normal text-black mt-8 mb-4';
+            futureHeading.className = 'text-lg font-semibold text-black mb-4';
             futureHeading.textContent = 'Future sprints';
             futureContainer.appendChild(futureHeading);
             futureSprints.forEach(function (sprint, index) {
                 var section = document.createElement('section');
-                section.className = 'mb-8';
+                section.className = 'mb-6 rounded-xl border border-[#D8DADA] bg-white p-4';
                 var heading = document.createElement('h3');
-                heading.className = 'text-lg font-normal text-black';
+                heading.className = 'text-base font-semibold text-black';
                 heading.textContent = sprint.sprintName;
                 section.appendChild(heading);
                 var summary = document.createElement('p');
-                summary.className = 'text-sm text-[#6F7171] mt-1 mb-4';
+                summary.className = 'text-xs text-[#6F7171] mt-0.5 mb-3';
                 var dateRange = formatCapacityDateRange_(sprint.sprintStart, sprint.sprintEnd);
                 summary.textContent = (dateRange ? dateRange + ' · ' : '') +
                     numberFormat.format(sprint.totalStoryPoints) + ' story points · ' +
@@ -1680,7 +1791,7 @@ function renderCapacityView() {
                 var table = document.createElement('table');
                 table.className = 'w-full text-sm';
                 var header = table.createTHead().insertRow();
-                header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
+                header.className = 'bg-[#F6F6F6] border-y border-[#D8DADA] text-left text-xs font-medium text-[#6F7171]';
                 ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining', 'Workload'].forEach(function (label, colIdx) {
                     var cell = document.createElement('th');
                     cell.scope = 'col';
@@ -1694,11 +1805,22 @@ function renderCapacityView() {
                 section.appendChild(tableWrapper);
                 futureContainer.appendChild(section);
             });
+        } else if (futureEmpty) {
+            futureEmpty.className = 'rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]';
         }
     }
 
     renderNoSprintCapacity_(APP_STATE.allData.noSprintCapacity, numberFormat);
     renderPastSprintOpenCapacity_(APP_STATE.allData.pastSprintOpenCapacity, numberFormat);
+    var noSprintEmpty = document.getElementById('no-sprint-empty');
+    if (noSprintEmpty) {
+        noSprintEmpty.className = (noSprint.totalIssues || 0) > 0 ? 'hidden' : 'rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]';
+    }
+    var pastOpenEmpty = document.getElementById('past-sprint-open-empty');
+    if (pastOpenEmpty) {
+        pastOpenEmpty.className = (pastOpen.totalIssues || 0) > 0 ? 'hidden' : 'rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]';
+    }
+    setActiveCapacityTab_(activeCapacityTab_);
 }
 
 function renderNoSprintCapacity_(noSprint, numberFormat) {
@@ -1935,7 +2057,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var remCell = row.insertCell();
         var remClass = developer.remaining == null ? 'text-[#6F7171]' :
             developer.remaining < 0 ? 'text-[#B95319] font-semibold' :
-            developer.remaining > 0 ? 'text-[#008331] font-medium' : 'text-[#6F7171]';
+                developer.remaining > 0 ? 'text-[#008331] font-medium' : 'text-[#6F7171]';
         remCell.className = 'px-3 py-3 text-right tabular-nums ' + remClass;
         remCell.textContent = developer.remaining == null ? '—' : numberFormat.format(developer.remaining);
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);

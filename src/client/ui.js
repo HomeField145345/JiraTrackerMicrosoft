@@ -1653,46 +1653,213 @@ function renderCapacityView() {
     renderCapacityRows_(body, capacity.developers, numberFormat, 'current', true);
 
     var futureContainer = document.getElementById('future-sprint-capacities');
-    if (!futureContainer) return;
-    futureContainer.replaceChildren();
-    var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
-    if (!futureSprints.length) return;
+    if (futureContainer) {
+        futureContainer.replaceChildren();
+        var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
+        if (futureSprints.length) {
+            var futureHeading = document.createElement('h2');
+            futureHeading.className = 'text-xl font-normal text-black mt-8 mb-4';
+            futureHeading.textContent = 'Future sprints';
+            futureContainer.appendChild(futureHeading);
+            futureSprints.forEach(function (sprint, index) {
+                var section = document.createElement('section');
+                section.className = 'mb-8';
+                var heading = document.createElement('h3');
+                heading.className = 'text-lg font-normal text-black';
+                heading.textContent = sprint.sprintName;
+                section.appendChild(heading);
+                var summary = document.createElement('p');
+                summary.className = 'text-sm text-[#6F7171] mt-1 mb-4';
+                var dateRange = formatCapacityDateRange_(sprint.sprintStart, sprint.sprintEnd);
+                summary.textContent = (dateRange ? dateRange + ' · ' : '') +
+                    numberFormat.format(sprint.totalStoryPoints) + ' story points · ' +
+                    numberFormat.format(sprint.totalIssues) + (sprint.totalIssues === 1 ? ' issue' : ' issues');
+                section.appendChild(summary);
+                var tableWrapper = document.createElement('div');
+                tableWrapper.className = 'overflow-x-auto';
+                var table = document.createElement('table');
+                table.className = 'w-full text-sm';
+                var header = table.createTHead().insertRow();
+                header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
+                ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining', 'Workload'].forEach(function (label, colIdx) {
+                    var cell = document.createElement('th');
+                    cell.scope = 'col';
+                    cell.className = 'px-3 py-2' + (colIdx > 0 && colIdx < 5 ? ' text-right' : '');
+                    cell.textContent = label;
+                    header.appendChild(cell);
+                });
+                var futureBody = table.createTBody();
+                renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index, false);
+                tableWrapper.appendChild(table);
+                section.appendChild(tableWrapper);
+                futureContainer.appendChild(section);
+            });
+        }
+    }
 
-    var futureHeading = document.createElement('h2');
-    futureHeading.className = 'text-xl font-normal text-black mt-8 mb-4';
-    futureHeading.textContent = 'Future sprints';
-    futureContainer.appendChild(futureHeading);
-    futureSprints.forEach(function (sprint, index) {
-        var section = document.createElement('section');
-        section.className = 'mb-8';
-        var heading = document.createElement('h3');
-        heading.className = 'text-lg font-normal text-black';
-        heading.textContent = sprint.sprintName;
-        section.appendChild(heading);
-        var summary = document.createElement('p');
-        summary.className = 'text-sm text-[#6F7171] mt-1 mb-4';
-        summary.textContent = numberFormat.format(sprint.totalStoryPoints) + ' story points · ' +
-            numberFormat.format(sprint.totalIssues) + (sprint.totalIssues === 1 ? ' issue' : ' issues');
-        section.appendChild(summary);
-        var tableWrapper = document.createElement('div');
-        tableWrapper.className = 'overflow-x-auto';
-        var table = document.createElement('table');
-        table.className = 'w-full text-sm';
-        var header = table.createTHead().insertRow();
-        header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
-        ['Developer', 'Issues', 'Story points', 'Capacity', 'Remaining', 'Workload'].forEach(function (label, index) {
-            var cell = document.createElement('th');
-            cell.scope = 'col';
-            cell.className = 'px-3 py-2' + (index > 0 && index < 5 ? ' text-right' : '');
-            cell.textContent = label;
-            header.appendChild(cell);
-        });
-        var futureBody = table.createTBody();
-        renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index, false);
-        tableWrapper.appendChild(table);
-        section.appendChild(tableWrapper);
-        futureContainer.appendChild(section);
+    renderNoSprintCapacity_(APP_STATE.allData.noSprintCapacity, numberFormat);
+    renderPastSprintOpenCapacity_(APP_STATE.allData.pastSprintOpenCapacity, numberFormat);
+}
+
+function renderNoSprintCapacity_(noSprint, numberFormat) {
+    var container = document.getElementById('no-sprint-capacity');
+    if (!container) return;
+    container.replaceChildren();
+    if (!noSprint || !noSprint.totalIssues) return;
+
+    var heading = document.createElement('h2');
+    heading.className = 'text-xl font-normal text-black mt-8 mb-1';
+    heading.textContent = 'No sprint assigned';
+    container.appendChild(heading);
+
+    var summary = document.createElement('p');
+    summary.className = 'text-sm text-[#6F7171] mb-4';
+    var parts = [
+        numberFormat.format(noSprint.totalStoryPoints) + ' story points',
+        numberFormat.format(noSprint.totalIssues) + (noSprint.totalIssues === 1 ? ' open issue' : ' open issues')
+    ];
+    if (noSprint.unestimatedIssues > 0) {
+        parts.push(numberFormat.format(noSprint.unestimatedIssues) + ' unestimated');
+    }
+    summary.textContent = parts.join(' · ');
+    container.appendChild(summary);
+
+    var tableWrapper = document.createElement('div');
+    tableWrapper.className = 'overflow-x-auto';
+    var table = document.createElement('table');
+    table.className = 'w-full text-sm';
+    var header = table.createTHead().insertRow();
+    header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
+    ['Assignee', 'Open issues', 'Story points', 'Status breakdown'].forEach(function (label, idx) {
+        var cell = document.createElement('th');
+        cell.scope = 'col';
+        cell.className = 'px-3 py-2' + (idx === 1 || idx === 2 ? ' text-right' : '');
+        cell.textContent = label;
+        header.appendChild(cell);
     });
+    var body = table.createTBody();
+    (noSprint.developers || []).forEach(function (dev, index) {
+        var row = body.insertRow();
+        row.className = 'border-b border-gray-200';
+        var nameCell = row.insertCell();
+        nameCell.className = 'px-3 py-3 text-black';
+        var name = document.createElement('span');
+        name.className = 'block';
+        name.textContent = dev.developer;
+        nameCell.appendChild(name);
+
+        var toggle = document.createElement('button');
+        toggle.type = 'button';
+        toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6]';
+        var toggleText = 'Issues (' + numberFormat.format(dev.issues.length) + ')';
+        var detailsId = 'no-sprint-issues-' + index;
+        toggle.setAttribute('aria-expanded', 'false');
+        toggle.setAttribute('aria-controls', detailsId);
+        var lbl = document.createElement('span');
+        lbl.textContent = toggleText;
+        toggle.appendChild(lbl);
+        var arrow = document.createElement('span');
+        arrow.setAttribute('aria-hidden', 'true');
+        arrow.textContent = '▸';
+        toggle.appendChild(arrow);
+        nameCell.appendChild(toggle);
+
+        var detailsRow = body.insertRow();
+        detailsRow.id = detailsId;
+        detailsRow.hidden = true;
+        detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
+        var detailsCell = detailsRow.insertCell();
+        detailsCell.colSpan = 4;
+        detailsCell.className = 'px-4 py-3';
+        renderCapacityAssignments_(detailsCell, dev.issues, dev.developer + ' unscheduled issues', numberFormat);
+        toggle.addEventListener('click', function () {
+            var expand = detailsRow.hidden;
+            detailsRow.hidden = !expand;
+            toggle.setAttribute('aria-expanded', String(expand));
+            arrow.textContent = expand ? '▾' : '▸';
+        });
+
+        var countCell = row.insertCell();
+        countCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
+        countCell.textContent = numberFormat.format(dev.issueCount);
+
+        var ptsCell = row.insertCell();
+        ptsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
+        ptsCell.textContent = numberFormat.format(dev.storyPoints);
+
+        var statusCell = row.insertCell();
+        statusCell.className = 'px-3 py-3 text-xs text-[#6F7171]';
+        var bdParts = [];
+        if (dev.inProgressPoints > 0) bdParts.push(numberFormat.format(dev.inProgressPoints) + ' active');
+        if (dev.notStartedPoints > 0) bdParts.push(numberFormat.format(dev.notStartedPoints) + ' to do');
+        if (dev.unestimatedCount > 0) bdParts.push(numberFormat.format(dev.unestimatedCount) + ' unest.');
+        statusCell.textContent = bdParts.length ? bdParts.join(' · ') : 'Needs sprint';
+    });
+    tableWrapper.appendChild(table);
+    container.appendChild(tableWrapper);
+}
+
+function renderPastSprintOpenCapacity_(pastOpen, numberFormat) {
+    var container = document.getElementById('past-sprint-open-capacity');
+    if (!container) return;
+    container.replaceChildren();
+    if (!pastOpen || !pastOpen.totalIssues) return;
+
+    var headerRow = document.createElement('div');
+    headerRow.className = 'flex flex-wrap items-center gap-3 mt-8 mb-1';
+    var heading = document.createElement('h2');
+    heading.className = 'text-xl font-normal text-black';
+    heading.textContent = 'Open items in past sprints';
+    headerRow.appendChild(heading);
+    var pill = document.createElement('span');
+    pill.className = 'inline-flex items-center rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-medium text-red-700';
+    pill.textContent = numberFormat.format(pastOpen.totalIssues) + ' open';
+    headerRow.appendChild(pill);
+    container.appendChild(headerRow);
+
+    var summary = document.createElement('p');
+    summary.className = 'text-sm text-[#6F7171] mb-4';
+    summary.textContent = numberFormat.format(pastOpen.totalStoryPoints) + ' story points still open in closed or past sprints (not moved to current or future sprints).';
+    container.appendChild(summary);
+
+    var tableWrapper = document.createElement('div');
+    tableWrapper.className = 'overflow-x-auto';
+    var table = document.createElement('table');
+    table.className = 'w-full text-sm';
+    var header = table.createTHead().insertRow();
+    header.className = 'bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600';
+    ['Jira key', 'Summary', 'Type', 'Status', 'Assignee', 'Past sprint', 'Story points'].forEach(function (label, idx) {
+        var cell = document.createElement('th');
+        cell.scope = 'col';
+        cell.className = 'px-3 py-2' + (idx === 6 ? ' text-right' : '');
+        cell.textContent = label;
+        header.appendChild(cell);
+    });
+    var body = table.createTBody();
+    (pastOpen.issues || []).forEach(function (issue) {
+        var row = body.insertRow();
+        row.className = 'border-b border-gray-200';
+        var keyCell = row.insertCell();
+        keyCell.className = 'px-3 py-2 whitespace-nowrap';
+        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(issue.jiraKey)) {
+            var link = document.createElement('a');
+            link.href = 'https://onejira.verizon.com/browse/' + issue.jiraKey;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'underline';
+            link.textContent = issue.jiraKey;
+            keyCell.appendChild(link);
+        } else {
+            keyCell.textContent = issue.jiraKey || '—';
+        }
+        [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', issue.assignee || 'Unassigned', issue.sprintName || '—', numberFormat.format(issue.storyPoints)].forEach(function (val, idx) {
+            var cell = row.insertCell();
+            cell.className = 'px-3 py-2' + (idx === 5 ? ' text-right tabular-nums font-medium text-gray-900' : '');
+            cell.textContent = val;
+        });
+    });
+    tableWrapper.appendChild(table);
+    container.appendChild(tableWrapper);
 }
 
 function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurrentSprint) {

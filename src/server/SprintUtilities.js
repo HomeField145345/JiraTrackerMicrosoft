@@ -624,6 +624,181 @@ function analyzeSprintData(items) {
     };
   }
 
+  function analyzeNoSprintCapacity_(projects, config) {
+    var byDeveloper = new Map();
+    var totalIssues = 0;
+    var totalStoryPoints = 0;
+    var unestimatedIssues = 0;
+
+    (projects || []).forEach(function (item) {
+      var issueType = String(item['Issue Type'] || '').trim();
+      if (issueType.toLowerCase() === 'epic') return;
+
+      var sprintEntries = parseSprintEntries_(item.sprint || item.Sprint).filter(function (entry) {
+        var name = formatSprint(entry.name);
+        var resolved = name === '—' ? String(entry.name || '').trim() : name;
+        return Boolean(resolved && resolved !== '—');
+      });
+      if (sprintEntries.length > 0) return;
+
+      var workState = classifyIssueWorkState_(item, config);
+      if (workState === 'completed') return;
+
+      var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+      developer = developer && developer.toLowerCase() !== 'unassigned' ? developer : 'Unassigned';
+
+      var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+      var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
+      var points = parseFloat(rawPoints);
+      var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
+      if (!Number.isFinite(points)) points = 0;
+
+      var key = developer.toLowerCase();
+      var entry = byDeveloper.get(key);
+      if (!entry) {
+        entry = {
+          developer: developer,
+          storyPoints: 0,
+          completedPoints: 0,
+          inProgressPoints: 0,
+          notStartedPoints: 0,
+          unestimatedCount: 0,
+          issues: []
+        };
+        byDeveloper.set(key, entry);
+      }
+      entry.storyPoints += points;
+      if (workState === 'inProgress') entry.inProgressPoints += points;
+      else entry.notStartedPoints += points;
+      if (isUnestimated) {
+        entry.unestimatedCount++;
+        unestimatedIssues++;
+      }
+      entry.issues.push({
+        jiraKey: String(item['Jira #'] || '').trim(),
+        summary: String(item.Summary || '').trim(),
+        issueType: issueType,
+        status: String(item.Status || '').trim(),
+        storyPoints: points,
+        workState: workState
+      });
+      totalIssues++;
+      totalStoryPoints += points;
+    });
+
+    var developers = Array.from(byDeveloper.values()).map(function (entry) {
+      entry.issueCount = entry.issues.length;
+      return entry;
+    }).sort(function (a, b) {
+      if (a.developer === 'Unassigned' && b.developer !== 'Unassigned') return 1;
+      if (b.developer === 'Unassigned' && a.developer !== 'Unassigned') return -1;
+      return b.storyPoints - a.storyPoints || b.issueCount - a.issueCount || a.developer.localeCompare(b.developer);
+    });
+
+    return {
+      totalIssues: totalIssues,
+      totalStoryPoints: totalStoryPoints,
+      unestimatedIssues: unestimatedIssues,
+      developers: developers
+    };
+  }
+
+  function analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, config, now) {
+    var currentKey = String(currentName || '').toLowerCase();
+    var currentNumberMatch = String(currentName || '').match(/^Sprint\s*(\d+)$/i);
+    var currentNumber = currentNumberMatch ? Number(currentNumberMatch[1]) : null;
+    var pastClosedStages = new Set(
+      ((config && Array.isArray(config.pastSprintClosedStages)) ? config.pastSprintClosedStages : [])
+        .map(function (s) { return String(s || '').trim().toLowerCase(); })
+        .filter(Boolean)
+    );
+
+    var isPastSprintKey = function (key) {
+      if (!key || key === currentKey || futureKeySet.has(key)) return false;
+      var sprint = sprints.get(key);
+      if (!sprint) return false;
+      if (sprint.states.has('ACTIVE') || sprint.states.has('FUTURE')) return false;
+      if (sprint.states.has('CLOSED') || sprint.states.has('COMPLETE') || sprint.states.has('COMPLETED')) return true;
+      if (sprint.endDate && sprint.endDate < now) return true;
+      if (currentNumber !== null) {
+        var numMatch = sprint.name.match(/^Sprint\s*(\d+)$/i);
+        if (numMatch && Number(numMatch[1]) < currentNumber) return true;
+      }
+      return false;
+    };
+
+    var issues = [];
+    var totalStoryPoints = 0;
+    var unestimatedIssues = 0;
+
+    (projects || []).forEach(function (item) {
+      var issueType = String(item['Issue Type'] || '').trim();
+      if (issueType.toLowerCase() === 'epic') return;
+
+      var workState = classifyIssueWorkState_(item, config);
+      if (workState === 'completed') return;
+      var stage = String(item['Project Stage'] || '').trim().toLowerCase();
+      if (stage && pastClosedStages.has(stage)) return;
+
+      var sprintNames = [];
+      var sprintKeys = [];
+      parseSprintEntries_(item.sprint || item.Sprint).forEach(function (entry) {
+        var formatted = formatSprint(entry.name);
+        var name = formatted === '—' ? String(entry.name || '').trim() : formatted;
+        if (!name || name === '—') return;
+        var key = name.toLowerCase();
+        if (sprintKeys.indexOf(key) === -1) {
+          sprintKeys.push(key);
+          sprintNames.push(name);
+        }
+      });
+      if (!sprintKeys.length) return;
+
+      var inCurrentOrFuture = sprintKeys.some(function (key) {
+        return key === currentKey || futureKeySet.has(key);
+      });
+      if (inCurrentOrFuture) return;
+
+      var pastNames = sprintNames.filter(function (name) {
+        return isPastSprintKey(name.toLowerCase());
+      });
+      if (!pastNames.length) return;
+
+      var pointsValue = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+      var rawPoints = String(pointsValue == null ? '' : pointsValue).trim();
+      var points = parseFloat(rawPoints);
+      var isUnestimated = rawPoints === '' || !Number.isFinite(points) || points <= 0;
+      if (!Number.isFinite(points)) points = 0;
+      if (isUnestimated) unestimatedIssues++;
+
+      var assignee = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+      assignee = assignee && assignee.toLowerCase() !== 'unassigned' ? assignee : 'Unassigned';
+
+      totalStoryPoints += points;
+      issues.push({
+        jiraKey: String(item['Jira #'] || '').trim(),
+        summary: String(item.Summary || '').trim(),
+        issueType: issueType,
+        status: String(item.Status || '').trim(),
+        assignee: assignee,
+        sprintName: pastNames[pastNames.length - 1],
+        storyPoints: points,
+        workState: workState
+      });
+    });
+
+    issues.sort(function (a, b) {
+      return b.storyPoints - a.storyPoints || a.sprintName.localeCompare(b.sprintName, undefined, { numeric: true }) || a.jiraKey.localeCompare(b.jiraKey);
+    });
+
+    return {
+      totalIssues: issues.length,
+      totalStoryPoints: totalStoryPoints,
+      unestimatedIssues: unestimatedIssues,
+      issues: issues
+    };
+  }
+
     function analyzeSprintCapacityPlan(projects, sprintItems, sprintStats, capacityEntries, options) {
       var opts = options || {};
       var now = opts.now instanceof Date && !isNaN(opts.now.getTime()) ? opts.now : new Date();
@@ -671,6 +846,7 @@ function analyzeSprintData(items) {
         return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
       });
 
+      var futureKeySet = new Set(future.map(function (sprint) { return sprint.name.toLowerCase(); }));
       var currentStart = (current && current.startDate) || (sprintStats && sprintStats.currentSprintStart) || null;
       var currentEnd = (current && current.endDate) || (sprintStats && sprintStats.currentSprintEnd) || null;
 
@@ -688,6 +864,8 @@ function analyzeSprintData(items) {
             config: opts.config,
             now: now
           });
-        })
+        }),
+        noSprint: analyzeNoSprintCapacity_(projects, opts.config),
+        pastOpen: analyzePastSprintOpen_(projects, sprints, currentName, futureKeySet, opts.config, now)
       };
     }

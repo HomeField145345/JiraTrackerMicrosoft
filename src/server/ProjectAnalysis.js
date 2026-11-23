@@ -118,6 +118,8 @@ function getProjectData_(user, targetUsername) {
   );
   data.sprintCapacity = capacityPlan.current;
   data.futureSprintCapacity = capacityPlan.future;
+  data.noSprintCapacity = capacityPlan.noSprint;
+  data.pastSprintOpenCapacity = capacityPlan.pastOpen;
   return data;
 }
 

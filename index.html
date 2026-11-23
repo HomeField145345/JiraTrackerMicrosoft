@@ -1500,16 +1500,18 @@
               aria-labelledby="developer-capacity-tab">
               <div>
                 <h4 class="text-xl font-normal text-black">Developer capacity</h4>
-                <p class="text-sm text-[#6F7171] mt-1">Set recurring story points per sprint for assignees in JiraData.
-                  Leave blank when capacity is unknown.</p>
+                <p class="text-sm text-[#6F7171] mt-1">Assign each developer a manager and recurring story-point
+                  capacity per sprint. Leave blank when unknown.</p>
               </div>
 
-              <form id="developer-capacity-form" class="max-w-2xl" novalidate>
+              <form id="developer-capacity-form" class="max-w-3xl" novalidate>
+                <datalist id="developer-manager-options"></datalist>
                 <div class="config-table-wrap border border-[#D8DADA] rounded-xl bg-white">
                   <table class="w-full text-sm">
                     <thead>
                       <tr class="text-left bg-[#F6F6F6] border-b border-[#D8DADA] text-xs font-medium text-[#6F7171]">
                         <th scope="col" class="px-4 py-3">Developer</th>
+                        <th scope="col" class="px-4 py-3">Manager</th>
                         <th scope="col" class="px-4 py-3 text-right">Capacity (points)</th>
                       </tr>
                     </thead>

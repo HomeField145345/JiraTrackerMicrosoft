@@ -173,13 +173,17 @@ function saveDeveloperCapacity_(entries) {
       if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
         throw new Error('Capacity must be a non-negative number or blank.');
       }
-      return { developer: developer, capacity: capacity, key: key };
+      var manager = entry.manager == null ? '' : String(entry.manager).trim();
+      return { developer: developer, capacity: capacity, manager: manager, hasManager: Object.prototype.hasOwnProperty.call(entry, 'manager'), key: key };
     });
 
+    var schemaHeaders = trackerSheetSchema()[DEVELOPER_CAPACITY_SHEET];
     if (!sheet) {
       sheet = ss.insertSheet(DEVELOPER_CAPACITY_SHEET);
-      sheet.getRange(1, 1, 1, 4).setValues([trackerSheetSchema()[DEVELOPER_CAPACITY_SHEET]]).setFontWeight('bold');
+      sheet.getRange(1, 1, 1, schemaHeaders.length).setValues([schemaHeaders]).setFontWeight('bold');
       sheet.setFrozenRows(1);
+    } else if (sheet.getLastColumn() < schemaHeaders.length) {
+      sheet.getRange(1, 1, 1, schemaHeaders.length).setValues([schemaHeaders]).setFontWeight('bold');
     }
     var data = sheet.getDataRange().getValues();
     var rowByName = new Map();
@@ -190,8 +194,9 @@ function saveDeveloperCapacity_(entries) {
     updates.forEach(function(update) {
       var row = rowByName.get(update.key);
       var old = existingByName.get(update.key);
-      var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp];
-      if (row) sheet.getRange(row, 1, 1, 4).setValues([values]);
+      var managerValue = update.hasManager ? update.manager : (old && old.manager ? old.manager : '');
+      var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp, managerValue];
+      if (row) sheet.getRange(row, 1, 1, schemaHeaders.length).setValues([values]);
       else sheet.appendRow(values);
     });
 

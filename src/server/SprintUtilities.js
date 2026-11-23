@@ -494,7 +494,8 @@ function analyzeSprintData(items) {
       var points = config.capacity;
       configuredCapacity.set(name.toLowerCase(), {
         developer: name,
-        capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null
+        capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null,
+        manager: config.manager == null ? '' : String(config.manager).trim()
       });
     });
 

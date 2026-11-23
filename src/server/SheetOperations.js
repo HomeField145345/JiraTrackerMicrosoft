@@ -232,6 +232,7 @@ function readDeveloperCapacity(sheet) {
   const nameIndex = headers.indexOf('Developer');
   const capacityIndex = headers.indexOf('Capacity');
   const notesIndex = headers.indexOf('Notes');
+  const managerIndex = headers.indexOf('Manager');
   if (nameIndex === -1 || capacityIndex === -1) throw new Error('DeveloperCapacity headers are invalid.');
 
   const entries = [];
@@ -250,7 +251,8 @@ function readDeveloperCapacity(sheet) {
     entries.push({
       developer: developer,
       capacity: capacity,
-      notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim()
+      notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim(),
+      manager: managerIndex === -1 ? '' : String(row[managerIndex] == null ? '' : row[managerIndex]).trim()
     });
   });
   return entries;

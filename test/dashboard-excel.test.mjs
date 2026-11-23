@@ -639,12 +639,14 @@ test('developer capacity config interactive buttons add company holidays and per
   vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
   context.renderDeveloperCapacityConfig();
 
-  // 1. Click "+ Add holiday"
+  // 1. Click "+ Add holiday" and set name + date
   elements['add-company-holiday-btn'].click();
   assert.equal(elements['developer-company-holidays-list'].children.length, 1);
   const holidayRow = elements['developer-company-holidays-list'].children[0];
   holidayRow.children[0].value = 'Memorial Day';
   holidayRow.children[0].listeners.input();
+  holidayRow.children[1].value = '2026-05-25';
+  holidayRow.children[1].listeners.input();
 
   // 2. Click Avery's "PTO & overrides" toggle button -> expands subpanel row
   const [averyRow, averyPtoRow] = elements['developer-capacity-body'].children;
@@ -653,13 +655,21 @@ test('developer capacity config interactive buttons add company holidays and per
   ptoToggleBtn.click();
   assert.equal(averyPtoRow.hidden, false);
 
-  // 3. Click "+ Add sprint PTO / override" inside Avery's subpanel
+  // 3. Click "+ Add PTO date" AND "+ Add manual PTO / override" inside Avery's subpanel
   const ptoPanelWrapper = averyPtoRow.children[0].children[0];
-  const addSprintPtoBtn = ptoPanelWrapper.children[0].children[1];
-  addSprintPtoBtn.click();
-  assert.equal(ptoToggleBtn.textContent, 'PTO & overrides (1)');
+  const btnGroup = ptoPanelWrapper.children[0].children[1];
+  const addPtoDateBtn = btnGroup.children[0];
+  addPtoDateBtn.click();
+  const dateRow = ptoPanelWrapper.children[1].children[0];
+  dateRow.children[0].children[1].value = '2026-05-26';
+  dateRow.children[0].children[1].listeners.input();
 
-  // 4. Save capacity and verify payload includes both holiday and Avery's sprint PTO
+  const updatedBtnGroup = ptoPanelWrapper.children[0].children[1];
+  const addManualPtoBtn = updatedBtnGroup.children[1];
+  addManualPtoBtn.click();
+  assert.equal(ptoToggleBtn.textContent, 'PTO & overrides (2)');
+
+  // 4. Save capacity and verify payload includes date-based holiday, date-based PTO, and manual sprint PTO
   context.saveDeveloperCapacity({ preventDefault() { } });
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), {
@@ -672,12 +682,15 @@ test('developer capacity config interactive buttons add company holidays and per
           manager: 'Jordan',
           sprintOverrides: {
             'Sprint 12': { ptoDays: 1, capacityOverride: null, notes: '' }
-          }
+          },
+          ptoDates: [
+            { startDate: '2026-05-26', endDate: '2026-05-26', days: null, notes: '' }
+          ]
         }
       ],
       {
         sprintWorkdays: 10,
-        companyHolidays: [{ name: 'Memorial Day', sprint: 'Sprint 12', days: 1 }]
+        companyHolidays: [{ name: 'Memorial Day', sprint: 'Sprint 12', date: '2026-05-25', days: 1 }]
       }
     ]
   });

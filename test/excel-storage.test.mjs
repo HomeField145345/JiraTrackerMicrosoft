@@ -460,10 +460,10 @@ import ExcelJS from 'exceljs/dist/exceljs.min.js';
       const connected = await graph.run('connect', undefined, undefined, owner, owner);
       const csv = Buffer.from([
         'Issue key,Summary,Status,Issue Type,Assignee,Sprint,Story Points',
-        'TEAM-101,Active work,In Progress,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12]",6',
-        'TEAM-102,Next sprint work,To Do,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13]",4',
-        'TEAM-103,Blair active,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12]",5',
-        'TEAM-104,Blair future,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13]",5'
+        'TEAM-101,Active work,In Progress,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12,startDate=2026-05-18,endDate=2026-05-29]",6',
+        'TEAM-102,Next sprint work,To Do,Story,Avery,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13,startDate=2026-06-01,endDate=2026-06-12]",4',
+        'TEAM-103,Blair active,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@1[state=ACTIVE,name=Sprint 12,startDate=2026-05-18,endDate=2026-05-29]",5',
+        'TEAM-104,Blair future,To Do,Story,Blair,"com.atlassian.greenhopper.service.sprint.Sprint@2[state=FUTURE,name=Sprint 13,startDate=2026-06-01,endDate=2026-06-12]",5'
       ].join('\n'));
       await graph.run('import', connected.itemId, { fileName: 'jira.csv', base64Data: csv.toString('base64') }, owner, owner);
 
@@ -475,9 +475,10 @@ import ExcelJS from 'exceljs/dist/exceljs.min.js';
               developer: 'Avery',
               capacity: 10,
               manager: 'Jordan',
-              sprintOverrides: {
-                'Sprint 12': { ptoDays: 2, capacityOverride: null, notes: 'Vacation May 26-27' }
-              }
+              // 2 workdays of date-based PTO (Tue May 26 - Wed May 27, 2026 -> falls in Sprint 12!)
+              ptoDates: [
+                { startDate: '2026-05-26', endDate: '2026-05-27', days: null, notes: 'Vacation May 26-27' }
+              ]
             },
             {
               developer: 'Blair',
@@ -490,7 +491,8 @@ import ExcelJS from 'exceljs/dist/exceljs.min.js';
           ],
           {
             sprintWorkdays: 10,
-            companyHolidays: [{ name: 'Memorial Day', sprint: 'Sprint 12', days: 1 }]
+            // Date-based company holiday: Mon May 25, 2026 falls inside Sprint 12 (2026-05-18..2026-05-29), NOT Sprint 13
+            companyHolidays: [{ name: 'Memorial Day', date: '2026-05-25', sprint: '', days: 1 }]
           }
         ]
       }, owner, owner);

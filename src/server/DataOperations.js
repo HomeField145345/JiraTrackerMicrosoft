@@ -138,7 +138,7 @@ function saveConfiguration_(optionsData) {
  * @param {Array<{developer: string, capacity: number|string, notes: string}>} entries
  * @returns {Object} Result object with status and message
  */
-function saveDeveloperCapacity_(entries) {
+function saveDeveloperCapacity_(entries, settings) {
   var lock = Platform.lock();
   try {
     lock.waitLock(30000); // Wait up to 30 seconds
@@ -148,6 +148,7 @@ function saveDeveloperCapacity_(entries) {
 
   try {
     if (!Array.isArray(entries)) throw new Error('Developer capacity data is invalid.');
+    var normalizedSettings = settings !== undefined ? normalizeDeveloperCapacitySettings_(settings) : null;
     var ss = getGlobalSpreadsheet();
     var sheet = ss.getSheetByName(DEVELOPER_CAPACITY_SHEET);
     var existing = sheet ? readDeveloperCapacity(sheet) : [];
@@ -174,7 +175,17 @@ function saveDeveloperCapacity_(entries) {
         throw new Error('Capacity must be a non-negative number or blank.');
       }
       var manager = entry.manager == null ? '' : String(entry.manager).trim();
-      return { developer: developer, capacity: capacity, manager: manager, hasManager: Object.prototype.hasOwnProperty.call(entry, 'manager'), key: key };
+      var hasSprintOverrides = Object.prototype.hasOwnProperty.call(entry, 'sprintOverrides');
+      var sprintOverrides = hasSprintOverrides ? normalizeDeveloperSprintOverrides_(entry.sprintOverrides) : null;
+      return {
+        developer: developer,
+        capacity: capacity,
+        manager: manager,
+        hasManager: Object.prototype.hasOwnProperty.call(entry, 'manager'),
+        hasSprintOverrides: hasSprintOverrides,
+        sprintOverrides: sprintOverrides,
+        key: key
+      };
     });
 
     var schemaHeaders = trackerSheetSchema()[DEVELOPER_CAPACITY_SHEET];
@@ -195,10 +206,36 @@ function saveDeveloperCapacity_(entries) {
       var row = rowByName.get(update.key);
       var old = existingByName.get(update.key);
       var managerValue = update.hasManager ? update.manager : (old && old.manager ? old.manager : '');
-      var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp, managerValue];
+      var overridesObj = update.hasSprintOverrides ? update.sprintOverrides : (old && old.sprintOverrides ? old.sprintOverrides : {});
+      var overridesValue = overridesObj && Object.keys(overridesObj).length > 0 ? JSON.stringify(overridesObj) : '';
+      var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp, managerValue, overridesValue];
       if (row) sheet.getRange(row, 1, 1, schemaHeaders.length).setValues([values]);
       else sheet.appendRow(values);
     });
+
+    if (normalizedSettings) {
+      var adminHeaders = trackerSheetSchema()[ADMIN_CONFIGS_SHEET];
+      var adminSheet = ss.getSheetByName(ADMIN_CONFIGS_SHEET);
+      if (!adminSheet) {
+        adminSheet = ss.insertSheet(ADMIN_CONFIGS_SHEET);
+        adminSheet.getRange(1, 1, 1, adminHeaders.length).setValues([adminHeaders]).setFontWeight('bold');
+        adminSheet.setFrozenRows(1);
+      }
+      var adminData = adminSheet.getDataRange().getValues();
+      var settingsRow = -1;
+      for (var i = 1; i < adminData.length; i++) {
+        if (String(adminData[i][0] == null ? '' : adminData[i][0]).trim() === '__CAPACITY_SETTINGS__') {
+          settingsRow = i + 1;
+          break;
+        }
+      }
+      var settingsValues = ['__CAPACITY_SETTINGS__', JSON.stringify(normalizedSettings), timestamp];
+      if (settingsRow !== -1) {
+        adminSheet.getRange(settingsRow, 1, 1, adminHeaders.length).setValues([settingsValues]);
+      } else {
+        adminSheet.appendRow(settingsValues);
+      }
+    }
 
     clearProjectCache();
     return { status: 'success', message: 'Developer capacity saved!' };

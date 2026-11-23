@@ -16,7 +16,7 @@ function trackerSheetSchema() {
     [MANUAL_DATA_SHEET]: ['Jira #', 'ACT/PCT', 'Planning Stage', 'Project Stage', 'Last Checked', 'Start Date', 'End Date', 'Drive Link', 'Priority', 'Artifacts'],
     [CONFIG_SHEET]: ['ACT/PCT Options', 'Planning Stage Options', 'Project Stage Options', 'HelpfulLinks', 'Epic Project Stage Options', 'Story Project Stage Options', 'Bug Project Stage Options', 'Closed Project Stages', 'Closed Status Keywords', 'Stage→Status (JSON)', 'Stage→Status Keywords', 'Past Sprint Closed Project Stages', 'Priority Options', '', 'Past Due Exempt Stages', 'KPI Project Stages', 'Independent Task Status Options', 'Not In Progress Statuses'],
     [INDEPENDENT_TASKS_SHEET]: ['ID', 'Title', 'Assignee', 'Status', 'Priority', 'Due', 'Project', 'Tags', 'Description', 'Owner', 'Recurrence', 'TaskListId', 'GoogleTaskId', 'Created', 'Updated', 'CompletedDate'],
-    [DEVELOPER_CAPACITY_SHEET]: ['Developer', 'Capacity', 'Notes', 'Updated', 'Manager'],
+    [DEVELOPER_CAPACITY_SHEET]: ['Developer', 'Capacity', 'Notes', 'Updated', 'Manager', 'SprintOverrides'],
     [USERS_SHEET]: ['ID', 'Username', 'Email', 'Display Name', 'Role', 'Is Active', 'Password', 'Created At', 'Last Login At', 'Data Sheet ID', 'Microsoft Object ID'],
     [SESSIONS_SHEET]: ['Token', 'Username', 'Role', 'Expiration', 'UserID'],
     [ADMIN_CONFIGS_SHEET]: ['Username', 'Config JSON', 'Updated At']

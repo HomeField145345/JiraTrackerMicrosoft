@@ -218,6 +218,103 @@ function readManualData(sheet) {
   return map;
 }
 
+function normalizeDeveloperSprintOverrides_(raw) {
+  if (!raw) return {};
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return {};
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (e) {
+      return {};
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+  const result = {};
+  Object.keys(parsed).forEach(sprintKey => {
+    const sprintName = String(sprintKey || '').trim();
+    if (!sprintName) return;
+    const item = parsed[sprintKey];
+    if (!item || typeof item !== 'object') return;
+    const rawPto = item.ptoDays;
+    const ptoText = rawPto == null ? '' : String(rawPto).trim();
+    const ptoDays = ptoText === '' ? 0 : Number(ptoText);
+    if (!Number.isFinite(ptoDays) || ptoDays < 0) {
+      throw new Error(`PTO days for ${sprintName} must be a non-negative number.`);
+    }
+    const rawOverride = item.capacityOverride;
+    const overrideText = rawOverride == null ? '' : String(rawOverride).trim();
+    const capacityOverride = overrideText === '' ? null : Number(overrideText);
+    if (capacityOverride !== null && (!Number.isFinite(capacityOverride) || capacityOverride < 0)) {
+      throw new Error(`Capacity override for ${sprintName} must be a non-negative number or blank.`);
+    }
+    const notes = item.notes == null ? '' : String(item.notes).trim();
+    if (ptoDays > 0 || capacityOverride !== null || notes) {
+      result[sprintName] = { ptoDays, capacityOverride, notes };
+    }
+  });
+  return result;
+}
+
+function normalizeDeveloperCapacitySettings_(raw) {
+  const defaults = { sprintWorkdays: 10, companyHolidays: [] };
+  if (!raw) return defaults;
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return defaults;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (e) {
+      return defaults;
+    }
+  }
+  if (!parsed || typeof parsed !== 'object') return defaults;
+  const rawDays = parsed.sprintWorkdays;
+  const daysText = rawDays == null ? '' : String(rawDays).trim();
+  const sprintWorkdays = daysText === '' ? 10 : Number(daysText);
+  if (!Number.isFinite(sprintWorkdays) || sprintWorkdays <= 0) {
+    throw new Error('Standard sprint workdays must be a positive number.');
+  }
+  const companyHolidays = [];
+  if (Array.isArray(parsed.companyHolidays)) {
+    parsed.companyHolidays.forEach(h => {
+      if (!h || typeof h !== 'object') return;
+      const name = String(h.name == null ? '' : h.name).trim();
+      const sprint = String(h.sprint == null ? '' : h.sprint).trim();
+      const rawHolDays = h.days;
+      const holText = rawHolDays == null ? '' : String(rawHolDays).trim();
+      const days = holText === '' ? 1 : Number(holText);
+      if (!Number.isFinite(days) || days < 0) {
+        throw new Error('Company holiday days must be a non-negative number.');
+      }
+      if ((name || sprint) && days > 0) {
+        companyHolidays.push({ name: name || 'Company Holiday', sprint, days });
+      }
+    });
+  }
+  return { sprintWorkdays, companyHolidays };
+}
+
+function readDeveloperCapacitySettings(sheet) {
+  const defaults = { sprintWorkdays: 10, companyHolidays: [] };
+  if (!sheet) return defaults;
+  const data = sheet.getDataRange().getValues();
+  if (data.length < 2) return defaults;
+  for (let i = 1; i < data.length; i++) {
+    const key = String(data[i][0] == null ? '' : data[i][0]).trim();
+    if (key === '__CAPACITY_SETTINGS__') {
+      try {
+        return normalizeDeveloperCapacitySettings_(data[i][1]);
+      } catch (e) {
+        return defaults;
+      }
+    }
+  }
+  return defaults;
+}
+
 /**
  * Reads developer capacity settings from the DeveloperCapacity sheet.
  * @param {Sheet|null} sheet - The DeveloperCapacity sheet (may be missing in older workbooks)
@@ -233,6 +330,7 @@ function readDeveloperCapacity(sheet) {
   const capacityIndex = headers.indexOf('Capacity');
   const notesIndex = headers.indexOf('Notes');
   const managerIndex = headers.indexOf('Manager');
+  const sprintOverridesIndex = headers.indexOf('SprintOverrides');
   if (nameIndex === -1 || capacityIndex === -1) throw new Error('DeveloperCapacity headers are invalid.');
 
   const entries = [];
@@ -248,12 +346,19 @@ function readDeveloperCapacity(sheet) {
     if (capacity !== null && (!Number.isFinite(capacity) || capacity < 0)) {
       throw new Error('DeveloperCapacity contains an invalid capacity.');
     }
-    entries.push({
+    const entry = {
       developer: developer,
       capacity: capacity,
       notes: notesIndex === -1 ? '' : String(row[notesIndex] == null ? '' : row[notesIndex]).trim(),
       manager: managerIndex === -1 ? '' : String(row[managerIndex] == null ? '' : row[managerIndex]).trim()
-    });
+    };
+    if (sprintOverridesIndex !== -1) {
+      const overrides = normalizeDeveloperSprintOverrides_(row[sprintOverridesIndex]);
+      if (Object.keys(overrides).length > 0) {
+        entry.sprintOverrides = overrides;
+      }
+    }
+    entries.push(entry);
   });
   return entries;
 }

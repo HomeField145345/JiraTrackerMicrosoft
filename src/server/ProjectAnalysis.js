@@ -114,7 +114,7 @@ function getProjectData_(user, targetUsername) {
   }
   var capacityPlan = analyzeSprintCapacityPlan(
     data.projects, data.projects.concat(data.independentTasks), data.sprintStats, data.developerCapacity,
-    { config: data.config }
+    { config: data.config, capacitySettings: data.capacitySettings }
   );
   data.sprintCapacity = capacityPlan.current;
   data.futureSprintCapacity = capacityPlan.future;
@@ -170,6 +170,7 @@ function _getRawProjectData(contextUser) {
 
     // Developer capacity settings live in the global workbook (sheet may be missing in older workbooks)
     var developerCapacity = readDeveloperCapacity(globalSS.getSheetByName(DEVELOPER_CAPACITY_SHEET));
+    var capacitySettings = readDeveloperCapacitySettings(globalSS.getSheetByName(ADMIN_CONFIGS_SHEET));
 
     // Load all data sources
     var projects = readJiraData(jiraSheet) || [];
@@ -190,8 +191,12 @@ function _getRawProjectData(contextUser) {
       independentTasks: independentTasks,
       config: config || {},
       sprintStats: sprintStats,
-      sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName, developerCapacity),
+      sprintCapacity: analyzeSprintCapacity(combinedProjects, sprintStats.currentSprintName, developerCapacity, {
+        config: config,
+        capacitySettings: capacitySettings
+      }),
       developerCapacity: developerCapacity,
+      capacitySettings: capacitySettings,
       users: users
     };
 

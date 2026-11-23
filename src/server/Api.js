@@ -157,10 +157,10 @@ function saveConfiguration(token, optionsData) {
   return saveConfiguration_(optionsData);
 }
 
-function saveDeveloperCapacity(token, entries) {
+function saveDeveloperCapacity(token, entries, settings) {
   const auth = requireAuth(token);
   if (auth.role !== 'admin') throw new Error('Access denied: Admin rights required.');
-  return saveDeveloperCapacity_(entries);
+  return saveDeveloperCapacity_(entries, settings);
 }
 
 function saveManualData(token, jiraId, field, value, targetUsername) {

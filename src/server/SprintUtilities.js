@@ -495,9 +495,26 @@ function analyzeSprintData(items) {
       configuredCapacity.set(name.toLowerCase(), {
         developer: name,
         capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null,
-        manager: config.manager == null ? '' : String(config.manager).trim()
+        manager: config.manager == null ? '' : String(config.manager).trim(),
+        sprintOverrides: config.sprintOverrides && typeof config.sprintOverrides === 'object' ? config.sprintOverrides : null
       });
     });
+
+    var capacitySettings = (opts && opts.capacitySettings) || {};
+    var sprintWorkdays = Number(capacitySettings.sprintWorkdays) > 0 ? Number(capacitySettings.sprintWorkdays) : 10;
+    var matchedHolidays = [];
+    var sprintHolidayDays = 0;
+    if (hasSprint && Array.isArray(capacitySettings.companyHolidays)) {
+      capacitySettings.companyHolidays.forEach(function (h) {
+        if (!h || typeof h !== 'object') return;
+        var hSprint = String(h.sprint == null ? '' : h.sprint).trim();
+        var hDays = Number(h.days);
+        if (hSprint && hSprint.toLowerCase() === sprintName.toLowerCase() && Number.isFinite(hDays) && hDays > 0) {
+          matchedHolidays.push({ name: String(h.name || 'Company Holiday').trim(), sprint: hSprint, days: hDays });
+          sprintHolidayDays += hDays;
+        }
+      });
+    }
 
     (items || []).forEach(function (item) {
       var developer = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
@@ -575,17 +592,55 @@ function analyzeSprintData(items) {
 
     var totalCapacity = 0;
     var hasConfiguredCapacity = false;
+    var totalPtoDays = 0;
+    var findSprintOverride = function (overrides) {
+      if (!hasSprint || !overrides || typeof overrides !== 'object') return null;
+      var target = sprintName.toLowerCase();
+      var keys = Object.keys(overrides);
+      for (var i = 0; i < keys.length; i++) {
+        if (String(keys[i] || '').trim().toLowerCase() === target) {
+          return overrides[keys[i]];
+        }
+      }
+      return null;
+    };
     var developers = Array.from(capacityByDeveloper.values()).map(function (entry) {
       var config = entry.developer === 'Unassigned' ? null : configuredCapacity.get(entry.developer.toLowerCase());
-      var capacity = config && config.capacity != null ? config.capacity : null;
+      var baseCapacity = config && config.capacity != null ? config.capacity : null;
+      var sprintOverride = config ? findSprintOverride(config.sprintOverrides) : null;
+      var ptoDays = sprintOverride && Number.isFinite(Number(sprintOverride.ptoDays)) && Number(sprintOverride.ptoDays) > 0 ?
+        Number(sprintOverride.ptoDays) : 0;
+      var rawManual = sprintOverride ? sprintOverride.capacityOverride : null;
+      var manualOverride = rawManual !== null && rawManual !== undefined && rawManual !== '' &&
+        Number.isFinite(Number(rawManual)) && Number(rawManual) >= 0 ? Number(rawManual) : null;
+      var overrideNotes = sprintOverride && sprintOverride.notes ? String(sprintOverride.notes).trim() : '';
+
+      var capacity = baseCapacity;
+      if (hasSprint && manualOverride !== null) {
+        capacity = manualOverride;
+      } else if (hasSprint && baseCapacity !== null && (ptoDays > 0 || sprintHolidayDays > 0)) {
+        var availableDays = Math.max(0, sprintWorkdays - sprintHolidayDays - ptoDays);
+        capacity = Math.round((baseCapacity * (availableDays / sprintWorkdays)) * 100) / 100;
+      }
+
       if (capacity != null) {
         totalCapacity += capacity;
         hasConfiguredCapacity = true;
       }
+      if (ptoDays > 0) {
+        totalPtoDays += ptoDays;
+      }
       entry.issueCount = entry.issues.length;
       entry.capacity = capacity;
       entry.manager = config && config.manager ? config.manager : '';
-      entry.remaining = capacity == null || !hasSprint ? null : capacity - entry.storyPoints;
+      if (hasSprint && entry.developer !== 'Unassigned' && (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride !== null || overrideNotes)) {
+        entry.baseCapacity = baseCapacity;
+        if (ptoDays > 0) entry.ptoDays = ptoDays;
+        if (sprintHolidayDays > 0) entry.holidayDays = sprintHolidayDays;
+        if (manualOverride !== null) entry.capacityOverride = manualOverride;
+        if (overrideNotes) entry.overrideNotes = overrideNotes;
+      }
+      entry.remaining = capacity == null || !hasSprint ? null : Math.round((capacity - entry.storyPoints) * 100) / 100;
       entry.pace = hasSprint && entry.issueCount > 0 && sprintStart && sprintEnd ?
         calculateSprintPace_(sprintStart, sprintEnd, {
           totalStoryPoints: entry.storyPoints,
@@ -609,7 +664,7 @@ function analyzeSprintData(items) {
       inProgressIssues: totalInProgressIssues
     }, opts.now) : null;
 
-    return {
+    var result = {
       sprintName: hasSprint ? sprintName : 'None',
       sprintStart: sprintStart ? sprintStart.toISOString() : null,
       sprintEnd: sprintEnd ? sprintEnd.toISOString() : null,
@@ -620,10 +675,21 @@ function analyzeSprintData(items) {
       notStartedPoints: totalNotStartedPoints,
       completedIssues: totalCompletedIssues,
       unestimatedIssues: totalUnestimatedIssues,
-      totalCapacity: hasConfiguredCapacity ? totalCapacity : null,
+      totalCapacity: hasConfiguredCapacity ? Math.round(totalCapacity * 100) / 100 : null,
       pace: pace,
       developers: developers
     };
+    if (sprintHolidayDays > 0) {
+      result.holidayDays = sprintHolidayDays;
+      result.holidays = matchedHolidays;
+    }
+    if (totalPtoDays > 0) {
+      result.totalPtoDays = totalPtoDays;
+    }
+    if (sprintHolidayDays > 0 || totalPtoDays > 0) {
+      result.sprintWorkdays = sprintWorkdays;
+    }
+    return result;
   }
 
   function analyzeNoSprintCapacity_(projects, config) {
@@ -857,6 +923,7 @@ function analyzeSprintData(items) {
           startDate: currentStart,
           endDate: currentEnd,
           config: opts.config,
+          capacitySettings: opts.capacitySettings,
           now: now
         }),
         future: future.map(function (sprint) {
@@ -864,6 +931,7 @@ function analyzeSprintData(items) {
             startDate: sprint.startDate,
             endDate: sprint.endDate,
             config: opts.config,
+            capacitySettings: opts.capacitySettings,
             now: now
           });
         }),

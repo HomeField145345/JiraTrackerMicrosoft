@@ -420,8 +420,13 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.deepEqual(storyCells(unassignedDetails).slice(1).map(cell => cell.textContent), ['Fix login', 'Bug', 'Open', '0']);
   assert.equal(storyCells(currentDetails)[0].children[0].textContent, 'TEAM-12');
   assert.equal(storyCells(currentDetails)[2].textContent, 'Custom work item');
+  const openedStories = [];
+  context.openStoryInfoModal = jiraId => openedStories.push(jiraId);
   const [key, ...fields] = storyCells(futureDetails);
-  assert.equal(key.children[0].href, 'https://onejira.verizon.com/browse/TEAM-13');
+  assert.equal(key.children[0].tag, 'button');
+  assert.equal(key.children[0].textContent, 'TEAM-13');
+  key.children[0].click();
+  assert.deepEqual(openedStories, ['TEAM-13']);
   assert.deepEqual(fields.map(cell => cell.textContent), ['Prepare next release', 'Story', 'To Do', '4']);
   futureToggle.click();
   assert.equal(futureDetails.hidden, true);
@@ -433,6 +438,10 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.match(elements['no-sprint-capacity'].children[1].textContent, /3 story points · 1 open issue/);
   assert.equal(elements['past-sprint-open-capacity'].children[0].children[0].textContent, 'Open items in past sprints');
   assert.equal(elements['past-sprint-open-capacity'].children[0].children[1].textContent, '1 open');
+  const pastKeyBtn = elements['past-sprint-open-capacity'].children[2].children[0].children[1].children[0].children[0].children[0];
+  assert.equal(pastKeyBtn.tag, 'button');
+  pastKeyBtn.click();
+  assert.deepEqual(openedStories, ['TEAM-13', 'OLD-1']);
 });
 
 test('configuration footer keeps inactive actions and asynchronous statuses hidden', () => {

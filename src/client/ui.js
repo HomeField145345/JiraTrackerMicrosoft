@@ -1994,17 +1994,7 @@ function renderPastSprintOpenCapacity_(pastOpen, numberFormat) {
         row.className = 'border-b border-gray-200';
         var keyCell = row.insertCell();
         keyCell.className = 'px-3 py-2 whitespace-nowrap';
-        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(issue.jiraKey)) {
-            var link = document.createElement('a');
-            link.href = 'https://onejira.verizon.com/browse/' + issue.jiraKey;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.className = 'underline';
-            link.textContent = issue.jiraKey;
-            keyCell.appendChild(link);
-        } else {
-            keyCell.textContent = issue.jiraKey || '—';
-        }
+        appendCapacityJiraKeyTrigger_(keyCell, issue.jiraKey);
         [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', issue.assignee || 'Unassigned', issue.sprintName || '—', numberFormat.format(issue.storyPoints)].forEach(function (val, idx) {
             var cell = row.insertCell();
             cell.className = 'px-3 py-2' + (idx === 5 ? ' text-right tabular-nums font-medium text-gray-900' : '');
@@ -2278,6 +2268,25 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
     }
 }
 
+function appendCapacityJiraKeyTrigger_(cell, jiraKey) {
+    if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(jiraKey)) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'text-[#006FC1] hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer text-left';
+        button.textContent = jiraKey;
+        button.setAttribute('aria-label', 'View details for ' + jiraKey);
+        button.setAttribute('data-jira-key', jiraKey);
+        button.addEventListener('click', function () {
+            if (typeof openStoryInfoModal === 'function') {
+                openStoryInfoModal(jiraKey);
+            }
+        });
+        cell.appendChild(button);
+    } else {
+        cell.textContent = jiraKey || '—';
+    }
+}
+
 function renderCapacityAssignments_(container, assignments, label, numberFormat) {
     var table = document.createElement('table');
     table.className = 'w-full text-sm text-black';
@@ -2297,17 +2306,7 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
         var row = body.insertRow();
         var keyCell = row.insertCell();
         keyCell.className = 'px-3 py-2 whitespace-nowrap';
-        if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(issue.jiraKey)) {
-            var link = document.createElement('a');
-            link.href = 'https://onejira.verizon.com/browse/' + issue.jiraKey;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.className = 'underline';
-            link.textContent = issue.jiraKey;
-            keyCell.appendChild(link);
-        } else {
-            keyCell.textContent = issue.jiraKey || '—';
-        }
+        appendCapacityJiraKeyTrigger_(keyCell, issue.jiraKey);
         var values = [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', numberFormat.format(issue.storyPoints)];
         values.forEach(function (value, index) {
             var cell = row.insertCell();

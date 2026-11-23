@@ -818,6 +818,8 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
     'capacity-table-body', 'capacity-filter-at-risk', 'capacity-filter-at-risk-count',
     'capacity-filter-over-capacity', 'capacity-filter-over-capacity-count',
     'capacity-filter-under-capacity', 'capacity-filter-under-capacity-count',
+    'capacity-tile-atrisk', 'capacity-stat-atrisk', 'capacity-stat-atrisk-sub',
+    'at-risk-devs-count',
     'future-sprint-capacities'
   ].map(id => [id, new Element()]));
   const state = {
@@ -841,14 +843,17 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
   context.renderCapacityView();
 
-  // Initially shows all 3 developers (6 rows including details rows), and badge counts are populated
+  // Initially shows all 3 developers (6 rows including details rows), and badge counts + KPI card are populated
   assert.equal(elements['capacity-filter-at-risk-count'].textContent, '2');
+  assert.equal(elements['capacity-stat-atrisk'].textContent, '2');
+  assert.equal(elements['at-risk-devs-count'].textContent, '2');
+  assert.equal(elements['capacity-stat-atrisk-sub'].textContent, '1 over capacity · 1 behind pace');
   assert.equal(elements['capacity-filter-over-capacity-count'].textContent, '1');
   assert.equal(elements['capacity-filter-under-capacity-count'].textContent, '1');
   assert.equal(elements['capacity-table-body'].children.length, 6);
 
-  // Toggle "At risk only" ON -> only Blair and Casey remain (4 rows including details rows)
-  elements['capacity-filter-at-risk'].click();
+  // Clicking the At risk KPI tile activates the at-risk filter -> only Blair and Casey remain (4 rows)
+  elements['capacity-tile-atrisk'].click();
   assert.equal(elements['capacity-filter-at-risk'].attributes['aria-pressed'], 'true');
   assert.equal(elements['capacity-table-body'].children.length, 4);
   assert.equal(elements['capacity-table-body'].children[0].children[0].children[0].textContent, 'Blair');

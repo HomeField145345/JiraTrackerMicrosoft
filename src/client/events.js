@@ -2008,6 +2008,18 @@ function updateCurrentSprintKPI() {
             paceBadge.textContent = '';
         }
     }
+    var atRiskDevsEl = document.getElementById('at-risk-devs-count');
+    if (atRiskDevsEl) {
+        var capData = APP_STATE && APP_STATE.allData && APP_STATE.allData.sprintCapacity;
+        var resolvedCap = typeof resolveSprintCapacityWithDates_ === 'function' ? resolveSprintCapacityWithDates_(capData) : capData;
+        var devs = (resolvedCap && resolvedCap.developers) || [];
+        var atRiskCount = typeof isCapacityDeveloperAtRisk_ === 'function' ?
+            devs.filter(isCapacityDeveloperAtRisk_).length : 0;
+        atRiskDevsEl.textContent = String(atRiskCount);
+    }
+    if (typeof bindCapacitySubTabs_ === 'function') {
+        bindCapacitySubTabs_();
+    }
 }
 
 function updatePastSprintKPI() {

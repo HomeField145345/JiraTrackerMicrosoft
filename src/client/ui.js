@@ -1903,6 +1903,32 @@ function bindCapacitySubTabs_() {
             btn.addEventListener('click', function () { setActiveCapacityTab_(key); });
         }
     });
+    var tileAtRisk = document.getElementById('capacity-tile-atrisk');
+    if (tileAtRisk && !tileAtRisk._capTabBound) {
+        tileAtRisk._capTabBound = true;
+        tileAtRisk.addEventListener('click', function () {
+            setActiveCapacityTab_('current');
+            setCapacityCurrentFilter_('at_risk');
+            syncCapacityFilterButtons_();
+            renderCapacityView();
+        });
+    }
+    var topAtRiskCard = document.getElementById('at-risk-devs-card');
+    if (topAtRiskCard && !topAtRiskCard._capKpiBound) {
+        topAtRiskCard._capKpiBound = true;
+        topAtRiskCard.addEventListener('click', function () {
+            APP_STATE.currentView = 'capacity';
+            capacityCurrentFilter_ = 'at_risk';
+            capacityFilterAtRisk_ = true;
+            setActiveCapacityTab_('current');
+            var capBtn = document.querySelector && document.querySelector('.view-btn[data-view="capacity"]');
+            if (capBtn && typeof capBtn.click === 'function') {
+                capBtn.click();
+            } else {
+                renderApp();
+            }
+        });
+    }
     var tileNoSprint = document.getElementById('capacity-tile-nosprint');
     if (tileNoSprint && !tileNoSprint._capTabBound) {
         tileNoSprint._capTabBound = true;
@@ -2004,6 +2030,37 @@ function renderCapacityView() {
         overCapacity: overCapDevs.length,
         underCapacity: underCapDevs.length
     });
+    var atRiskStat = document.getElementById('capacity-stat-atrisk');
+    var atRiskSub = document.getElementById('capacity-stat-atrisk-sub');
+    var atRiskTile = document.getElementById('capacity-tile-atrisk');
+    var topAtRiskCount = document.getElementById('at-risk-devs-count');
+    if (topAtRiskCount) {
+        topAtRiskCount.textContent = numberFormat.format(atRiskDevs.length);
+    }
+    if (atRiskStat) {
+        atRiskStat.textContent = numberFormat.format(atRiskDevs.length);
+        atRiskStat.className = 'mt-1 text-2xl font-semibold tabular-nums ' + (atRiskDevs.length > 0 ? 'text-[#B95319]' : 'text-black');
+    }
+    if (atRiskSub) {
+        if (atRiskDevs.length === 0) {
+            atRiskSub.textContent = 'All developers on track';
+        } else {
+            var behindPaceCount = atRiskDevs.filter(function (d) {
+                return d.pace && (d.pace.status === 'at_risk' || d.pace.status === 'behind');
+            }).length;
+            var riskParts = [];
+            if (overCapDevs.length > 0) riskParts.push(numberFormat.format(overCapDevs.length) + ' over capacity');
+            if (behindPaceCount > 0) riskParts.push(numberFormat.format(behindPaceCount) + ' behind pace');
+            atRiskSub.textContent = riskParts.join(' · ') || (numberFormat.format(atRiskDevs.length) + ' need attention');
+        }
+    }
+    if (atRiskTile) {
+        atRiskTile.className = capacityCurrentFilter_ === 'at_risk' ?
+            'text-left rounded-xl border-2 border-[#B95319] bg-[#FFECE0]/80 px-3.5 py-3 transition-colors' :
+            atRiskDevs.length > 0 ?
+                'text-left rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/60 px-3.5 py-3 hover:border-[#B95319] transition-colors' :
+                'text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors';
+    }
     var displayedCurrentDevs = capacityCurrentFilter_ === 'at_risk' ? atRiskDevs :
         capacityCurrentFilter_ === 'over_capacity' ? overCapDevs :
             capacityCurrentFilter_ === 'under_capacity' ? underCapDevs : allCurrentDevs;

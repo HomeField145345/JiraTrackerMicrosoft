@@ -1373,35 +1373,185 @@ function computeClientSprintPace_(startYmd, endYmd, metrics, nowDate) {
     return { status: status, label: label, timeElapsedPct: timeElapsedPct, timeRemainingPct: timeRemainingPct, completedPct: completedPct, activePct: activePct, delta: delta, remainingPoints: remainingPoints, remainingIssues: remainingIssues, requiredPointsPerDay: requiredPointsPerDay, expectedPointsPerDay: expectedPointsPerDay, totalDays: totalDays, daysElapsed: daysElapsed, daysRemaining: daysRemaining, unit: unit, metricBasis: metricBasis };
 }
 
+function toClientIsoDateKey_(value) {
+    if (!value) return '';
+    if (typeof value === 'string') {
+        var m = value.trim().match(/^(\d{4}-\d{2}-\d{2})/);
+        if (m) return m[1];
+    }
+    var d = value instanceof Date ? value : new Date(value);
+    if (isNaN(d.getTime())) return '';
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function countClientIsoWorkdays_(startIso, endIso) {
+    if (!startIso || !endIso || endIso < startIso) return 0;
+    var sp = startIso.split('-').map(Number);
+    var ep = endIso.split('-').map(Number);
+    var cur = new Date(sp[0], sp[1] - 1, sp[2], 12, 0, 0);
+    var end = new Date(ep[0], ep[1] - 1, ep[2], 12, 0, 0);
+    var count = 0;
+    while (cur <= end) {
+        var dow = cur.getDay();
+        if (dow >= 1 && dow <= 5) count++;
+        cur.setDate(cur.getDate() + 1);
+    }
+    return count;
+}
+
 function resolveSprintCapacityWithDates_(capacity) {
     if (!capacity || !capacity.sprintName || capacity.sprintName === 'None') return capacity;
     var override = getStoredSprintDateOverride_(capacity.sprintName);
-    if (!override) return capacity;
-    var startIso = new Date(override.start + 'T00:00:00').toISOString();
-    var endIso = new Date(override.end + 'T23:59:59').toISOString();
-    var pace = computeClientSprintPace_(override.start, override.end, {
+    var startKey = override ? override.start : toClientIsoDateKey_(capacity.sprintStart);
+    var endKey = override ? override.end : toClientIsoDateKey_(capacity.sprintEnd);
+    if (!startKey || !endKey) return capacity;
+
+    var startIso = override ? new Date(override.start + 'T00:00:00').toISOString() : capacity.sprintStart;
+    var endIso = override ? new Date(override.end + 'T23:59:59').toISOString() : capacity.sprintEnd;
+    var pace = override ? computeClientSprintPace_(startKey, endKey, {
         totalStoryPoints: capacity.totalStoryPoints,
         completedPoints: capacity.completedPoints,
         inProgressPoints: capacity.inProgressPoints,
         totalIssues: capacity.totalIssues,
         completedIssues: capacity.completedIssues,
         inProgressIssues: 0
+    }) : capacity.pace;
+
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var capSettings = allData.capacitySettings;
+    var devCapList = allData.developerCapacity;
+    var hasDateBasedRules = Boolean(
+        (capSettings && Array.isArray(capSettings.companyHolidays) && capSettings.companyHolidays.some(function (h) { return h && h.date; })) ||
+        (Array.isArray(devCapList) && devCapList.some(function (d) { return d && Array.isArray(d.ptoDates) && d.ptoDates.length > 0; }))
+    );
+
+    if (!override && !hasDateBasedRules) return capacity;
+
+    var sprintName = capacity.sprintName;
+    var workdays = capSettings && Number(capSettings.sprintWorkdays) > 0 ? Number(capSettings.sprintWorkdays) : (capacity.sprintWorkdays || 10);
+    var matchedHolidays = [];
+    var sprintHolidayDays = 0;
+    if (capSettings && Array.isArray(capSettings.companyHolidays)) {
+        capSettings.companyHolidays.forEach(function (h) {
+            if (!h || typeof h !== 'object') return;
+            var hSprint = String(h.sprint == null ? '' : h.sprint).trim();
+            var hDate = toClientIsoDateKey_(h.date);
+            var hDays = Number(h.days);
+            if (!Number.isFinite(hDays) || hDays <= 0) return;
+            var matches = hDate ? (hDate >= startKey && hDate <= endKey) : (hSprint && hSprint.toLowerCase() === sprintName.toLowerCase());
+            if (matches) {
+                matchedHolidays.push({ name: String(h.name || 'Company Holiday').trim(), sprint: hSprint || sprintName, date: hDate || undefined, days: hDays });
+                sprintHolidayDays += hDays;
+            }
+        });
+    } else if (capacity.holidayDays > 0) {
+        sprintHolidayDays = capacity.holidayDays;
+        matchedHolidays = capacity.holidays || [];
+    }
+
+    var devConfigByName = new Map();
+    (devCapList || []).forEach(function (c) {
+        if (c && c.developer) devConfigByName.set(String(c.developer).trim().toLowerCase(), c);
     });
+
+    var totalCapacity = 0;
+    var hasConfiguredCapacity = false;
+    var totalPtoDays = 0;
+
     var developers = (capacity.developers || []).map(function (dev) {
         var bd = getDeveloperPointBreakdown_(dev);
-        var devPace = dev.issueCount > 0 ? computeClientSprintPace_(override.start, override.end, {
+        var devPace = override ? (dev.issueCount > 0 ? computeClientSprintPace_(startKey, endKey, {
             totalStoryPoints: dev.storyPoints,
             completedPoints: bd.completed,
             inProgressPoints: bd.inProgress,
             totalIssues: dev.issueCount,
             completedIssues: dev.completedIssues || 0,
             inProgressIssues: dev.inProgressIssues || 0
-        }) : null;
-        return Object.assign({}, dev, { pace: devPace });
+        }) : null) : dev.pace;
+
+        var cfg = dev.developer !== 'Unassigned' ? devConfigByName.get(dev.developer.toLowerCase()) : null;
+        if (!cfg && !hasDateBasedRules) {
+            if (dev.capacity != null) {
+                totalCapacity += dev.capacity;
+                hasConfiguredCapacity = true;
+            }
+            if (dev.ptoDays > 0) totalPtoDays += dev.ptoDays;
+            return Object.assign({}, dev, { pace: devPace });
+        }
+
+        var baseCapacity = cfg ? (typeof cfg.capacity === 'number' && Number.isFinite(cfg.capacity) ? cfg.capacity : null) :
+            (dev.baseCapacity !== undefined ? dev.baseCapacity : dev.capacity);
+        var sprintOvr = null;
+        if (cfg && cfg.sprintOverrides && typeof cfg.sprintOverrides === 'object') {
+            Object.keys(cfg.sprintOverrides).forEach(function (k) {
+                if (k !== '__ptoDates__' && k.trim().toLowerCase() === sprintName.toLowerCase()) {
+                    sprintOvr = cfg.sprintOverrides[k];
+                }
+            });
+        }
+        var manualPto = sprintOvr && Number(sprintOvr.ptoDays) > 0 ? Number(sprintOvr.ptoDays) : 0;
+        var datePto = 0;
+        var dateNotes = [];
+        if (cfg && Array.isArray(cfg.ptoDates)) {
+            cfg.ptoDates.forEach(function (pt) {
+                if (!pt) return;
+                var sIso = toClientIsoDateKey_(pt.startDate || pt.date);
+                if (!sIso) return;
+                var eIso = toClientIsoDateKey_(pt.endDate) || sIso;
+                if (eIso < sIso) eIso = sIso;
+                var ovStart = sIso > startKey ? sIso : startKey;
+                var ovEnd = eIso < endKey ? eIso : endKey;
+                if (ovStart > ovEnd) return;
+                var ovDays = countClientIsoWorkdays_(ovStart, ovEnd);
+                var expDays = pt.days != null && pt.days !== '' && Number.isFinite(Number(pt.days)) && Number(pt.days) >= 0 ? Number(pt.days) : null;
+                var add = expDays !== null ?
+                    ((sIso >= startKey && eIso <= endKey) ? expDays : (countClientIsoWorkdays_(sIso, eIso) > 0 ? Math.round((expDays * (ovDays / countClientIsoWorkdays_(sIso, eIso))) * 100) / 100 : 0)) :
+                    ovDays;
+                if (add > 0) {
+                    datePto += add;
+                    var lbl = sIso === eIso ? sIso : (sIso + ' to ' + eIso);
+                    dateNotes.push(pt.notes ? (pt.notes + ' (' + lbl + ')') : ('PTO ' + lbl));
+                }
+            });
+        }
+        var ptoDays = cfg ? Math.round((manualPto + datePto) * 100) / 100 : (dev.ptoDays || 0);
+        var manualOverride = sprintOvr && sprintOvr.capacityOverride != null && sprintOvr.capacityOverride !== '' && Number.isFinite(Number(sprintOvr.capacityOverride)) ?
+            Number(sprintOvr.capacityOverride) : (dev.capacityOverride !== undefined ? dev.capacityOverride : null);
+        var effCap = baseCapacity;
+        if (manualOverride != null) {
+            effCap = manualOverride;
+        } else if (baseCapacity != null && (ptoDays > 0 || sprintHolidayDays > 0)) {
+            var avail = Math.max(0, workdays - sprintHolidayDays - ptoDays);
+            effCap = Math.round((baseCapacity * (avail / workdays)) * 100) / 100;
+        }
+        if (effCap != null) {
+            totalCapacity += effCap;
+            hasConfiguredCapacity = true;
+        }
+        if (ptoDays > 0) totalPtoDays += ptoDays;
+        var notes = [sprintOvr && sprintOvr.notes ? sprintOvr.notes : ''].concat(dateNotes).filter(Boolean).join('; ') || dev.overrideNotes;
+        var updatedDev = Object.assign({}, dev, {
+            capacity: effCap,
+            remaining: effCap == null ? null : Math.round((effCap - dev.storyPoints) * 100) / 100,
+            pace: devPace
+        });
+        if (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride != null || notes) {
+            updatedDev.baseCapacity = baseCapacity;
+            if (ptoDays > 0) updatedDev.ptoDays = ptoDays; else delete updatedDev.ptoDays;
+            if (sprintHolidayDays > 0) updatedDev.holidayDays = sprintHolidayDays; else delete updatedDev.holidayDays;
+            if (manualOverride != null) updatedDev.capacityOverride = manualOverride; else delete updatedDev.capacityOverride;
+            if (notes) updatedDev.overrideNotes = notes; else delete updatedDev.overrideNotes;
+        }
+        return updatedDev;
     });
+
     return Object.assign({}, capacity, {
         sprintStart: startIso,
         sprintEnd: endIso,
+        totalCapacity: hasConfiguredCapacity ? Math.round(totalCapacity * 100) / 100 : capacity.totalCapacity,
+        holidayDays: sprintHolidayDays > 0 ? sprintHolidayDays : undefined,
+        holidays: sprintHolidayDays > 0 ? matchedHolidays : undefined,
+        totalPtoDays: totalPtoDays > 0 ? Math.round(totalPtoDays * 100) / 100 : undefined,
         pace: pace,
         developers: developers
     });
@@ -2353,7 +2503,52 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
 }
 
 var developerSprintOverridesState_ = new Map();
+var developerPtoDatesState_ = new Map();
 var developerCompanyHolidaysState_ = [];
+
+function getKnownSprintDateWindows_() {
+    var windows = [];
+    var seen = new Set();
+    var addWindow = function (name, startVal, endVal) {
+        var clean = String(name || '').trim();
+        if (!clean || clean === 'None' || clean === '—') return;
+        var key = clean.toLowerCase();
+        if (seen.has(key)) return;
+        var ovr = getStoredSprintDateOverride_(clean);
+        var s = ovr ? ovr.start : toClientIsoDateKey_(startVal);
+        var e = ovr ? ovr.end : toClientIsoDateKey_(endVal);
+        if (s && e && e >= s) {
+            seen.add(key);
+            windows.push({ sprintName: clean, start: s, end: e });
+        }
+    };
+    if (APP_STATE && APP_STATE.allData) {
+        var sc = APP_STATE.allData.sprintCapacity;
+        if (sc && sc.sprintName) addWindow(sc.sprintName, sc.sprintStart, sc.sprintEnd);
+        (APP_STATE.allData.futureSprintCapacity || []).forEach(function (fs) {
+            if (fs && fs.sprintName) addWindow(fs.sprintName, fs.sprintStart, fs.sprintEnd);
+        });
+        var sd = APP_STATE.allData.capacitySettings && APP_STATE.allData.capacitySettings.sprintDates;
+        if (sd && typeof sd === 'object') {
+            Object.keys(sd).forEach(function (k) {
+                if (sd[k]) addWindow(k, sd[k].start, sd[k].end);
+            });
+        }
+    }
+    return windows;
+}
+
+function findMatchingSprintForDate_(dateIso) {
+    var d = toClientIsoDateKey_(dateIso);
+    if (!d) return '';
+    var windows = getKnownSprintDateWindows_();
+    for (var i = 0; i < windows.length; i++) {
+        if (d >= windows[i].start && d <= windows[i].end) {
+            return windows[i].sprintName;
+        }
+    }
+    return '';
+}
 
 function getKnownCapacitySprints_() {
     var sprints = [];
@@ -2376,7 +2571,9 @@ function getKnownCapacitySprints_() {
         });
         (APP_STATE.allData.developerCapacity || []).forEach(function (entry) {
             if (entry && entry.sprintOverrides && typeof entry.sprintOverrides === 'object') {
-                Object.keys(entry.sprintOverrides).forEach(addSprint);
+                Object.keys(entry.sprintOverrides).forEach(function (k) {
+                    if (k !== '__ptoDates__') addSprint(k);
+                });
             }
         });
         if (APP_STATE.allData.capacitySettings && Array.isArray(APP_STATE.allData.capacitySettings.companyHolidays)) {
@@ -2407,25 +2604,46 @@ function renderCompanyHolidaysConfig_() {
         nameInput.type = 'text';
         nameInput.placeholder = 'Holiday name (e.g. Memorial Day)';
         nameInput.value = holiday.name || '';
-        nameInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 text-xs bg-white text-black flex-1 min-w-[150px]';
-        nameInput.setAttribute('aria-label', 'Holiday name');
-        nameInput.addEventListener('input', function () {
-            holiday.name = nameInput.value;
-        });
+        nameInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 text-xs bg-white text-black flex-1 min-w-[140px]';
+        if (typeof nameInput.setAttribute === 'function') nameInput.setAttribute('aria-label', 'Holiday name');
+        if (typeof nameInput.addEventListener === 'function') {
+            nameInput.addEventListener('input', function () {
+                holiday.name = nameInput.value;
+            });
+        }
         row.appendChild(nameInput);
+
+        var dateInput = document.createElement('input');
+        dateInput.type = 'date';
+        dateInput.value = holiday.date || '';
+        dateInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 text-xs bg-white text-black w-36';
+        if (typeof dateInput.setAttribute === 'function') dateInput.setAttribute('aria-label', 'Holiday date');
+        row.appendChild(dateInput);
 
         var sprintInput = document.createElement('input');
         sprintInput.type = 'text';
-        sprintInput.placeholder = 'Sprint (e.g. Sprint 12)';
+        sprintInput.placeholder = 'Auto by date or sprint';
         sprintInput.value = holiday.sprint || '';
         if (typeof sprintInput.setAttribute === 'function') {
             sprintInput.setAttribute('list', 'developer-sprint-options');
             sprintInput.setAttribute('aria-label', 'Holiday sprint');
         }
         sprintInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 text-xs bg-white text-black w-36';
-        sprintInput.addEventListener('input', function () {
-            holiday.sprint = sprintInput.value;
-        });
+        if (typeof sprintInput.addEventListener === 'function') {
+            sprintInput.addEventListener('input', function () {
+                holiday.sprint = sprintInput.value;
+            });
+        }
+        if (typeof dateInput.addEventListener === 'function') {
+            dateInput.addEventListener('input', function () {
+                holiday.date = dateInput.value;
+                var matched = findMatchingSprintForDate_(dateInput.value);
+                if (matched) {
+                    holiday.sprint = matched;
+                    sprintInput.value = matched;
+                }
+            });
+        }
         row.appendChild(sprintInput);
 
         var daysInput = document.createElement('input');
@@ -2433,11 +2651,13 @@ function renderCompanyHolidaysConfig_() {
         daysInput.min = '0.5';
         daysInput.step = '0.5';
         daysInput.value = holiday.days != null ? String(holiday.days) : '1';
-        daysInput.setAttribute('aria-label', 'Holiday days off');
-        daysInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2 py-1 text-xs bg-white text-black w-20 text-right';
-        daysInput.addEventListener('input', function () {
-            holiday.days = daysInput.value;
-        });
+        if (typeof daysInput.setAttribute === 'function') daysInput.setAttribute('aria-label', 'Holiday days off');
+        daysInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2 py-1 text-xs bg-white text-black w-16 text-right';
+        if (typeof daysInput.addEventListener === 'function') {
+            daysInput.addEventListener('input', function () {
+                holiday.days = daysInput.value;
+            });
+        }
         row.appendChild(daysInput);
 
         var daysLabel = document.createElement('span');
@@ -2449,10 +2669,12 @@ function renderCompanyHolidaysConfig_() {
         removeBtn.type = 'button';
         removeBtn.className = 'ml-auto text-xs text-[#6F7171] hover:text-black px-2 py-0.5';
         removeBtn.textContent = 'Remove';
-        removeBtn.addEventListener('click', function () {
-            developerCompanyHolidaysState_.splice(idx, 1);
-            renderCompanyHolidaysConfig_();
-        });
+        if (typeof removeBtn.addEventListener === 'function') {
+            removeBtn.addEventListener('click', function () {
+                developerCompanyHolidaysState_.splice(idx, 1);
+                renderCompanyHolidaysConfig_();
+            });
+        }
         row.appendChild(removeBtn);
 
         listEl.appendChild(row);
@@ -2462,10 +2684,15 @@ function renderCompanyHolidaysConfig_() {
 function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacity) {
     var devKey = devName.toLowerCase();
     var entries = developerSprintOverridesState_.get(devKey) || [];
+    var dateEntries = developerPtoDatesState_.get(devKey) || [];
     var updateBadge = function () {
-        var activeCount = (developerSprintOverridesState_.get(devKey) || []).filter(function (item) {
+        var manualCount = (developerSprintOverridesState_.get(devKey) || []).filter(function (item) {
             return String(item.sprint || '').trim() && (Number(item.ptoDays) > 0 || (item.capacityOverride !== '' && item.capacityOverride != null));
         }).length;
+        var dateCount = (developerPtoDatesState_.get(devKey) || []).filter(function (item) {
+            return Boolean(toClientIsoDateKey_(item.startDate));
+        }).length;
+        var activeCount = manualCount + dateCount;
         toggleBtn.textContent = activeCount > 0 ? 'PTO & overrides (' + activeCount + ')' : 'PTO & overrides';
         toggleBtn.className = activeCount > 0 ?
             'inline-flex items-center gap-1 rounded-lg border border-[#006FC1] bg-[#E5F2FA] px-2.5 py-1 text-xs font-medium text-[#006FC1] hover:border-black' :
@@ -2477,13 +2704,35 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
     header.className = 'flex flex-wrap items-center justify-between gap-2 mb-2';
     var title = document.createElement('span');
     title.className = 'text-xs font-semibold text-black';
-    title.textContent = devName + ' — Sprint PTO & capacity overrides';
+    title.textContent = devName + ' — Scheduled PTO dates & manual sprint overrides';
     header.appendChild(title);
+
+    var btnGroup = document.createElement('div');
+    btnGroup.className = 'flex flex-wrap items-center gap-2';
+
+    var addDateBtn = document.createElement('button');
+    addDateBtn.type = 'button';
+    addDateBtn.className = 'rounded-lg border border-[#D8DADA] bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-black';
+    addDateBtn.textContent = '+ Add PTO date';
+    if (typeof addDateBtn.setAttribute === 'function') {
+        addDateBtn.setAttribute('data-add-pto-date-for', devName);
+    }
+    if (typeof addDateBtn.addEventListener === 'function') {
+        addDateBtn.addEventListener('click', function () {
+            var windows = getKnownSprintDateWindows_();
+            var defaultDate = windows.length ? windows[0].start : '';
+            dateEntries.push({ startDate: defaultDate, endDate: defaultDate, days: '', notes: '' });
+            developerPtoDatesState_.set(devKey, dateEntries);
+            renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacity);
+            updateBadge();
+        });
+    }
+    btnGroup.appendChild(addDateBtn);
 
     var addBtn = document.createElement('button');
     addBtn.type = 'button';
     addBtn.className = 'rounded-lg border border-[#D8DADA] bg-white px-2.5 py-1 text-xs font-medium text-black hover:border-black';
-    addBtn.textContent = '+ Add sprint PTO / override';
+    addBtn.textContent = '+ Add manual PTO / override';
     if (typeof addBtn.setAttribute === 'function') {
         addBtn.setAttribute('data-add-pto-for', devName);
     }
@@ -2498,13 +2747,14 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
             updateBadge();
         });
     }
-    header.appendChild(addBtn);
+    btnGroup.appendChild(addBtn);
+    header.appendChild(btnGroup);
     wrapper.appendChild(header);
 
-    if (!entries.length) {
+    if (!dateEntries.length && !entries.length) {
         var empty = document.createElement('p');
         empty.className = 'text-xs text-[#6F7171] italic';
-        empty.textContent = 'No PTO or capacity overrides tracked for ' + devName + '. Click "+ Add sprint PTO / override" to add days off for a specific sprint.';
+        empty.textContent = 'No PTO or capacity overrides tracked for ' + devName + '. Use "+ Add PTO date" to pick dates on the calendar (auto-matched to sprint dates) or "+ Add manual PTO / override" for manual days or point overrides.';
         wrapper.appendChild(empty);
         updateBadge();
         return;
@@ -2512,6 +2762,140 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
 
     var list = document.createElement('div');
     list.className = 'space-y-2';
+
+    // 1. Date-based PTO entries
+    dateEntries.forEach(function (pt, idx) {
+        var dRow = document.createElement('div');
+        dRow.className = 'grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-white border border-[#D8DADA] rounded-lg px-3 py-2 text-xs';
+
+        var sWrap = document.createElement('div');
+        sWrap.className = 'md:col-span-3';
+        var sLbl = document.createElement('label');
+        sLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
+        sLbl.textContent = 'PTO start date';
+        var sInp = document.createElement('input');
+        sInp.type = 'date';
+        sInp.value = pt.startDate || '';
+        sInp.className = 'border border-[#D8DADA] rounded px-2 py-1 w-full text-xs text-black';
+        if (typeof sInp.setAttribute === 'function') sInp.setAttribute('aria-label', devName + ' PTO start date');
+        sWrap.appendChild(sLbl);
+        sWrap.appendChild(sInp);
+        dRow.appendChild(sWrap);
+
+        var eWrap = document.createElement('div');
+        eWrap.className = 'md:col-span-3';
+        var eLbl = document.createElement('label');
+        eLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
+        eLbl.textContent = 'PTO end date';
+        var eInp = document.createElement('input');
+        eInp.type = 'date';
+        eInp.value = pt.endDate || pt.startDate || '';
+        eInp.className = 'border border-[#D8DADA] rounded px-2 py-1 w-full text-xs text-black';
+        if (typeof eInp.setAttribute === 'function') eInp.setAttribute('aria-label', devName + ' PTO end date');
+        eWrap.appendChild(eLbl);
+        eWrap.appendChild(eInp);
+        dRow.appendChild(eWrap);
+
+        var daysWrap = document.createElement('div');
+        daysWrap.className = 'md:col-span-2';
+        var daysLbl = document.createElement('label');
+        daysLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
+        daysLbl.textContent = 'Days (blank=auto)';
+        var daysInp = document.createElement('input');
+        daysInp.type = 'number';
+        daysInp.min = '0';
+        daysInp.step = '0.5';
+        daysInp.placeholder = 'Auto';
+        daysInp.value = pt.days != null && pt.days !== '' ? String(pt.days) : '';
+        daysInp.className = 'border border-[#D8DADA] rounded px-2 py-1 w-full text-right text-xs text-black';
+        if (typeof daysInp.setAttribute === 'function') daysInp.setAttribute('aria-label', devName + ' PTO date days');
+        daysWrap.appendChild(daysLbl);
+        daysWrap.appendChild(daysInp);
+        dRow.appendChild(daysWrap);
+
+        var nWrap = document.createElement('div');
+        nWrap.className = 'md:col-span-2';
+        var nLbl = document.createElement('label');
+        nLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
+        nLbl.textContent = 'Notes';
+        var nInp = document.createElement('input');
+        nInp.type = 'text';
+        nInp.placeholder = 'Vacation';
+        nInp.value = pt.notes || '';
+        nInp.className = 'border border-[#D8DADA] rounded px-2 py-1 w-full text-xs text-black';
+        nWrap.appendChild(nLbl);
+        nWrap.appendChild(nInp);
+        dRow.appendChild(nWrap);
+
+        var infoWrap = document.createElement('div');
+        infoWrap.className = 'md:col-span-2 flex items-center justify-between gap-1 pt-3';
+        var infoBadge = document.createElement('span');
+        infoBadge.className = 'text-[11px] font-medium text-[#006FC1]';
+        var updateDateInfo = function () {
+            var sKey = toClientIsoDateKey_(pt.startDate);
+            var eKey = toClientIsoDateKey_(pt.endDate) || sKey;
+            if (!sKey) {
+                infoBadge.textContent = 'Pick date';
+                return;
+            }
+            if (eKey < sKey) eKey = sKey;
+            var wDays = pt.days !== '' && pt.days != null && Number.isFinite(Number(pt.days)) ?
+                Number(pt.days) : countClientIsoWorkdays_(sKey, eKey);
+            var matchedSprint = findMatchingSprintForDate_(sKey) || findMatchingSprintForDate_(eKey);
+            infoBadge.textContent = wDays + 'd' + (matchedSprint ? ' · ' + matchedSprint : ' · by date');
+        };
+        updateDateInfo();
+
+        if (typeof sInp.addEventListener === 'function') {
+            sInp.addEventListener('input', function () {
+                pt.startDate = sInp.value;
+                if (!pt.endDate || pt.endDate < pt.startDate) {
+                    pt.endDate = pt.startDate;
+                    eInp.value = pt.endDate;
+                }
+                updateDateInfo();
+                updateBadge();
+            });
+        }
+        if (typeof eInp.addEventListener === 'function') {
+            eInp.addEventListener('input', function () {
+                pt.endDate = eInp.value;
+                updateDateInfo();
+                updateBadge();
+            });
+        }
+        if (typeof daysInp.addEventListener === 'function') {
+            daysInp.addEventListener('input', function () {
+                pt.days = daysInp.value;
+                updateDateInfo();
+            });
+        }
+        if (typeof nInp.addEventListener === 'function') {
+            nInp.addEventListener('input', function () {
+                pt.notes = nInp.value;
+            });
+        }
+
+        var delDateBtn = document.createElement('button');
+        delDateBtn.type = 'button';
+        delDateBtn.className = 'text-[#6F7171] hover:text-black px-1.5 py-0.5';
+        delDateBtn.textContent = '✕';
+        if (typeof delDateBtn.setAttribute === 'function') delDateBtn.setAttribute('aria-label', 'Remove PTO date entry');
+        if (typeof delDateBtn.addEventListener === 'function') {
+            delDateBtn.addEventListener('click', function () {
+                dateEntries.splice(idx, 1);
+                developerPtoDatesState_.set(devKey, dateEntries);
+                renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacity);
+                updateBadge();
+            });
+        }
+        infoWrap.appendChild(infoBadge);
+        infoWrap.appendChild(delDateBtn);
+        dRow.appendChild(infoWrap);
+        list.appendChild(dRow);
+    });
+
+    // 2. Manual Sprint PTO & Point Override entries
     entries.forEach(function (item, idx) {
         var itemRow = document.createElement('div');
         itemRow.className = 'grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-white border border-[#D8DADA] rounded-lg px-3 py-2 text-xs';
@@ -2520,7 +2904,7 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
         sprintWrap.className = 'md:col-span-3';
         var sprintLbl = document.createElement('label');
         sprintLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
-        sprintLbl.textContent = 'Sprint';
+        sprintLbl.textContent = 'Sprint (manual)';
         var sprintInp = document.createElement('input');
         sprintInp.type = 'text';
         sprintInp.value = item.sprint || '';
@@ -2538,7 +2922,7 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
         ptoWrap.className = 'md:col-span-2';
         var ptoLbl = document.createElement('label');
         ptoLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
-        ptoLbl.textContent = 'PTO (days)';
+        ptoLbl.textContent = 'Manual PTO (days)';
         var ptoInp = document.createElement('input');
         ptoInp.type = 'number';
         ptoInp.min = '0';
@@ -2556,7 +2940,7 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
         ovrWrap.className = 'md:col-span-2';
         var ovrLbl = document.createElement('label');
         ovrLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
-        ovrLbl.textContent = 'Override (pts)';
+        ovrLbl.textContent = 'Point override (pts)';
         var ovrInp = document.createElement('input');
         ovrInp.type = 'number';
         ovrInp.min = '0';
@@ -2575,10 +2959,10 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
         noteWrap.className = 'md:col-span-3';
         var noteLbl = document.createElement('label');
         noteLbl.className = 'block text-[10px] text-[#6F7171] mb-0.5';
-        noteLbl.textContent = 'Notes / dates';
+        noteLbl.textContent = 'Notes';
         var noteInp = document.createElement('input');
         noteInp.type = 'text';
-        noteInp.placeholder = 'e.g. Vacation May 26-27';
+        noteInp.placeholder = 'e.g. 50% Auth team';
         noteInp.value = item.notes || '';
         noteInp.className = 'border border-[#D8DADA] rounded px-2 py-1 w-full text-xs text-black';
         noteWrap.appendChild(noteLbl);
@@ -2595,7 +2979,9 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
             var workdays = workdaysEl && Number(workdaysEl.value) > 0 ? Number(workdaysEl.value) : 10;
             var sprintKey = String(item.sprint || '').trim().toLowerCase();
             var holDays = developerCompanyHolidaysState_.reduce(function (sum, h) {
-                return String(h.sprint || '').trim().toLowerCase() === sprintKey && Number(h.days) > 0 ? sum + Number(h.days) : sum;
+                var matchedSp = h.date ? findMatchingSprintForDate_(h.date) : '';
+                var effSp = String(matchedSp || h.sprint || '').trim().toLowerCase();
+                return effSp === sprintKey && Number(h.days) > 0 ? sum + Number(h.days) : sum;
             }, 0);
             var pto = Number(item.ptoDays) > 0 ? Number(item.ptoDays) : 0;
             if (item.capacityOverride !== '' && item.capacityOverride != null && Number.isFinite(Number(item.capacityOverride))) {
@@ -2610,22 +2996,24 @@ function renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacit
         };
         updatePreview();
 
-        sprintInp.addEventListener('input', function () { item.sprint = sprintInp.value; updatePreview(); updateBadge(); });
-        ptoInp.addEventListener('input', function () { item.ptoDays = ptoInp.value; updatePreview(); updateBadge(); });
-        ovrInp.addEventListener('input', function () { item.capacityOverride = ovrInp.value; updatePreview(); updateBadge(); });
-        noteInp.addEventListener('input', function () { item.notes = noteInp.value; });
+        if (typeof sprintInp.addEventListener === 'function') sprintInp.addEventListener('input', function () { item.sprint = sprintInp.value; updatePreview(); updateBadge(); });
+        if (typeof ptoInp.addEventListener === 'function') ptoInp.addEventListener('input', function () { item.ptoDays = ptoInp.value; updatePreview(); updateBadge(); });
+        if (typeof ovrInp.addEventListener === 'function') ovrInp.addEventListener('input', function () { item.capacityOverride = ovrInp.value; updatePreview(); updateBadge(); });
+        if (typeof noteInp.addEventListener === 'function') noteInp.addEventListener('input', function () { item.notes = noteInp.value; });
 
         var delBtn = document.createElement('button');
         delBtn.type = 'button';
         delBtn.className = 'text-[#6F7171] hover:text-black px-1.5 py-0.5';
         delBtn.textContent = '✕';
-        delBtn.setAttribute('aria-label', 'Remove sprint PTO entry');
-        delBtn.addEventListener('click', function () {
-            entries.splice(idx, 1);
-            developerSprintOverridesState_.set(devKey, entries);
-            renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacity);
-            updateBadge();
-        });
+        if (typeof delBtn.setAttribute === 'function') delBtn.setAttribute('aria-label', 'Remove sprint PTO entry');
+        if (typeof delBtn.addEventListener === 'function') {
+            delBtn.addEventListener('click', function () {
+                entries.splice(idx, 1);
+                developerSprintOverridesState_.set(devKey, entries);
+                renderDeveloperPtoSubpanel_(wrapper, devName, toggleBtn, getBaseCapacity);
+                updateBadge();
+            });
+        }
         previewWrap.appendChild(previewBadge);
         previewWrap.appendChild(delBtn);
         itemRow.appendChild(previewWrap);
@@ -2640,9 +3028,10 @@ function renderDeveloperCapacityConfig() {
     if (!body) return;
     body.replaceChildren();
     developerSprintOverridesState_ = new Map();
+    developerPtoDatesState_ = new Map();
     var rawSettings = (APP_STATE.allData && APP_STATE.allData.capacitySettings) || { sprintWorkdays: 10, companyHolidays: [] };
     developerCompanyHolidaysState_ = (rawSettings.companyHolidays || []).map(function (h) {
-        return { name: h.name || '', sprint: h.sprint || '', days: h.days != null ? h.days : 1 };
+        return { name: h.name || '', date: h.date || '', sprint: h.sprint || '', days: h.days != null ? h.days : 1 };
     });
     var workdaysInput = document.getElementById('developer-sprint-workdays');
     if (workdaysInput) {
@@ -2652,153 +3041,169 @@ function renderDeveloperCapacityConfig() {
     if (addHolidayBtn) {
         addHolidayBtn.onclick = function () {
             var known = getKnownCapacitySprints_();
-            developerCompanyHolidaysState_.push({ name: '', sprint: known[0] || '', days: 1 });
+            var windows = getKnownSprintDateWindows_();
+            developerCompanyHolidaysState_.push({
+                name: '',
+                date: windows.length ? windows[0].start : '',
+                sprint: known[0] || '',
+                days: 1
+            });
             renderCompanyHolidaysConfig_();
         };
     }
     renderCompanyHolidaysConfig_();
 
-var sprintList = document.getElementById('developer-sprint-options');
-if (sprintList) {
-    sprintList.replaceChildren();
-    getKnownCapacitySprints_().forEach(function (sprintName) {
-        var opt = document.createElement('option');
-        opt.value = sprintName;
-        sprintList.appendChild(opt);
-    });
-}
-
-var names = new Map();
-(APP_STATE.allData.projects || []).forEach(function (project) {
-    var name = String(project.Assignee || '').trim();
-    if (name && name.toLowerCase() !== 'unassigned' && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
-});
-var capacities = new Map();
-var managers = new Map();
-var distinctManagers = new Set();
-(APP_STATE.allData.developerCapacity || []).forEach(function (entry) {
-    if (!entry || !entry.developer) return;
-    var key = entry.developer.toLowerCase();
-    capacities.set(key, entry.capacity);
-    var mgr = String(entry.manager || '').trim();
-    if (mgr) {
-        managers.set(key, mgr);
-        distinctManagers.add(mgr);
-    }
-    if (entry.sprintOverrides && typeof entry.sprintOverrides === 'object') {
-        var list = Object.keys(entry.sprintOverrides).map(function (sprintName) {
-            var item = entry.sprintOverrides[sprintName] || {};
-            return {
-                sprint: sprintName,
-                ptoDays: item.ptoDays != null ? String(item.ptoDays) : '0',
-                capacityOverride: item.capacityOverride != null ? String(item.capacityOverride) : '',
-                notes: item.notes || ''
-            };
-        });
-        if (list.length) developerSprintOverridesState_.set(key, list);
-    }
-});
-var managerList = document.getElementById('developer-manager-options');
-if (managerList) {
-    managerList.replaceChildren();
-    Array.from(distinctManagers).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (mgr) {
-        var opt = document.createElement('option');
-        opt.value = mgr;
-        managerList.appendChild(opt);
-    });
-}
-var developers = Array.from(names.values()).sort(function (a, b) { return a.localeCompare(b); });
-if (!developers.length) {
-    var empty = body.insertRow().insertCell();
-    empty.colSpan = 4;
-    empty.className = 'px-3 py-8 text-gray-600';
-    empty.textContent = 'No Jira assignees found.';
-}
-developers.forEach(function (name, index) {
-    var row = body.insertRow();
-    row.className = 'hover:bg-[#F6F6F6] transition-colors';
-    var nameCell = row.insertCell();
-    nameCell.className = 'px-4 py-3';
-    var label = document.createElement('label');
-    label.htmlFor = 'developer-capacity-' + index;
-    label.className = 'text-black font-normal';
-    label.textContent = name;
-    nameCell.appendChild(label);
-
-    var managerCell = row.insertCell();
-    managerCell.className = 'px-4 py-3';
-    var managerInput = document.createElement('input');
-    managerInput.id = 'developer-manager-' + index;
-    managerInput.type = 'text';
-    managerInput.maxLength = 128;
-    managerInput.placeholder = 'Assign manager';
-    if (typeof managerInput.setAttribute === 'function') {
-        managerInput.setAttribute('list', 'developer-manager-options');
-        managerInput.setAttribute('aria-label', name + ' manager');
-    }
-    managerInput.dataset.developerManager = name;
-    managerInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-44 bg-white text-black';
-    managerInput.value = managers.get(name.toLowerCase()) || '';
-    managerCell.appendChild(managerInput);
-
-    var cell = row.insertCell();
-    cell.className = 'px-4 py-3 text-right';
-    var input = document.createElement('input');
-    input.id = label.htmlFor;
-    input.type = 'number';
-    input.min = '0';
-    input.step = 'any';
-    input.dataset.developer = name;
-    input.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-28 text-right bg-white';
-    var capacity = capacities.get(name.toLowerCase());
-    input.value = capacity == null ? '' : String(capacity);
-    cell.appendChild(input);
-
-    var ptoCell = row.insertCell();
-    ptoCell.className = 'px-4 py-3 text-right';
-    var ptoToggle = document.createElement('button');
-    ptoToggle.type = 'button';
-    if (typeof ptoToggle.setAttribute === 'function') {
-        ptoToggle.setAttribute('data-developer-pto-toggle', name);
-        ptoToggle.setAttribute('aria-expanded', 'false');
-    }
-    ptoCell.appendChild(ptoToggle);
-
-    var ptoRow = body.insertRow();
-    ptoRow.hidden = true;
-    ptoRow.className = 'bg-[#F6F6F6]/80 border-b border-[#D8DADA] hidden';
-    var ptoDetailsCell = ptoRow.insertCell();
-    ptoDetailsCell.colSpan = 4;
-    ptoDetailsCell.className = 'px-4 py-3';
-    var ptoPanelWrapper = document.createElement('div');
-    ptoDetailsCell.appendChild(ptoPanelWrapper);
-
-    var getBaseCap = function () {
-        return input.value === '' ? null : Number(input.value);
-    };
-    renderDeveloperPtoSubpanel_(ptoPanelWrapper, name, ptoToggle, getBaseCap);
-    if (typeof input.addEventListener === 'function') {
-        input.addEventListener('input', function () {
-            renderDeveloperPtoSubpanel_(ptoPanelWrapper, name, ptoToggle, getBaseCap);
+    var sprintList = document.getElementById('developer-sprint-options');
+    if (sprintList) {
+        sprintList.replaceChildren();
+        getKnownCapacitySprints_().forEach(function (sprintName) {
+            var opt = document.createElement('option');
+            opt.value = sprintName;
+            sprintList.appendChild(opt);
         });
     }
-    var togglePtoRow = function (e) {
-        if (e && typeof e.preventDefault === 'function') e.preventDefault();
-        var expand = Boolean(ptoRow.hidden);
-        ptoRow.hidden = !expand;
-        if (ptoRow.classList && typeof ptoRow.classList.toggle === 'function') {
-            ptoRow.classList.toggle('hidden', !expand);
-        } else {
-            ptoRow.className = expand ? 'bg-[#F6F6F6]/80 border-b border-[#D8DADA]' : 'bg-[#F6F6F6]/80 border-b border-[#D8DADA] hidden';
+
+    var names = new Map();
+    (APP_STATE.allData.projects || []).forEach(function (project) {
+        var name = String(project.Assignee || '').trim();
+        if (name && name.toLowerCase() !== 'unassigned' && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
+    });
+    var capacities = new Map();
+    var managers = new Map();
+    var distinctManagers = new Set();
+    (APP_STATE.allData.developerCapacity || []).forEach(function (entry) {
+        if (!entry || !entry.developer) return;
+        var key = entry.developer.toLowerCase();
+        capacities.set(key, entry.capacity);
+        var mgr = String(entry.manager || '').trim();
+        if (mgr) {
+            managers.set(key, mgr);
+            distinctManagers.add(mgr);
         }
+        if (entry.sprintOverrides && typeof entry.sprintOverrides === 'object') {
+            var list = Object.keys(entry.sprintOverrides).filter(function (k) { return k !== '__ptoDates__'; }).map(function (sprintName) {
+                var item = entry.sprintOverrides[sprintName] || {};
+                return {
+                    sprint: sprintName,
+                    ptoDays: item.ptoDays != null ? String(item.ptoDays) : '0',
+                    capacityOverride: item.capacityOverride != null ? String(item.capacityOverride) : '',
+                    notes: item.notes || ''
+                };
+            });
+            if (list.length) developerSprintOverridesState_.set(key, list);
+        }
+        if (Array.isArray(entry.ptoDates) && entry.ptoDates.length) {
+            developerPtoDatesState_.set(key, entry.ptoDates.map(function (pt) {
+                return {
+                    startDate: pt.startDate || '',
+                    endDate: pt.endDate || pt.startDate || '',
+                    days: pt.days != null ? String(pt.days) : '',
+                    notes: pt.notes || ''
+                };
+            }));
+        }
+    });
+    var managerList = document.getElementById('developer-manager-options');
+    if (managerList) {
+        managerList.replaceChildren();
+        Array.from(distinctManagers).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (mgr) {
+            var opt = document.createElement('option');
+            opt.value = mgr;
+            managerList.appendChild(opt);
+        });
+    }
+    var developers = Array.from(names.values()).sort(function (a, b) { return a.localeCompare(b); });
+    if (!developers.length) {
+        var empty = body.insertRow().insertCell();
+        empty.colSpan = 4;
+        empty.className = 'px-3 py-8 text-gray-600';
+        empty.textContent = 'No Jira assignees found.';
+    }
+    developers.forEach(function (name, index) {
+        var row = body.insertRow();
+        row.className = 'hover:bg-[#F6F6F6] transition-colors';
+        var nameCell = row.insertCell();
+        nameCell.className = 'px-4 py-3';
+        var label = document.createElement('label');
+        label.htmlFor = 'developer-capacity-' + index;
+        label.className = 'text-black font-normal';
+        label.textContent = name;
+        nameCell.appendChild(label);
+
+        var managerCell = row.insertCell();
+        managerCell.className = 'px-4 py-3';
+        var managerInput = document.createElement('input');
+        managerInput.id = 'developer-manager-' + index;
+        managerInput.type = 'text';
+        managerInput.maxLength = 128;
+        managerInput.placeholder = 'Assign manager';
+        if (typeof managerInput.setAttribute === 'function') {
+            managerInput.setAttribute('list', 'developer-manager-options');
+            managerInput.setAttribute('aria-label', name + ' manager');
+        }
+        managerInput.dataset.developerManager = name;
+        managerInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-44 bg-white text-black';
+        managerInput.value = managers.get(name.toLowerCase()) || '';
+        managerCell.appendChild(managerInput);
+
+        var cell = row.insertCell();
+        cell.className = 'px-4 py-3 text-right';
+        var input = document.createElement('input');
+        input.id = label.htmlFor;
+        input.type = 'number';
+        input.min = '0';
+        input.step = 'any';
+        input.dataset.developer = name;
+        input.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-28 text-right bg-white';
+        var capacity = capacities.get(name.toLowerCase());
+        input.value = capacity == null ? '' : String(capacity);
+        cell.appendChild(input);
+
+        var ptoCell = row.insertCell();
+        ptoCell.className = 'px-4 py-3 text-right';
+        var ptoToggle = document.createElement('button');
+        ptoToggle.type = 'button';
         if (typeof ptoToggle.setAttribute === 'function') {
-            ptoToggle.setAttribute('aria-expanded', String(expand));
+            ptoToggle.setAttribute('data-developer-pto-toggle', name);
+            ptoToggle.setAttribute('aria-expanded', 'false');
         }
-    };
-    if (typeof ptoToggle.addEventListener === 'function') {
-        ptoToggle.addEventListener('click', togglePtoRow);
-    }
-});
+        ptoCell.appendChild(ptoToggle);
+
+        var ptoRow = body.insertRow();
+        ptoRow.hidden = true;
+        ptoRow.className = 'bg-[#F6F6F6]/80 border-b border-[#D8DADA] hidden';
+        var ptoDetailsCell = ptoRow.insertCell();
+        ptoDetailsCell.colSpan = 4;
+        ptoDetailsCell.className = 'px-4 py-3';
+        var ptoPanelWrapper = document.createElement('div');
+        ptoDetailsCell.appendChild(ptoPanelWrapper);
+
+        var getBaseCap = function () {
+            return input.value === '' ? null : Number(input.value);
+        };
+        renderDeveloperPtoSubpanel_(ptoPanelWrapper, name, ptoToggle, getBaseCap);
+        if (typeof input.addEventListener === 'function') {
+            input.addEventListener('input', function () {
+                renderDeveloperPtoSubpanel_(ptoPanelWrapper, name, ptoToggle, getBaseCap);
+            });
+        }
+        var togglePtoRow = function (e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            var expand = Boolean(ptoRow.hidden);
+            ptoRow.hidden = !expand;
+            if (ptoRow.classList && typeof ptoRow.classList.toggle === 'function') {
+                ptoRow.classList.toggle('hidden', !expand);
+            } else {
+                ptoRow.className = expand ? 'bg-[#F6F6F6]/80 border-b border-[#D8DADA]' : 'bg-[#F6F6F6]/80 border-b border-[#D8DADA] hidden';
+            }
+            if (typeof ptoToggle.setAttribute === 'function') {
+                ptoToggle.setAttribute('aria-expanded', String(expand));
+            }
+        };
+        if (typeof ptoToggle.addEventListener === 'function') {
+            ptoToggle.addEventListener('click', togglePtoRow);
+        }
+    });
 }
 
 function saveDeveloperCapacity(event) {
@@ -2845,6 +3250,23 @@ function saveDeveloperCapacity(event) {
             });
             entry.sprintOverrides = overrideMap;
         }
+        if (developerPtoDatesState_.has(key)) {
+            var ptoDatesList = [];
+            (developerPtoDatesState_.get(key) || []).forEach(function (pt) {
+                var sIso = toClientIsoDateKey_(pt.startDate);
+                if (!sIso) return;
+                var eIso = toClientIsoDateKey_(pt.endDate) || sIso;
+                if (eIso < sIso) eIso = sIso;
+                var dVal = pt.days === '' || pt.days == null ? null : Number(pt.days);
+                ptoDatesList.push({
+                    startDate: sIso,
+                    endDate: eIso,
+                    days: dVal,
+                    notes: String(pt.notes || '').trim()
+                });
+            });
+            entry.ptoDates = ptoDatesList;
+        }
         return entry;
     });
     var workdaysEl = document.getElementById('developer-sprint-workdays');
@@ -2853,15 +3275,26 @@ function saveDeveloperCapacity(event) {
     if (workdaysEl || holidaysListEl) {
         var workdaysVal = workdaysEl && Number(workdaysEl.value) > 0 ? Number(workdaysEl.value) : 10;
         var holidaysPayload = developerCompanyHolidaysState_.filter(function (h) {
-            return String(h.sprint || '').trim() && Number(h.days) > 0;
+            return (String(h.sprint || '').trim() || toClientIsoDateKey_(h.date)) && Number(h.days) > 0;
         }).map(function (h) {
-            return {
+            var hObj = {
                 name: String(h.name || 'Company Holiday').trim() || 'Company Holiday',
                 sprint: String(h.sprint || '').trim(),
                 days: Number(h.days)
             };
+            var hDate = toClientIsoDateKey_(h.date);
+            if (hDate) hObj.date = hDate;
+            return hObj;
         });
-        serverArgs.push({ sprintWorkdays: workdaysVal, companyHolidays: holidaysPayload });
+        var sprintDatesMap = {};
+        getKnownSprintDateWindows_().forEach(function (w) {
+            sprintDatesMap[w.sprintName] = { start: w.start, end: w.end };
+        });
+        var settingsPayload = { sprintWorkdays: workdaysVal, companyHolidays: holidaysPayload };
+        if (Object.keys(sprintDatesMap).length > 0) {
+            settingsPayload.sprintDates = sprintDatesMap;
+        }
+        serverArgs.push(settingsPayload);
     }
     button.disabled = true;
     inputs.forEach(function (input) { input.disabled = true; });

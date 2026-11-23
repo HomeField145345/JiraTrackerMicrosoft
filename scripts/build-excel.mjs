@@ -1,4 +1,5 @@
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { build } from 'esbuild';
 
 await mkdir('dist/vendor', { recursive: true });
@@ -29,3 +30,15 @@ await build({
   outdir: 'dist',
   format: 'iife'
 });
+
+// Stamp a content hash on local script/style references in dist/index.html and dist/src/client/dashboard-init.js
+// so GitHub Pages browsers never serve stale cached JS/CSS after a deploy.
+const hash = createHash('sha256');
+for (const file of ['dist/dashboard-excel.js', 'dist/src/client/ui.js', 'dist/src/client/Config.js', 'dist/src/client/dashboard-init.js']) {
+  hash.update(await readFile(file));
+}
+const version = hash.digest('hex').slice(0, 10);
+const indexHtml = (await readFile('dist/index.html', 'utf8')).replace(/\?v=[A-Za-z0-9_-]+/g, `?v=${version}`);
+await writeFile('dist/index.html', indexHtml);
+const initJs = (await readFile('dist/src/client/dashboard-init.js', 'utf8')).replace(/\?v=[A-Za-z0-9_-]+/g, `?v=${version}`);
+await writeFile('dist/src/client/dashboard-init.js', initJs);

@@ -5,7 +5,7 @@
 
 window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-window.getStoredProjectHubUser = function() {
+window.getStoredProjectHubUser = function () {
   return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
 };
 
@@ -14,11 +14,11 @@ function loadDeferredDashboardAsset(filename) {
     return Promise.reject(new Error('Asset not allowed: ' + filename));
   }
   if (!window.__deferredDashboardAssets[filename]) {
-    window.__deferredDashboardAssets[filename] = new Promise(function(resolve, reject) {
+    window.__deferredDashboardAssets[filename] = new Promise(function (resolve, reject) {
       var script = document.createElement('script');
-      script.src = './src/client/' + filename;
-      script.onload = function() { resolve(); };
-      script.onerror = function() {
+      script.src = './src/client/' + filename + (window.__PROJECTHUB_ASSET_VERSION ? '?v=' + window.__PROJECTHUB_ASSET_VERSION : '?v=20261123');
+      script.onload = function () { resolve(); };
+      script.onerror = function () {
         delete window.__deferredDashboardAssets[filename];
         reject(new Error('Could not load ' + filename + '.'));
       };
@@ -28,7 +28,7 @@ function loadDeferredDashboardAsset(filename) {
   return window.__deferredDashboardAssets[filename];
 }
 
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
   var configBtn = document.getElementById('configBtn');
   var configModal = document.getElementById('config-modal');
   var closeConfigBtn = document.getElementById('closeConfigBtn');
@@ -38,12 +38,12 @@ document.addEventListener('DOMContentLoaded', function() {
   function openConfig() {
     if (configModal) configModal.classList.remove('hidden');
     loadDeferredDashboardAsset('Config.js')
-      .then(function() {
+      .then(function () {
         if (typeof loadConfigData === 'function') {
           loadConfigData();
         }
       })
-      .catch(function(error) {
+      .catch(function (error) {
         alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
       });
   }
@@ -53,7 +53,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   if (configBtn) {
-    configBtn.addEventListener('click', function(e) {
+    configBtn.addEventListener('click', function (e) {
       e.preventDefault();
       openConfig();
     });
@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   var developerCapacityForm = document.getElementById('developer-capacity-form');
   if (developerCapacityForm) {
-    developerCapacityForm.addEventListener('submit', function(event) {
+    developerCapacityForm.addEventListener('submit', function (event) {
       if (typeof saveDeveloperCapacity === 'function') {
         saveDeveloperCapacity(event);
       }

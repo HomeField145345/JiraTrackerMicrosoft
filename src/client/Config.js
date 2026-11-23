@@ -378,6 +378,12 @@
                 var targetSelector = btn.dataset.target;
                 var target = document.querySelector(targetSelector);
                 if (target) target.classList.remove('hidden');
+                if (targetSelector === '#tab-developer-capacity' && typeof renderDeveloperCapacityConfig === 'function') {
+                    var capBody = document.getElementById('developer-capacity-body');
+                    if (capBody && !capBody.querySelector('input[data-developer]')) {
+                        renderDeveloperCapacityConfig();
+                    }
+                }
                 syncConfigFooter_(targetSelector);
             });
         });

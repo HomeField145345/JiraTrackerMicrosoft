@@ -6,10 +6,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Project Tracker Dashboard</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="./assets/css/Gantt.css">
-  <link rel="stylesheet" href="./assets/css/Dashboard.css">
-  <link rel="stylesheet" href="./assets/css/Config.css">
-  <script src="./src/client/dashboard-init.js"></script>
+  <link rel="stylesheet" href="./assets/css/Gantt.css?v=20261123">
+  <link rel="stylesheet" href="./assets/css/Dashboard.css?v=20261123">
+  <link rel="stylesheet" href="./assets/css/Config.css?v=20261123">
+  <script src="./src/client/dashboard-init.js?v=20261123"></script>
 </head>
 
 <body>
@@ -1505,43 +1505,43 @@
                   holidays, and per-sprint PTO or capacity overrides.</p>
               </div>
 
-                <form id="developer-capacity-form" class="max-w-4xl space-y-6" novalidate>
-                  <datalist id="developer-manager-options"></datalist>
-                  <datalist id="developer-sprint-options"></datalist>
+              <form id="developer-capacity-form" class="max-w-4xl space-y-6" novalidate>
+                <datalist id="developer-manager-options"></datalist>
+                <datalist id="developer-sprint-options"></datalist>
 
-                  <div class="config-card space-y-4">
-                    <div class="flex flex-wrap items-center justify-between gap-4">
-                      <div>
-                        <h5 class="text-base font-medium text-black">Company holidays &amp; sprint defaults</h5>
-                        <p class="text-xs text-[#6F7171] mt-0.5">Standard company holidays automatically reduce
-                          available workdays for every developer in that sprint.</p>
-                      </div>
-                      <div class="flex items-center gap-3">
-                        <label for="developer-sprint-workdays" class="text-xs font-medium text-[#6F7171]">Standard
-                          sprint workdays</label>
-                        <input id="developer-sprint-workdays" type="number" min="1" max="60" step="0.5" value="10"
-                          class="border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 w-20 text-right text-sm bg-white text-black">
-                        <button type="button" id="add-company-holiday-btn" class="config-btn-secondary text-xs">+ Add
-                          holiday</button>
-                      </div>
+                <div class="config-card space-y-4">
+                  <div class="flex flex-wrap items-center justify-between gap-4">
+                    <div>
+                      <h5 class="text-base font-medium text-black">Company holidays &amp; sprint defaults</h5>
+                      <p class="text-xs text-[#6F7171] mt-0.5">Standard company holidays automatically reduce
+                        available workdays for every developer in that sprint.</p>
                     </div>
-                    <div id="developer-company-holidays-list" class="space-y-2"></div>
+                    <div class="flex items-center gap-3">
+                      <label for="developer-sprint-workdays" class="text-xs font-medium text-[#6F7171]">Standard
+                        sprint workdays</label>
+                      <input id="developer-sprint-workdays" type="number" min="1" max="60" step="0.5" value="10"
+                        class="border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1 w-20 text-right text-sm bg-white text-black">
+                      <button type="button" id="add-company-holiday-btn" class="config-btn-secondary text-xs">+ Add
+                        holiday</button>
+                    </div>
                   </div>
+                  <div id="developer-company-holidays-list" class="space-y-2"></div>
+                </div>
 
-                  <div class="config-table-wrap border border-[#D8DADA] rounded-xl bg-white">
-                    <table class="w-full text-sm">
-                      <thead>
-                        <tr class="text-left bg-[#F6F6F6] border-b border-[#D8DADA] text-xs font-medium text-[#6F7171]">
-                          <th scope="col" class="px-4 py-3">Developer</th>
-                          <th scope="col" class="px-4 py-3">Manager</th>
-                          <th scope="col" class="px-4 py-3 text-right">Base capacity (pts)</th>
-                          <th scope="col" class="px-4 py-3 text-right">PTO &amp; overrides</th>
-                        </tr>
-                      </thead>
-                      <tbody id="developer-capacity-body" class="divide-y divide-[#D8DADA]"></tbody>
-                    </table>
-                  </div>
-                </form>
+                <div class="config-table-wrap border border-[#D8DADA] rounded-xl bg-white">
+                  <table class="w-full text-sm">
+                    <thead>
+                      <tr class="text-left bg-[#F6F6F6] border-b border-[#D8DADA] text-xs font-medium text-[#6F7171]">
+                        <th scope="col" class="px-4 py-3">Developer</th>
+                        <th scope="col" class="px-4 py-3">Manager</th>
+                        <th scope="col" class="px-4 py-3 text-right">Base capacity (pts)</th>
+                        <th scope="col" class="px-4 py-3 text-right">PTO &amp; overrides</th>
+                      </tr>
+                    </thead>
+                    <tbody id="developer-capacity-body" class="divide-y divide-[#D8DADA]"></tbody>
+                  </table>
+                </div>
+              </form>
             </section>
 
             <!-- Users Panel (Admin) -->
@@ -1647,17 +1647,17 @@
     </div>
   </div>
 
-  <script src="./dashboard-excel.js"></script>
-  <script src="./src/client/constants.js"></script>
-  <script src="./src/client/TimerManager.js"></script>
-  <script src="./src/client/EventManager.js"></script>
-  <script src="./src/client/AppCleanup.js"></script>
-  <script src="./src/client/state.js"></script>
-  <script src="./src/client/utils.js"></script>
-  <script src="./src/client/ui.js"></script>
-  <script src="./src/client/api.js"></script>
-  <script src="./src/client/events.js"></script>
-  <script src="./src/client/Dashboard.js"></script>
+  <script src="./dashboard-excel.js?v=20261123"></script>
+  <script src="./src/client/constants.js?v=20261123"></script>
+  <script src="./src/client/TimerManager.js?v=20261123"></script>
+  <script src="./src/client/EventManager.js?v=20261123"></script>
+  <script src="./src/client/AppCleanup.js?v=20261123"></script>
+  <script src="./src/client/state.js?v=20261123"></script>
+  <script src="./src/client/utils.js?v=20261123"></script>
+  <script src="./src/client/ui.js?v=20261123"></script>
+  <script src="./src/client/api.js?v=20261123"></script>
+  <script src="./src/client/events.js?v=20261123"></script>
+  <script src="./src/client/Dashboard.js?v=20261123"></script>
 </body>
 
 </html>

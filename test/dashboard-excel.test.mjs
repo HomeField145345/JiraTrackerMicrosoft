@@ -577,3 +577,108 @@ test('capacity planner displays PTO, holiday, and manual override breakdowns per
   assert.equal(blairRow.children[3].children[0].textContent, '5');
   assert.equal(blairRow.children[3].children[1].textContent, 'of 10 (Override)');
 });
+
+test('developer capacity config interactive buttons add company holidays and per-developer sprint PTO', async () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.value = '';
+      this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+      this.validity = { valid: true }; this.classList = fakeClassList();
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() {
+      if (typeof this.onclick === 'function') this.onclick();
+      if (this.listeners.click) this.listeners.click();
+    }
+  }
+  const elements = {
+    'developer-capacity-body': new Element('tbody'),
+    'developer-capacity-status': new Element('p'),
+    'save-developer-capacity': new Element('button'),
+    'developer-sprint-workdays': Object.assign(new Element('input'), { value: '10' }),
+    'add-company-holiday-btn': new Element('button'),
+    'developer-company-holidays-list': new Element('div'),
+    'developer-sprint-options': new Element('datalist'),
+    'developer-manager-options': new Element('datalist')
+  };
+  const data = {
+    projects: [{ Assignee: 'Avery' }],
+    sprintCapacity: { sprintName: 'Sprint 12', developers: [] },
+    futureSprintCapacity: [{ sprintName: 'Sprint 13', developers: [] }],
+    developerCapacity: [{ developer: 'Avery', capacity: 10, manager: 'Jordan' }],
+    capacitySettings: { sprintWorkdays: 10, companyHolidays: [] }
+  };
+  const calls = [];
+  const context = vm.createContext({
+    window: { addEventListener() { } },
+    document: {
+      getElementById: id => elements[id],
+      createElement: tag => new Element(tag),
+      querySelectorAll: selector => {
+        const devRows = elements['developer-capacity-body'].children.filter(r => r.children.length === 4);
+        if (selector.includes('data-developer-manager')) {
+          return devRows.map(r => r.children[1].children[0]);
+        }
+        return devRows.map(r => r.children[2].children[0]);
+      }
+    },
+    APP_STATE: { allData: data },
+    checkAuth: () => 'token',
+    getErrorMessage_: error => error.message,
+    handleDataLoaded: () => true,
+    callServer: async (method, args) => {
+      calls.push({ method, args });
+      return method === 'saveDeveloperCapacity' ? { status: 'success' } : data;
+    }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderDeveloperCapacityConfig();
+
+  // 1. Click "+ Add holiday"
+  elements['add-company-holiday-btn'].click();
+  assert.equal(elements['developer-company-holidays-list'].children.length, 1);
+  const holidayRow = elements['developer-company-holidays-list'].children[0];
+  holidayRow.children[0].value = 'Memorial Day';
+  holidayRow.children[0].listeners.input();
+
+  // 2. Click Avery's "PTO & overrides" toggle button -> expands subpanel row
+  const [averyRow, averyPtoRow] = elements['developer-capacity-body'].children;
+  const ptoToggleBtn = averyRow.children[3].children[0];
+  assert.equal(averyPtoRow.hidden, true);
+  ptoToggleBtn.click();
+  assert.equal(averyPtoRow.hidden, false);
+
+  // 3. Click "+ Add sprint PTO / override" inside Avery's subpanel
+  const ptoPanelWrapper = averyPtoRow.children[0].children[0];
+  const addSprintPtoBtn = ptoPanelWrapper.children[0].children[1];
+  addSprintPtoBtn.click();
+  assert.equal(ptoToggleBtn.textContent, 'PTO & overrides (1)');
+
+  // 4. Save capacity and verify payload includes both holiday and Avery's sprint PTO
+  context.saveDeveloperCapacity({ preventDefault() { } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), {
+    method: 'saveDeveloperCapacity',
+    args: [
+      [
+        {
+          developer: 'Avery',
+          capacity: '10',
+          manager: 'Jordan',
+          sprintOverrides: {
+            'Sprint 12': { ptoDays: 1, capacityOverride: null, notes: '' }
+          }
+        }
+      ],
+      {
+        sprintWorkdays: 10,
+        companyHolidays: [{ name: 'Memorial Day', sprint: 'Sprint 12', days: 1 }]
+      }
+    ]
+  });
+});

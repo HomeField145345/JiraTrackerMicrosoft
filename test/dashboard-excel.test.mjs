@@ -877,6 +877,28 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   elements['capacity-filter-under-capacity'].click();
   assert.equal(elements['capacity-filter-under-capacity'].attributes['aria-pressed'], 'false');
   assert.equal(elements['capacity-table-body'].children.length, 6);
+
+  // Tab awareness: switching to "Future sprints" updates filter counts for future sprints,
+  // and switching to "No sprint assigned" hides the sprint-only capacity filters
+  state.allData.futureSprintCapacity = [{
+    sprintName: 'Sprint 13', totalStoryPoints: 12, totalIssues: 2, totalCapacity: 10,
+    developers: [
+      { developer: 'Avery', issueCount: 1, storyPoints: 8, capacity: 5, remaining: -3, issues: [] },
+      { developer: 'Blair', issueCount: 1, storyPoints: 4, capacity: 5, remaining: 1, issues: [] }
+    ]
+  }];
+  elements['capacity-tab-future'] = new Element('button');
+  elements['capacity-tab-nosprint'] = new Element('button');
+  context.renderCapacityView();
+  elements['capacity-tab-future'].click();
+  assert.equal(elements['capacity-filter-at-risk'].hidden, false);
+  assert.equal(elements['capacity-filter-over-capacity-count'].textContent, '1');
+  assert.equal(elements['capacity-filter-under-capacity-count'].textContent, '1');
+
+  elements['capacity-tab-nosprint'].click();
+  assert.equal(elements['capacity-filter-at-risk'].hidden, true);
+  assert.equal(elements['capacity-filter-over-capacity'].hidden, true);
+  assert.equal(elements['capacity-filter-under-capacity'].hidden, true);
 });
 
 test('capacity view groups developers by PCT with rolled-up workload when toggled', () => {

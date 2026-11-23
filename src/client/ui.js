@@ -1818,8 +1818,37 @@ function setCapacityCurrentFilter_(filterKey) {
     capacityFilterAtRisk_ = capacityCurrentFilter_ === 'at_risk';
 }
 
+function filterCapacityDevelopers_(developers) {
+    var list = developers || [];
+    if (capacityCurrentFilter_ === 'at_risk') return list.filter(isCapacityDeveloperAtRisk_);
+    if (capacityCurrentFilter_ === 'over_capacity') return list.filter(isCapacityDeveloperOverCapacity_);
+    if (capacityCurrentFilter_ === 'under_capacity') return list.filter(isCapacityDeveloperUnderCapacity_);
+    return list;
+}
+
+function getTabCapacityCounts_(tabKey) {
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var targetTab = tabKey || activeCapacityTab_ || 'current';
+    var devs = [];
+    if (targetTab === 'current') {
+        var cap = resolveSprintCapacityWithDates_(allData.sprintCapacity || { sprintName: 'None', developers: [] });
+        devs = (cap && cap.developers) || [];
+    } else if (targetTab === 'future') {
+        (allData.futureSprintCapacity || []).forEach(function (sp) {
+            var resolvedSp = resolveSprintCapacityWithDates_(sp);
+            devs = devs.concat((resolvedSp && resolvedSp.developers) || []);
+        });
+    }
+    return {
+        atRisk: devs.filter(isCapacityDeveloperAtRisk_).length,
+        overCapacity: devs.filter(isCapacityDeveloperOverCapacity_).length,
+        underCapacity: devs.filter(isCapacityDeveloperUnderCapacity_).length
+    };
+}
+
 function syncCapacityFilterButtons_(counts) {
-    var c = counts || {};
+    var c = counts || getTabCapacityCounts_(activeCapacityTab_);
+    var showFilters = activeCapacityTab_ === 'current' || activeCapacityTab_ === 'future';
     var configs = [
         {
             key: 'at_risk',
@@ -1850,9 +1879,11 @@ function syncCapacityFilterButtons_(counts) {
         var btn = document.getElementById(cfg.btnId);
         var isActive = capacityCurrentFilter_ === cfg.key;
         if (btn) {
+            btn.hidden = !showFilters;
             btn.setAttribute('aria-pressed', String(isActive));
-            btn.className = isActive ? cfg.activeBtnClass :
+            var baseClass = isActive ? cfg.activeBtnClass :
                 'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+            btn.className = showFilters ? baseClass : (baseClass + ' hidden');
         }
         var countEl = document.getElementById(cfg.countId);
         if (countEl && typeof cfg.count === 'number') {
@@ -1876,19 +1907,24 @@ var capacityGroupByPct_ = (function () {
 })();
 
 function syncCapacityGroupButton_() {
+    var showGrouping = activeCapacityTab_ === 'current' || activeCapacityTab_ === 'future';
     var btn = document.getElementById('capacity-group-by-manager');
     if (btn) {
+        btn.hidden = !showGrouping;
         btn.setAttribute('aria-pressed', String(capacityGroupByManager_));
-        btn.className = capacityGroupByManager_ ?
+        var mgrClass = capacityGroupByManager_ ?
             'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
             'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        btn.className = showGrouping ? mgrClass : (mgrClass + ' hidden');
     }
     var pctBtn = document.getElementById('capacity-group-by-pct');
     if (pctBtn) {
+        pctBtn.hidden = !showGrouping;
         pctBtn.setAttribute('aria-pressed', String(capacityGroupByPct_));
-        pctBtn.className = capacityGroupByPct_ ?
+        var pctClass = capacityGroupByPct_ ?
             'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
             'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        pctBtn.className = showGrouping ? pctClass : (pctClass + ' hidden');
     }
 }
 
@@ -1909,6 +1945,8 @@ function setActiveCapacityTab_(tabKey) {
             panel.className = isActive ? 'px-4 pb-6' : 'px-4 pb-6 hidden';
         }
     });
+    syncCapacityFilterButtons_();
+    syncCapacityGroupButton_();
 }
 
 function bindCapacitySubTabs_() {
@@ -2059,11 +2097,11 @@ function renderCapacityView() {
     var atRiskDevs = allCurrentDevs.filter(isCapacityDeveloperAtRisk_);
     var overCapDevs = allCurrentDevs.filter(isCapacityDeveloperOverCapacity_);
     var underCapDevs = allCurrentDevs.filter(isCapacityDeveloperUnderCapacity_);
-    syncCapacityFilterButtons_({
+    syncCapacityFilterButtons_(activeCapacityTab_ === 'current' ? {
         atRisk: atRiskDevs.length,
         overCapacity: overCapDevs.length,
         underCapacity: underCapDevs.length
-    });
+    } : undefined);
     var atRiskStat = document.getElementById('capacity-stat-atrisk');
     var atRiskSub = document.getElementById('capacity-stat-atrisk-sub');
     var atRiskTile = document.getElementById('capacity-tile-atrisk');
@@ -2095,9 +2133,7 @@ function renderCapacityView() {
                 'text-left rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/60 px-3.5 py-3 hover:border-[#B95319] transition-colors' :
                 'text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors';
     }
-    var displayedCurrentDevs = capacityCurrentFilter_ === 'at_risk' ? atRiskDevs :
-        capacityCurrentFilter_ === 'over_capacity' ? overCapDevs :
-            capacityCurrentFilter_ === 'under_capacity' ? underCapDevs : allCurrentDevs;
+    var displayedCurrentDevs = filterCapacityDevelopers_(allCurrentDevs);
     renderCapacityRows_(body, displayedCurrentDevs, numberFormat, 'current', true);
     renderCapacityFooter_(document.getElementById('capacity-table-footer'), capacity, numberFormat);
 
@@ -2146,7 +2182,8 @@ function renderCapacityView() {
             futureHeading.className = 'text-lg font-semibold text-black mb-4';
             futureHeading.textContent = 'Future sprints';
             futureContainer.appendChild(futureHeading);
-            futureSprints.forEach(function (sprint, index) {
+            futureSprints.forEach(function (rawFutureSprint, index) {
+                var sprint = resolveSprintCapacityWithDates_(rawFutureSprint);
                 var section = document.createElement('section');
                 section.className = 'mb-6 rounded-xl border border-[#D8DADA] bg-white p-4';
                 var heading = document.createElement('h3');
@@ -2178,7 +2215,8 @@ function renderCapacityView() {
                     header.appendChild(cell);
                 });
                 var futureBody = table.createTBody();
-                renderCapacityRows_(futureBody, sprint.developers, numberFormat, 'future-' + index, false);
+                var displayedFutureDevs = filterCapacityDevelopers_(sprint.developers);
+                renderCapacityRows_(futureBody, displayedFutureDevs, numberFormat, 'future-' + index, false);
                 tableWrapper.appendChild(table);
                 section.appendChild(tableWrapper);
                 futureContainer.appendChild(section);
@@ -2440,11 +2478,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         emptyCell.colSpan = 6;
         emptyCell.className = 'px-3 py-8 text-center text-gray-500';
         var emptyMsg = 'No developers found.';
-        if (isCurrentSprint) {
-            if (capacityCurrentFilter_ === 'at_risk') emptyMsg = 'No at-risk developers in the current sprint.';
-            else if (capacityCurrentFilter_ === 'over_capacity') emptyMsg = 'No over-capacity developers in the current sprint.';
-            else if (capacityCurrentFilter_ === 'under_capacity') emptyMsg = 'No under-capacity developers in the current sprint.';
-        }
+        var scopeLabel = isCurrentSprint ? 'the current sprint.' : 'this sprint.';
+        if (capacityCurrentFilter_ === 'at_risk') emptyMsg = 'No at-risk developers in ' + scopeLabel;
+        else if (capacityCurrentFilter_ === 'over_capacity') emptyMsg = 'No over-capacity developers in ' + scopeLabel;
+        else if (capacityCurrentFilter_ === 'under_capacity') emptyMsg = 'No under-capacity developers in ' + scopeLabel;
         emptyCell.textContent = emptyMsg;
         return;
     }
@@ -3646,7 +3683,9 @@ function renderDeveloperCapacityConfig() {
     });
     var capacities = new Map();
     var managers = new Map();
+    var pcts = new Map();
     var distinctManagers = new Set();
+    var distinctPcts = new Set(((APP_STATE.allData && APP_STATE.allData.config && APP_STATE.allData.config.actPctOptions) || []).map(function (o) { return String(o || '').trim(); }).filter(Boolean));
     (APP_STATE.allData.developerCapacity || []).forEach(function (entry) {
         if (!entry || !entry.developer) return;
         var key = entry.developer.toLowerCase();
@@ -3656,8 +3695,13 @@ function renderDeveloperCapacityConfig() {
             managers.set(key, mgr);
             distinctManagers.add(mgr);
         }
+        var pctVal = String(entry.pct || '').trim();
+        if (pctVal) {
+            pcts.set(key, pctVal);
+            distinctPcts.add(pctVal);
+        }
         if (entry.sprintOverrides && typeof entry.sprintOverrides === 'object') {
-            var list = Object.keys(entry.sprintOverrides).filter(function (k) { return k !== '__ptoDates__'; }).map(function (sprintName) {
+            var list = Object.keys(entry.sprintOverrides).filter(function (k) { return k !== '__ptoDates__' && k !== '__pct__'; }).map(function (sprintName) {
                 var item = entry.sprintOverrides[sprintName] || {};
                 return {
                     sprint: sprintName,
@@ -3686,6 +3730,15 @@ function renderDeveloperCapacityConfig() {
             var opt = document.createElement('option');
             opt.value = mgr;
             managerList.appendChild(opt);
+        });
+    }
+    var pctList = document.getElementById('developer-pct-options');
+    if (pctList) {
+        pctList.replaceChildren();
+        Array.from(distinctPcts).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (pctOpt) {
+            var opt = document.createElement('option');
+            opt.value = pctOpt;
+            pctList.appendChild(opt);
         });
     }
     var developers = Array.from(names.values()).sort(function (a, b) { return a.localeCompare(b); });
@@ -3718,9 +3771,23 @@ function renderDeveloperCapacityConfig() {
             managerInput.setAttribute('aria-label', name + ' manager');
         }
         managerInput.dataset.developerManager = name;
-        managerInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-44 bg-white text-black';
+        managerInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-36 bg-white text-black mr-2';
         managerInput.value = managers.get(name.toLowerCase()) || '';
         managerCell.appendChild(managerInput);
+
+        var pctInput = document.createElement('input');
+        pctInput.id = 'developer-pct-' + index;
+        pctInput.type = 'text';
+        pctInput.maxLength = 128;
+        pctInput.placeholder = 'PCT';
+        if (typeof pctInput.setAttribute === 'function') {
+            pctInput.setAttribute('list', 'developer-pct-options');
+            pctInput.setAttribute('aria-label', name + ' PCT');
+        }
+        pctInput.dataset.developerPct = name;
+        pctInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-2.5 py-1.5 w-28 bg-white text-black';
+        pctInput.value = pcts.get(name.toLowerCase()) || '';
+        managerCell.appendChild(pctInput);
 
         var cell = row.insertCell();
         cell.className = 'px-4 py-3 text-right';
@@ -3789,10 +3856,17 @@ function saveDeveloperCapacity(event) {
     var button = document.getElementById('save-developer-capacity');
     var inputs = Array.from(document.querySelectorAll('#developer-capacity-body input[data-developer]'));
     var managerInputs = Array.from(document.querySelectorAll('#developer-capacity-body input[data-developer-manager]'));
+    var pctInputs = Array.from(document.querySelectorAll('#developer-capacity-body input[data-developer-pct]'));
     var managerByDev = new Map();
     managerInputs.forEach(function (input) {
         if (input && input.dataset && input.dataset.developerManager) {
             managerByDev.set(input.dataset.developerManager.toLowerCase(), String(input.value || '').trim());
+        }
+    });
+    var pctByDev = new Map();
+    pctInputs.forEach(function (input) {
+        if (input && input.dataset && input.dataset.developerPct) {
+            pctByDev.set(input.dataset.developerPct.toLowerCase(), String(input.value || '').trim());
         }
     });
     var invalid = inputs.find(function (input) {
@@ -3811,6 +3885,9 @@ function saveDeveloperCapacity(event) {
         var entry = { developer: dev, capacity: input.value };
         if (managerByDev.has(key)) {
             entry.manager = managerByDev.get(key);
+        }
+        if (pctByDev.get(key)) {
+            entry.pct = pctByDev.get(key);
         }
         if (developerSprintOverridesState_.has(key)) {
             var overrideMap = {};

@@ -12,7 +12,7 @@
   <script>
     window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
 
-    window.getStoredProjectHubUser = function () {
+    window.getStoredProjectHubUser = function  () {
       return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
     };
 
@@ -21,11 +21,11 @@
         return Promise.reject(new Error('Asset not allowed: ' + filename));
       }
       if (!window.__deferredDashboardAssets[filename]) {
-        window.__deferredDashboardAssets[filename] = new Promise(function (resolve, reject) {
+        window.__deferredDashboardAssets[filename] = new Promise(functio n (resolve, reject) {
           var script = document.createElement('script');
           script.src = './src/client/' + filename;
-          script.onload = function () { resolve(); };
-          script.onerror = function () {
+          script.onload = functi on () { resolve(); };
+          script.onerror = funct ion () {
             delete window.__deferredDashboardAssets[filename];
             reject(new Error('Could not load ' + filename + '.'));
           };
@@ -33,7 +33,7 @@
         });
       }
       return window.__deferredDashboardAssets[filename];
-    }
+  }
   </script>
 </head>
 
@@ -611,56 +611,56 @@
               started against capacity. Open Issues under a developer to review their sprint assignments, or under
               Unassigned to review work that needs an assignee.</p>
           </div>
-            <div class="flex flex-wrap items-baseline gap-6" aria-live="polite">
-              <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-points">0</span><span
-                  class="text-sm text-gray-600 ml-2">story points</span></div>
-              <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-issues">0</span><span
-                  class="text-sm text-gray-600 ml-2">issues</span></div>
-            </div>
+          <div class="flex flex-wrap items-baseline gap-6" aria-live="polite">
+            <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-points">0</span><span
+                class="text-sm text-gray-600 ml-2">story points</span></div>
+            <div><span class="text-2xl font-semibold text-gray-900" id="capacity-total-issues">0</span><span
+                class="text-sm text-gray-600 ml-2">issues</span></div>
           </div>
-          <div id="capacity-pace-card" class="mx-4 mb-4 rounded-xl border border-[#D8DADA] bg-[#F6F6F6] p-4 hidden"
-            aria-live="polite">
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <div id="capacity-pace-summary" class="text-sm font-medium text-gray-900"></div>
-              <div id="capacity-pace-breakdown" class="text-xs text-[#6F7171]"></div>
-            </div>
-            <div id="capacity-pace-bar"
-              class="relative h-3 w-full overflow-visible rounded-full bg-white border border-[#D8DADA]" role="img"
-              aria-label="Sprint progress compared to elapsed time"></div>
-            <div class="mt-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-[#6F7171]">
-              <div class="flex flex-wrap items-center gap-4">
-                <span class="inline-flex items-center gap-1.5"><span
-                    class="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Completed</span>
-                <span class="inline-flex items-center gap-1.5"><span
-                    class="inline-block h-2.5 w-2.5 rounded-sm bg-[#006FC1]"></span>In progress</span>
-                <span class="inline-flex items-center gap-1.5"><span
-                    class="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300"></span>Not started</span>
-                <span class="inline-flex items-center gap-1.5"><span
-                    class="inline-block h-3 w-0.5 bg-gray-900"></span>Elapsed time / capacity limit</span>
-              </div>
-              <div id="capacity-team-summary" class="tabular-nums"></div>
-            </div>
+        </div>
+        <div id="capacity-pace-card" class="mx-4 mb-4 rounded-xl border border-[#D8DADA] bg-[#F6F6F6] p-4 hidden"
+          aria-live="polite">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div id="capacity-pace-summary" class="text-sm font-medium text-gray-900"></div>
+            <div id="capacity-pace-breakdown" class="text-xs text-[#6F7171]"></div>
           </div>
-          <div class="overflow-x-auto px-4 pb-4">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600">
-                  <th scope="col" class="px-3 py-2">Developer</th>
-                  <th scope="col" class="px-3 py-2 text-right">Issues</th>
-                  <th scope="col" class="px-3 py-2 text-right">Story points</th>
-                  <th scope="col" class="px-3 py-2 text-right">Capacity</th>
-                  <th scope="col" class="px-3 py-2 text-right">Remaining</th>
-                  <th scope="col" class="px-3 py-2 text-left">Workload</th>
-                </tr>
-              </thead>
-              <tbody id="capacity-table-body">
-                <tr>
-                  <td colspan="6" class="px-3 py-8 text-gray-500">No developers found.</td>
-                </tr>
-              </tbody>
-            </table>
+          <div id="capacity-pace-bar"
+            class="relative h-3 w-full overflow-visible rounded-full bg-white border border-[#D8DADA]" role="img"
+            aria-label="Sprint progress compared to elapsed time"></div>
+          <div class="mt-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-[#6F7171]">
+            <div class="flex flex-wrap items-center gap-4">
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-600"></span>Completed</span>
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="inline-block h-2.5 w-2.5 rounded-sm bg-[#006FC1]"></span>In progress</span>
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300"></span>Not started</span>
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="inline-block h-3 w-0.5 bg-gray-900"></span>Elapsed time / capacity limit</span>
+            </div>
+            <div id="capacity-team-summary" class="tabular-nums"></div>
           </div>
-          <div id="future-sprint-capacities" class="px-4 pb-4"></div>
+        </div>
+        <div class="overflow-x-auto px-4 pb-4">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-gray-50 border-b border-gray-200 text-left text-xs font-medium text-gray-600">
+                <th scope="col" class="px-3 py-2">Developer</th>
+                <th scope="col" class="px-3 py-2 text-right">Issues</th>
+                <th scope="col" class="px-3 py-2 text-right">Story points</th>
+                <th scope="col" class="px-3 py-2 text-right">Capacity</th>
+                <th scope="col" class="px-3 py-2 text-right">Remaining</th>
+                <th scope="col" class="px-3 py-2 text-left">Workload</th>
+              </tr>
+            </thead>
+            <tbody id="capacity-table-body">
+              <tr>
+                <td colspan="6" class="px-3 py-8 text-gray-500">No developers found.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="future-sprint-capacities" class="px-4 pb-4"></div>
       </section>
 
       <!-- My Tasks View -->
@@ -1354,13 +1354,26 @@
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
+                      <label for="closedStatuses" class="block text-sm font-medium text-black">Closed Jira
+                        statuses</label>
+                      <button type="button" class="config-link-action" data-clean-for="closedStatuses">Sort &amp;
+                        clean</button>
+                    </div>
+                    <textarea id="closedStatuses" rows="5" class="config-field"></textarea>
+                    <p class="config-helper">Case-insensitive match to Jira Status. Counts matching items as Completed
+                      in
+                      sprint capacity and pace.</p>
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
                       <label for="inProgressStatuses" class="block text-sm font-medium text-black">Not in progress
                         statuses</label>
                       <button type="button" class="config-link-action" data-clean-for="inProgressStatuses">Sort &amp;
                         clean</button>
                     </div>
                     <textarea id="inProgressStatuses" rows="5" class="config-field"></textarea>
-                    <p class="config-helper">Exclusion list for the Show Only In Progress filter. One status per line.
+                    <p class="config-helper">Exclusion list for the Show Only In Progress filter and Not started
+                      capacity bucket. One status per line.
                     </p>
                   </div>
                 </div>
@@ -1541,40 +1554,31 @@
 
   <script>
     // Config Modal Logic
-    document.addEventListener('DOMContentLoaded', function () {
-      const configBtn = document.getElementById('configBtn');
-      const configModal = document.getElementById('config-modal');
-      const closeConfigBtn = document.getElementById('closeConfigBtn');
-      const closeConfigBtnFooter = document.getElementById('closeConfigBtnFooter');
-      const overlay = document.getElementById('config-modal-overlay');
-
-      function openConfig() {
-        configModal.classList.remove('hidden');
-        loadDeferredDashboardAsset('Config.js')
-          .then(function () {
-            if (typeof loadConfigData === 'function') {
-              loadConfigData();
-            }
-          })
-          .catch(function (error) {
-            alert('Failed to load configuration tools: ' + (error && error.message ? error.message : error));
+    document.addEventListener('DOMContentLoad ed',        () {
+      const configBtn = document.getElementById('c      ');
+      const configModal = document.getElementById('config      ;
+      const closeConfigBtn = document.getElementById('closeConfi            const closeConfigBtnFooter = document.getElementById('closeConfigBtnFoot          const overlay = document.getElementById('config-modal-overlay'        function openConfig()         nfigModal.classList.remove('hidden');
+          DeferredDashboardAsset('Config.js')
+              function () {
+                  eof loadConfigData === 'function') {
+                     gData();
+                      }          .ca           (error) {
+             al             load configuration tools: ' + (error && error.message ? error.message : error));
           });
+             fun      ose       {
+        configModal.cl        'hidden');
       }
 
-      function closeConfig() {
-        configModal.classList.add('hidden');
-      }
-
-      if (configBtn) configBtn.addEventListener('click', function (e) {
-        e.preventDefault();
-        openConfig();
+      if (configB      igB      entListener('click', function (e) {
+        e.preventDefaul t();
+         onfig();
       });
 
-      if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
-      if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
-      if (overlay) overlay.addEventListener('click', closeConfig);
-      const developerCapacityForm = document.getElementById('developer-capacity-form');
-      if (developerCapacityForm) developerCapacityForm.addEventListener('submit', saveDeveloperCapacity);
+        oseConfigBtn)       figBt      ntListener('click', closeConfig);
+      if (closeConfigBtnFooter) closeConf      ter.addEventListener('click', closeConfig);
+      if (overlay) overlay.addEventListener      , closeConfig);
+      const developerCapacityForm = document.      ntById('developer-capacity-form');
+      if (developerCapacityForm) developerCapac      addEventListener('submit', saveDeveloperCapacity);
     });
   </script>
 </body>

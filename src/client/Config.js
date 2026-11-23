@@ -459,6 +459,7 @@
                     priorityOptions: (document.getElementById('priorityOptions').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     independentTaskStatusOptions: (document.getElementById('independentTaskStatusOptions') ? document.getElementById('independentTaskStatusOptions').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     closedProjectStages: (document.getElementById('closedProjectStages').value || '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
+                    closedStatuses: (document.getElementById('closedStatuses') ? document.getElementById('closedStatuses').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     pastSprintClosedStages: (document.getElementById('pastSprintClosedStages') ? document.getElementById('pastSprintClosedStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     pastDueExemptStages: (document.getElementById('pastDueExemptStages') ? document.getElementById('pastDueExemptStages').value : '').split('\n').map(function(s) { return s.trim(); }).filter(Boolean),
                     // Legacy key retained for compatibility with existing config pipeline
@@ -675,6 +676,9 @@
         // Closed mappings
         if (data.config.closedProjectStages) {
             setVal('closedProjectStages', data.config.closedProjectStages.join('\n'));
+        }
+        if (data.config.closedStatuses) {
+            setVal('closedStatuses', data.config.closedStatuses.join('\n'));
         }
         // Past sprint closed mappings (optional)
         if (data.config.pastSprintClosedStages) {

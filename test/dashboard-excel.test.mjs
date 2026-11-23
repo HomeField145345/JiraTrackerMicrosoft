@@ -695,3 +695,163 @@ test('developer capacity config interactive buttons add company holidays and per
     ]
   });
 });
+
+test('clicking the people icon next to a developer on the capacity page opens the quick-edit modal and saves capacity, manager, and PTO', async () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.value = '';
+      this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+      this.validity = { valid: true }; this.classList = fakeClassList();
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() {
+      if (typeof this.onclick === 'function') this.onclick();
+      if (this.listeners.click) this.listeners.click();
+    }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'future-sprint-capacities', 'developer-quick-edit-modal'
+  ].map(id => [id, new Element()]));
+  const data = {
+    projects: [{ Assignee: 'Avery' }],
+    sprintCapacity: {
+      sprintName: 'Sprint 12', totalStoryPoints: 6, totalIssues: 1, totalCapacity: 10,
+      developers: [
+        { developer: 'Avery', manager: 'Jordan', issueCount: 1, storyPoints: 6, capacity: 10, remaining: 4, issues: [] }
+      ]
+    },
+    futureSprintCapacity: [],
+    developerCapacity: [{ developer: 'Avery', capacity: 10, manager: 'Jordan' }],
+    capacitySettings: { sprintWorkdays: 10, companyHolidays: [] }
+  };
+  const calls = [];
+  const context = vm.createContext({
+    window: { addEventListener() { } },
+    APP_STATE: { allData: data },
+    Intl: { NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); } },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) },
+    checkAuth: () => 'token',
+    getErrorMessage_: error => error.message,
+    handleDataLoaded: () => true,
+    callServer: async (method, args) => {
+      calls.push({ method, args });
+      return method === 'saveDeveloperCapacity' ? { status: 'success' } : data;
+    }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+
+  // Find the people icon button next to Avery's name in the Capacity Planner row
+  const [averyRow] = elements['capacity-table-body'].children;
+  const peopleBtn = averyRow.children[0].children[2];
+  assert.equal(peopleBtn.attributes['data-edit-developer-capacity'], 'Avery');
+  peopleBtn.click();
+
+  // Modal opens with Avery's manager, base capacity, and PTO controls
+  const modal = elements['developer-quick-edit-modal'];
+  assert.equal(modal.hidden, false);
+  assert.equal(modal.attributes['data-editing-developer'], 'Avery');
+  const card = modal.children[0];
+  const body = card.children[1];
+  const topGrid = body.children[0];
+  const mgrInput = topGrid.children[0].children[1];
+  const capInput = topGrid.children[1].children[1];
+  assert.equal(mgrInput.value, 'Jordan');
+  assert.equal(capInput.value, '10');
+
+  // Edit manager, base capacity, and add a PTO date directly from the modal
+  mgrInput.value = 'Taylor';
+  capInput.value = '12';
+  const ptoContainer = body.children[1];
+  const addPtoDateBtn = ptoContainer.children[0].children[1].children[0];
+  addPtoDateBtn.click();
+  const dateRow = ptoContainer.children[1].children[0];
+  dateRow.children[0].children[1].value = '2026-05-26';
+  dateRow.children[0].children[1].listeners.input();
+
+  // Click Save changes inside the quick-edit modal
+  const footer = card.children[2];
+  const saveBtn = footer.children[1].children[1];
+  saveBtn.click();
+  await new Promise(resolve => setImmediate(resolve));
+
+  assert.deepEqual(JSON.parse(JSON.stringify(calls[0])), {
+    method: 'saveDeveloperCapacity',
+    args: [[
+      {
+        developer: 'Avery',
+        capacity: '12',
+        manager: 'Taylor',
+        sprintOverrides: {},
+        ptoDates: [{ startDate: '2026-05-26', endDate: '2026-05-26', days: null, notes: '' }]
+      }
+    ]]
+  });
+  assert.equal(modal.hidden, true);
+});
+
+test('at-risk filter on current sprint shows only developers who are at risk, behind, or over capacity', () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() { if (this.listeners.click) this.listeners.click(); }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'capacity-filter-at-risk', 'capacity-filter-at-risk-count',
+    'future-sprint-capacities'
+  ].map(id => [id, new Element()]));
+  const state = {
+    allData: {
+      sprintCapacity: {
+        sprintName: 'Sprint 12', totalStoryPoints: 18, totalIssues: 3, totalCapacity: 20,
+        developers: [
+          { developer: 'Avery', issueCount: 1, storyPoints: 5, capacity: 8, remaining: 3, pace: { status: 'on_track', label: 'On track' }, issues: [] },
+          { developer: 'Blair', issueCount: 1, storyPoints: 6, capacity: 5, remaining: -1, pace: { status: 'on_track', label: 'On track' }, issues: [] },
+          { developer: 'Casey', issueCount: 1, storyPoints: 7, capacity: 7, remaining: 0, pace: { status: 'at_risk', label: 'At risk' }, issues: [] }
+        ]
+      },
+      futureSprintCapacity: []
+    }
+  };
+  const context = vm.createContext({
+    window: { addEventListener() { } }, APP_STATE: state,
+    Intl: { NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); } },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+
+  // Initially shows all 3 developers (6 rows including details rows), and badge count is 2 (Blair over capacity + Casey at_risk)
+  assert.equal(elements['capacity-filter-at-risk-count'].textContent, '2');
+  assert.equal(elements['capacity-table-body'].children.length, 6);
+
+  // Toggle "At risk only" ON -> only Blair and Casey remain (4 rows including details rows)
+  elements['capacity-filter-at-risk'].click();
+  assert.equal(elements['capacity-filter-at-risk'].attributes['aria-pressed'], 'true');
+  assert.equal(elements['capacity-table-body'].children.length, 4);
+  assert.equal(elements['capacity-table-body'].children[0].children[0].children[0].textContent, 'Blair');
+  assert.equal(elements['capacity-table-body'].children[2].children[0].children[0].textContent, 'Casey');
+
+  // Toggle "At risk only" OFF -> all 3 developers shown again
+  elements['capacity-filter-at-risk'].click();
+  assert.equal(elements['capacity-filter-at-risk'].attributes['aria-pressed'], 'false');
+  assert.equal(elements['capacity-table-body'].children.length, 6);
+});

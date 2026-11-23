@@ -1792,6 +1792,36 @@ var capacityGroupByManager_ = (function () {
     }
 })();
 
+var capacityFilterAtRisk_ = false;
+
+function isCapacityDeveloperAtRisk_(developer) {
+    if (!developer || developer.developer === 'Unassigned') return false;
+    var paceStatus = developer.pace && developer.pace.status;
+    if (paceStatus === 'at_risk' || paceStatus === 'behind') return true;
+    if (developer.remaining != null && developer.remaining < 0) return true;
+    return false;
+}
+
+function syncCapacityAtRiskButton_(atRiskCount) {
+    var btn = document.getElementById('capacity-filter-at-risk');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', String(capacityFilterAtRisk_));
+    btn.className = capacityFilterAtRisk_ ?
+        'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors' :
+        'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+    var countEl = document.getElementById('capacity-filter-at-risk-count');
+    if (countEl && typeof atRiskCount === 'number') {
+        countEl.textContent = String(atRiskCount);
+        if (capacityFilterAtRisk_) {
+            countEl.className = 'rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white';
+        } else {
+            countEl.className = atRiskCount > 0 ?
+                'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]' :
+                'rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]';
+        }
+    }
+}
+
 function syncCapacityGroupButton_() {
     var btn = document.getElementById('capacity-group-by-manager');
     if (!btn) return;
@@ -1837,6 +1867,15 @@ function bindCapacitySubTabs_() {
     if (tilePastOpen && !tilePastOpen._capTabBound) {
         tilePastOpen._capTabBound = true;
         tilePastOpen.addEventListener('click', function () { setActiveCapacityTab_('pastopen'); });
+    }
+    var atRiskBtn = document.getElementById('capacity-filter-at-risk');
+    if (atRiskBtn && !atRiskBtn._capAtRiskBound) {
+        atRiskBtn._capAtRiskBound = true;
+        atRiskBtn.addEventListener('click', function () {
+            capacityFilterAtRisk_ = !capacityFilterAtRisk_;
+            syncCapacityAtRiskButton_();
+            renderCapacityView();
+        });
     }
     var groupBtn = document.getElementById('capacity-group-by-manager');
     if (groupBtn && !groupBtn._capGroupBound) {
@@ -1905,7 +1944,11 @@ function renderCapacityView() {
     if (totalPoints) totalPoints.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
     if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
     renderCapacityPace_(capacity, numberFormat, percentFormat);
-    renderCapacityRows_(body, capacity.developers, numberFormat, 'current', true);
+    var allCurrentDevs = capacity.developers || [];
+    var atRiskDevs = allCurrentDevs.filter(isCapacityDeveloperAtRisk_);
+    syncCapacityAtRiskButton_(atRiskDevs.length);
+    var displayedCurrentDevs = capacityFilterAtRisk_ ? atRiskDevs : allCurrentDevs;
+    renderCapacityRows_(body, displayedCurrentDevs, numberFormat, 'current', true);
     renderCapacityFooter_(document.getElementById('capacity-table-footer'), capacity, numberFormat);
 
     var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
@@ -2245,7 +2288,8 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var emptyCell = emptyRow.insertCell();
         emptyCell.colSpan = 6;
         emptyCell.className = 'px-3 py-8 text-center text-gray-500';
-        emptyCell.textContent = 'No developers found.';
+        emptyCell.textContent = (isCurrentSprint && capacityFilterAtRisk_) ?
+            'No at-risk developers in the current sprint.' : 'No developers found.';
         return;
     }
 
@@ -2299,6 +2343,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
                 arrow.textContent = expand ? '▾' : '▸';
             });
         }
+        if (!unassigned) {
+            var peopleBtn = createDeveloperPeopleEditButton_(developer.developer);
+            nameCell.appendChild(peopleBtn);
+        }
         var issueCell = row.insertCell();
         issueCell.className = 'px-3 py-3 text-right tabular-nums text-[#6F7171]';
         issueCell.textContent = numberFormat.format(developer.issueCount);
@@ -2307,7 +2355,6 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         pointsCell.textContent = numberFormat.format(developer.storyPoints);
         var capCell = row.insertCell();
         capCell.className = 'px-3 py-3 text-right tabular-nums text-black';
-        capCell.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
         var hasCapAdjustment = developer.ptoDays > 0 || developer.holidayDays > 0 || developer.capacityOverride != null;
         if (!hasCapAdjustment) {
             capCell.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
@@ -2505,6 +2552,323 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
 var developerSprintOverridesState_ = new Map();
 var developerPtoDatesState_ = new Map();
 var developerCompanyHolidaysState_ = [];
+
+function createDeveloperPeopleEditButton_(developerName) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'inline-flex items-center justify-center rounded-lg border border-[#D8DADA] bg-white hover:bg-[#F6F6F6] hover:border-black p-1 text-[#6F7171] hover:text-black ml-1.5 align-middle transition-colors';
+    btn.title = 'Edit capacity, manager & PTO for ' + developerName;
+    if (typeof btn.setAttribute === 'function') {
+        btn.setAttribute('aria-label', 'Edit capacity, manager and PTO for ' + developerName);
+        btn.setAttribute('data-edit-developer-capacity', developerName);
+    }
+    var iconWrap = document.createElement('span');
+    iconWrap.className = 'inline-flex items-center justify-center w-3.5 h-3.5';
+    if (typeof iconWrap.setAttribute === 'function') iconWrap.setAttribute('aria-hidden', 'true');
+    iconWrap.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    btn.appendChild(iconWrap);
+    if (typeof btn.addEventListener === 'function') {
+        btn.addEventListener('click', function (e) {
+            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+            openDeveloperQuickEditModal_(developerName);
+        });
+    }
+    return btn;
+}
+
+function openDeveloperQuickEditModal_(developerName) {
+    var devName = String(developerName || '').trim();
+    if (!devName || devName === 'Unassigned') return;
+    var devKey = devName.toLowerCase();
+
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var devList = allData.developerCapacity || [];
+    var existingEntry = devList.find(function (e) {
+        return e && e.developer && String(e.developer).trim().toLowerCase() === devKey;
+    }) || { developer: devName, capacity: null, manager: '', sprintOverrides: {}, ptoDates: [] };
+
+    var rawSettings = allData.capacitySettings || { sprintWorkdays: 10, companyHolidays: [] };
+    developerCompanyHolidaysState_ = (rawSettings.companyHolidays || []).map(function (h) {
+        return { name: h.name || '', date: h.date || '', sprint: h.sprint || '', days: h.days != null ? h.days : 1 };
+    });
+
+    if (existingEntry.sprintOverrides && typeof existingEntry.sprintOverrides === 'object') {
+        var oList = Object.keys(existingEntry.sprintOverrides).filter(function (k) { return k !== '__ptoDates__'; }).map(function (sp) {
+            var item = existingEntry.sprintOverrides[sp] || {};
+            return {
+                sprint: sp,
+                ptoDays: item.ptoDays != null ? String(item.ptoDays) : '0',
+                capacityOverride: item.capacityOverride != null ? String(item.capacityOverride) : '',
+                notes: item.notes || ''
+            };
+        });
+        developerSprintOverridesState_.set(devKey, oList);
+    } else {
+        developerSprintOverridesState_.set(devKey, []);
+    }
+
+    if (Array.isArray(existingEntry.ptoDates) && existingEntry.ptoDates.length) {
+        developerPtoDatesState_.set(devKey, existingEntry.ptoDates.map(function (pt) {
+            return {
+                startDate: pt.startDate || '',
+                endDate: pt.endDate || pt.startDate || '',
+                days: pt.days != null ? String(pt.days) : '',
+                notes: pt.notes || ''
+            };
+        }));
+    } else {
+        developerPtoDatesState_.set(devKey, []);
+    }
+
+    var sprintList = document.getElementById('developer-sprint-options');
+    if (sprintList) {
+        sprintList.replaceChildren();
+        getKnownCapacitySprints_().forEach(function (sprintName) {
+            var opt = document.createElement('option');
+            opt.value = sprintName;
+            sprintList.appendChild(opt);
+        });
+    }
+    var managerList = document.getElementById('developer-manager-options');
+    if (managerList) {
+        managerList.replaceChildren();
+        var distinctManagers = new Set();
+        devList.forEach(function (e) {
+            var m = e && e.manager ? String(e.manager).trim() : '';
+            if (m) distinctManagers.add(m);
+        });
+        Array.from(distinctManagers).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (mgr) {
+            var opt = document.createElement('option');
+            opt.value = mgr;
+            managerList.appendChild(opt);
+        });
+    }
+
+    var modal = document.getElementById('developer-quick-edit-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'developer-quick-edit-modal';
+        if (document.body && typeof document.body.appendChild === 'function') {
+            document.body.appendChild(modal);
+        }
+    }
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
+    if (typeof modal.setAttribute === 'function') {
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('data-editing-developer', devName);
+    }
+    modal.replaceChildren();
+
+    var card = document.createElement('div');
+    card.className = 'w-full max-w-3xl rounded-xl border border-[#D8DADA] bg-white shadow-xl overflow-hidden flex flex-col max-h-[85vh]';
+
+    // Header
+    var header = document.createElement('div');
+    header.className = 'flex items-center justify-between border-b border-[#D8DADA] px-6 py-4 bg-[#F6F6F6]';
+    var titleWrap = document.createElement('div');
+    var titleEl = document.createElement('h3');
+    titleEl.id = 'quick-edit-dev-title';
+    titleEl.className = 'text-base font-semibold text-black';
+    titleEl.textContent = devName + ' — Capacity, Manager & PTO';
+    var subEl = document.createElement('p');
+    subEl.className = 'text-xs text-[#6F7171] mt-0.5';
+    subEl.textContent = 'Edit base sprint capacity, assigned manager, scheduled PTO dates, and manual sprint overrides.';
+    titleWrap.appendChild(titleEl);
+    titleWrap.appendChild(subEl);
+    header.appendChild(titleWrap);
+
+    var closeModal = function () {
+        modal.className = 'hidden';
+        modal.hidden = true;
+    };
+    modal.hidden = false;
+
+    var closeBtn = document.createElement('button');
+    closeBtn.id = 'quick-edit-dev-close';
+    closeBtn.type = 'button';
+    closeBtn.className = 'rounded-lg px-2.5 py-1 text-sm text-[#6F7171] hover:text-black';
+    closeBtn.textContent = '✕';
+    if (typeof closeBtn.setAttribute === 'function') closeBtn.setAttribute('aria-label', 'Close developer settings');
+    if (typeof closeBtn.addEventListener === 'function') closeBtn.addEventListener('click', closeModal);
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+
+    // Body
+    var body = document.createElement('div');
+    body.className = 'p-6 space-y-5 overflow-y-auto flex-1';
+
+    var topGrid = document.createElement('div');
+    topGrid.className = 'grid grid-cols-1 md:grid-cols-2 gap-4';
+
+    var mgrGroup = document.createElement('div');
+    var mgrLabel = document.createElement('label');
+    mgrLabel.htmlFor = 'quick-edit-dev-manager';
+    mgrLabel.className = 'block text-xs font-medium text-black mb-1';
+    mgrLabel.textContent = 'Manager';
+    var mgrInput = document.createElement('input');
+    mgrInput.id = 'quick-edit-dev-manager';
+    mgrInput.type = 'text';
+    mgrInput.maxLength = 128;
+    mgrInput.placeholder = 'Assign manager';
+    mgrInput.value = existingEntry.manager || '';
+    if (typeof mgrInput.setAttribute === 'function') {
+        mgrInput.setAttribute('list', 'developer-manager-options');
+        mgrInput.setAttribute('aria-label', devName + ' manager');
+    }
+    mgrInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-full text-sm bg-white text-black';
+    mgrGroup.appendChild(mgrLabel);
+    mgrGroup.appendChild(mgrInput);
+    topGrid.appendChild(mgrGroup);
+
+    var capGroup = document.createElement('div');
+    var capLabel = document.createElement('label');
+    capLabel.htmlFor = 'quick-edit-dev-capacity';
+    capLabel.className = 'block text-xs font-medium text-black mb-1';
+    capLabel.textContent = 'Base sprint capacity (story points)';
+    var capInput = document.createElement('input');
+    capInput.id = 'quick-edit-dev-capacity';
+    capInput.type = 'number';
+    capInput.min = '0';
+    capInput.step = 'any';
+    capInput.placeholder = 'e.g. 10';
+    capInput.value = existingEntry.capacity == null ? '' : String(existingEntry.capacity);
+    if (typeof capInput.setAttribute === 'function') {
+        capInput.setAttribute('aria-label', devName + ' base sprint capacity');
+    }
+    capInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-full text-sm bg-white text-black';
+    capGroup.appendChild(capLabel);
+    capGroup.appendChild(capInput);
+    topGrid.appendChild(capGroup);
+    body.appendChild(topGrid);
+
+    var ptoContainer = document.createElement('div');
+    ptoContainer.id = 'quick-edit-dev-pto-container';
+    ptoContainer.className = 'rounded-xl border border-[#D8DADA] bg-[#F6F6F6]/70 p-4';
+    var dummyBadgeBtn = document.createElement('button');
+    var getBaseCap = function () {
+        return capInput.value === '' ? null : Number(capInput.value);
+    };
+    renderDeveloperPtoSubpanel_(ptoContainer, devName, dummyBadgeBtn, getBaseCap);
+    if (typeof capInput.addEventListener === 'function') {
+        capInput.addEventListener('input', function () {
+            renderDeveloperPtoSubpanel_(ptoContainer, devName, dummyBadgeBtn, getBaseCap);
+        });
+    }
+    body.appendChild(ptoContainer);
+    card.appendChild(body);
+
+    // Footer
+    var footer = document.createElement('div');
+    footer.className = 'flex flex-wrap items-center justify-between gap-3 border-t border-[#D8DADA] bg-[#F6F6F6] px-6 py-3.5';
+    var statusEl = document.createElement('p');
+    statusEl.id = 'quick-edit-dev-status';
+    statusEl.className = 'text-xs text-[#6F7171]';
+    footer.appendChild(statusEl);
+
+    var actions = document.createElement('div');
+    actions.className = 'flex items-center gap-2';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'rounded-lg border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:border-black';
+    cancelBtn.textContent = 'Cancel';
+    if (typeof cancelBtn.addEventListener === 'function') cancelBtn.addEventListener('click', closeModal);
+    actions.appendChild(cancelBtn);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.id = 'quick-edit-dev-save';
+    saveBtn.type = 'button';
+    saveBtn.className = 'rounded-lg border border-black bg-black px-4 py-1.5 text-xs font-medium text-white hover:opacity-90';
+    saveBtn.textContent = 'Save changes';
+    if (typeof saveBtn.addEventListener === 'function') {
+        saveBtn.addEventListener('click', function () {
+            if (!checkAuth()) return;
+            var rawCap = String(capInput.value == null ? '' : capInput.value).trim();
+            if (rawCap !== '' && (!Number.isFinite(Number(rawCap)) || Number(rawCap) < 0)) {
+                statusEl.textContent = 'Enter a non-negative number or leave capacity blank.';
+                statusEl.className = 'text-xs text-[#B95319] font-medium';
+                return;
+            }
+            var overrideMap = {};
+            (developerSprintOverridesState_.get(devKey) || []).forEach(function (item) {
+                var sp = String(item.sprint || '').trim();
+                if (!sp) return;
+                var pto = item.ptoDays === '' || item.ptoDays == null ? 0 : Number(item.ptoDays);
+                var ovr = item.capacityOverride === '' || item.capacityOverride == null ? null : Number(item.capacityOverride);
+                var notes = String(item.notes || '').trim();
+                if (pto > 0 || ovr !== null || notes) {
+                    overrideMap[sp] = { ptoDays: pto, capacityOverride: ovr, notes: notes };
+                }
+            });
+            var ptoDatesList = [];
+            (developerPtoDatesState_.get(devKey) || []).forEach(function (pt) {
+                var sIso = toClientIsoDateKey_(pt.startDate);
+                if (!sIso) return;
+                var eIso = toClientIsoDateKey_(pt.endDate) || sIso;
+                if (eIso < sIso) eIso = sIso;
+                var dVal = pt.days === '' || pt.days == null ? null : Number(pt.days);
+                ptoDatesList.push({
+                    startDate: sIso,
+                    endDate: eIso,
+                    days: dVal,
+                    notes: String(pt.notes || '').trim()
+                });
+            });
+
+            var byKey = new Map();
+            (allData.projects || []).forEach(function (p) {
+                var n = String(p.Assignee || '').trim();
+                if (n && n.toLowerCase() !== 'unassigned' && !byKey.has(n.toLowerCase())) {
+                    byKey.set(n.toLowerCase(), { developer: n, capacity: '' });
+                }
+            });
+            (devList || []).forEach(function (e) {
+                if (!e || !e.developer) return;
+                var k = String(e.developer).trim().toLowerCase();
+                var copy = {
+                    developer: e.developer,
+                    capacity: e.capacity == null ? '' : String(e.capacity),
+                    manager: e.manager || ''
+                };
+                if (e.sprintOverrides) copy.sprintOverrides = e.sprintOverrides;
+                if (e.ptoDates) copy.ptoDates = e.ptoDates;
+                byKey.set(k, copy);
+            });
+            byKey.set(devKey, {
+                developer: devName,
+                capacity: rawCap,
+                manager: String(mgrInput.value || '').trim(),
+                sprintOverrides: overrideMap,
+                ptoDates: ptoDatesList
+            });
+            var allEntries = Array.from(byKey.values());
+            saveBtn.disabled = true;
+            statusEl.textContent = 'Saving...';
+            statusEl.className = 'text-xs text-[#6F7171]';
+            callServer('saveDeveloperCapacity', [allEntries]).then(function (response) {
+                if (!response || response.status !== 'success') {
+                    throw new Error(response && response.message ? response.message : 'Could not save capacity.');
+                }
+                return callServer('getProjectData', []).then(function (data) {
+                    if (!handleDataLoaded(data)) throw new Error('Saved, but refresh failed.');
+                    if (typeof renderDeveloperCapacityConfig === 'function') renderDeveloperCapacityConfig();
+                    renderCapacityView();
+                    closeModal();
+                });
+            }).catch(function (error) {
+                statusEl.textContent = typeof getErrorMessage_ === 'function' ? getErrorMessage_(error) : (error.message || String(error));
+                statusEl.className = 'text-xs text-[#B95319] font-medium';
+            }).finally(function () {
+                saveBtn.disabled = false;
+            });
+        });
+    }
+    actions.appendChild(saveBtn);
+    footer.appendChild(actions);
+    card.appendChild(footer);
+    modal.appendChild(card);
+    return modal;
+}
 
 function getKnownSprintDateWindows_() {
     var windows = [];

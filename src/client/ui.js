@@ -1876,11 +1876,11 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
     var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
     developers.forEach(function (developer, index) {
         var row = body.insertRow();
-        row.className = 'border-b border-gray-200';
+        row.className = 'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/60 transition-colors';
         var nameCell = row.insertCell();
-        nameCell.className = 'px-3 py-3 text-black';
+        nameCell.className = 'px-4 py-3 text-black';
         var name = document.createElement('span');
-        name.className = 'block';
+        name.className = 'font-medium text-black mr-2';
         name.textContent = developer.developer;
         nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
@@ -1889,7 +1889,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.className = 'mt-1 inline-flex items-center justify-between gap-2 whitespace-nowrap rounded-xl border border-black bg-white px-2 py-1 text-xs text-black hover:bg-[#F6F6F6] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#D8DADA] bg-[#F6F6F6] px-2 py-0.5 text-xs text-black hover:border-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
             var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
             toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
             toggle.setAttribute('aria-expanded', 'false');
@@ -1924,16 +1924,20 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             });
         }
         var issueCell = row.insertCell();
-        issueCell.className = 'px-3 py-3 text-right tabular-nums text-gray-700';
+        issueCell.className = 'px-3 py-3 text-right tabular-nums text-[#6F7171]';
         issueCell.textContent = numberFormat.format(developer.issueCount);
         var pointsCell = row.insertCell();
-        pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-gray-900';
+        pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-black';
         pointsCell.textContent = numberFormat.format(developer.storyPoints);
-        [developer.capacity, developer.remaining].forEach(function (value) {
-            var cell = row.insertCell();
-            cell.className = 'px-3 py-3 text-right tabular-nums text-gray-900';
-            cell.textContent = value == null ? '—' : numberFormat.format(value);
-        });
+        var capCell = row.insertCell();
+        capCell.className = 'px-3 py-3 text-right tabular-nums text-black';
+        capCell.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
+        var remCell = row.insertCell();
+        var remClass = developer.remaining == null ? 'text-[#6F7171]' :
+            developer.remaining < 0 ? 'text-[#B95319] font-semibold' :
+            developer.remaining > 0 ? 'text-[#008331] font-medium' : 'text-[#6F7171]';
+        remCell.className = 'px-3 py-3 text-right tabular-nums ' + remClass;
+        remCell.textContent = developer.remaining == null ? '—' : numberFormat.format(developer.remaining);
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
     });
 }
@@ -2038,7 +2042,14 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
         var values = [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', numberFormat.format(issue.storyPoints)];
         values.forEach(function (value, index) {
             var cell = row.insertCell();
-            cell.className = 'px-3 py-2' + (index === values.length - 1 ? ' text-right tabular-nums' : '');
+            var extraClass = '';
+            if (index === 2) {
+                extraClass = issue.workState === 'completed' ? ' text-[#008331] font-medium' :
+                    issue.workState === 'inProgress' ? ' text-[#006FC1] font-medium' : ' text-[#6F7171]';
+            } else if (index === values.length - 1) {
+                extraClass = ' text-right tabular-nums font-medium';
+            }
+            cell.className = 'px-3 py-2' + extraClass;
             cell.textContent = value;
         });
     });

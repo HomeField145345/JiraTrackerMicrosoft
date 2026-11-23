@@ -3036,17 +3036,23 @@ function openDeveloperQuickEditModal_(developerName) {
                     capacity: e.capacity == null ? '' : String(e.capacity),
                     manager: e.manager || ''
                 };
+                if (e.pct) copy.pct = e.pct;
                 if (e.sprintOverrides) copy.sprintOverrides = e.sprintOverrides;
                 if (e.ptoDates) copy.ptoDates = e.ptoDates;
                 byKey.set(k, copy);
             });
-            byKey.set(devKey, {
+            var updatedEntry = {
                 developer: devName,
                 capacity: rawCap,
                 manager: String(mgrInput.value || '').trim(),
                 sprintOverrides: overrideMap,
                 ptoDates: ptoDatesList
-            });
+            };
+            var rawPctVal = String(pctInput.value || '').trim();
+            if (rawPctVal || existingEntry.pct) {
+                updatedEntry.pct = rawPctVal;
+            }
+            byKey.set(devKey, updatedEntry);
             var allEntries = Array.from(byKey.values());
             saveBtn.disabled = true;
             statusEl.textContent = 'Saving...';

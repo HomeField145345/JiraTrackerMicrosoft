@@ -878,3 +878,55 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   assert.equal(elements['capacity-filter-under-capacity'].attributes['aria-pressed'], 'false');
   assert.equal(elements['capacity-table-body'].children.length, 6);
 });
+
+test('capacity view groups developers by PCT with rolled-up workload when toggled', () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() { if (this.listeners.click) this.listeners.click(); }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'capacity-group-by-manager', 'capacity-group-by-pct',
+    'future-sprint-capacities'
+  ].map(id => [id, new Element()]));
+  const state = {
+    allData: {
+      sprintCapacity: {
+        sprintName: 'Sprint 20', totalStoryPoints: 14, totalIssues: 3, totalCapacity: 15,
+        developers: [
+          { developer: 'Avery', pct: 'Checkout PCT', issueCount: 1, storyPoints: 6, completedPoints: 3, inProgressPoints: 3, notStartedPoints: 0, capacity: 5, remaining: -1, issues: [] },
+          { developer: 'Blair', pct: 'Checkout PCT', issueCount: 1, storyPoints: 4, completedPoints: 4, inProgressPoints: 0, notStartedPoints: 0, capacity: 5, remaining: 1, issues: [] },
+          { developer: 'Casey', pct: '', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4, capacity: 5, remaining: 1, issues: [] }
+        ]
+      },
+      futureSprintCapacity: []
+    }
+  };
+  const context = vm.createContext({
+    window: { addEventListener() { } }, APP_STATE: state,
+    Intl: { NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); } },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+
+  // Toggle Group by PCT ON
+  elements['capacity-group-by-pct'].click();
+  assert.equal(elements['capacity-group-by-pct'].attributes['aria-pressed'], 'true');
+  const pctRows = elements['capacity-table-body'].children.filter(r => r.attributes['data-pct-group']);
+  assert.deepEqual(pctRows.map(r => r.attributes['data-pct-group']), ['Checkout PCT', 'No PCT assigned']);
+  assert.equal(pctRows[0].children[0].textContent, 'Checkout PCT (2 devs)');
+  assert.equal(pctRows[0].children[2].textContent, '10'); // 6 + 4 pts
+  assert.equal(pctRows[0].children[3].textContent, '10'); // 5 + 5 cap
+  assert.equal(pctRows[0].children[4].textContent, '0');  // 0 remaining
+});

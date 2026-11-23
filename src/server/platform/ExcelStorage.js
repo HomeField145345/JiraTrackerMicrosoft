@@ -130,8 +130,150 @@ class ExcelStorage {
     }
   }
 
-  async save(data, item) {
+  async save(data, item, beforeSheets) {
+    if (beforeSheets && item && item.id) {
+      const savedInPlace = await this.saveInPlace(data, item, beforeSheets);
+      if (savedInPlace) return item;
+    }
     return this.upload(data, this.itemPath(item.id), item.eTag);
+  }
+
+  columnLetter(index) {
+    let n = index;
+    let letters = '';
+    while (n > 0) {
+      const rem = (n - 1) % 26;
+      letters = String.fromCharCode(65 + rem) + letters;
+      n = Math.floor((n - 1) / 26);
+    }
+    return letters || 'A';
+  }
+
+  serializeGraphCell(value, sheetName, rowNumber, colNumber) {
+    if (value == null || value === '') return '';
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === 'string' && value.length > 32767) {
+      throw new Error(`${sheetName}, row ${rowNumber}, column ${colNumber} exceeds Excel's cell length limit.`);
+    }
+    return value;
+  }
+
+  normalizeSheetMatrix(rows, width, sheetName) {
+    return (rows || []).map((row, i) => {
+      const padded = Array(width).fill('');
+      (row || []).forEach((value, j) => {
+        if (j < width) padded[j] = this.serializeGraphCell(value, sheetName, i + 1, j + 1);
+      });
+      return padded;
+    });
+  }
+
+  rowsEqual(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  async saveInPlace(data, item, beforeSheets) {
+    const path = this.itemPath(item.id);
+    const schema = trackerSheetSchema();
+    const diffs = [];
+
+    for (const { name, rows } of data.sheets) {
+      const existed = beforeSheets.has(name);
+      const prevRaw = existed ? beforeSheets.get(name) : [];
+      const schemaWidth = (schema[name] || []).length;
+      const maxPrevCols = prevRaw.reduce((m, r) => Math.max(m, (r || []).length), 0);
+      const maxNextCols = (rows || []).reduce((m, r) => Math.max(m, (r || []).length), 0);
+      const width = Math.max(1, schemaWidth, maxPrevCols, maxNextCols);
+
+      const prevMatrix = this.normalizeSheetMatrix(prevRaw, width, name);
+      const nextMatrix = this.normalizeSheetMatrix(rows, width, name);
+
+      const changedRowIndices = [];
+      for (let i = 0; i < nextMatrix.length; i++) {
+        if (!prevMatrix[i] || !this.rowsEqual(prevMatrix[i], nextMatrix[i])) {
+          changedRowIndices.push(i);
+        }
+      }
+      const clearedFrom = nextMatrix.length < prevMatrix.length ? nextMatrix.length : -1;
+      if (!existed || changedRowIndices.length > 0 || clearedFrom !== -1) {
+        diffs.push({ name, existed, width, prevCount: prevMatrix.length, nextMatrix, changedRowIndices, clearedFrom });
+      }
+    }
+
+    if (diffs.length === 0) return true;
+
+    const session = await this.graph(`${path}/workbook/createSession`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ persistChanges: true })
+    });
+    // Consumer Personal OneDrive and unsupported drives return 400/404/405/501 for /workbook APIs;
+    // fall back cleanly to whole-file upload when the Graph Excel API is unavailable.
+    if ([400, 404, 405, 501].includes(session.status)) {
+      return false;
+    }
+    this.check(session, 'start workbook save session');
+    const { id } = await session.json();
+    if (typeof id !== 'string' || !id) {
+      throw new Error('Microsoft did not return a workbook save session. Refresh before retrying.');
+    }
+
+    const requestWorkbook = async (suffix, method, body) => {
+      const response = await this.graph(`${path}/workbook/${suffix}`, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'workbook-session-id': id },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      });
+      this.check(response, 'save changes to the workbook');
+    };
+
+    const CHUNK_ROWS = 200;
+    let failure;
+    try {
+      for (const diff of diffs) {
+        const sheetEncoded = encodeURIComponent(diff.name);
+        const lastCol = this.columnLetter(diff.width);
+        if (!diff.existed) {
+          await requestWorkbook('worksheets/add', 'POST', { name: diff.name });
+        }
+        // Group contiguous changed rows into range PATCH calls (chunked to CHUNK_ROWS).
+        let idx = 0;
+        while (idx < diff.changedRowIndices.length) {
+          const start = diff.changedRowIndices[idx];
+          let end = start;
+          while (
+            idx + 1 < diff.changedRowIndices.length &&
+            diff.changedRowIndices[idx + 1] === end + 1 &&
+            (end - start + 1) < CHUNK_ROWS
+          ) {
+            idx++;
+            end = diff.changedRowIndices[idx];
+          }
+          const slice = diff.nextMatrix.slice(start, end + 1);
+          const address = `A${start + 1}:${lastCol}${end + 1}`;
+          await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${address}')`, 'PATCH', { values: slice });
+          idx++;
+        }
+        if (diff.clearedFrom !== -1) {
+          const clearAddress = `A${diff.clearedFrom + 1}:${lastCol}${diff.prevCount}`;
+          await requestWorkbook(`worksheets/${sheetEncoded}/range(address='${clearAddress}')/clear`, 'POST', { applyTo: 'Contents' });
+        }
+      }
+    } catch (error) {
+      failure = error;
+    }
+
+    try {
+      await requestWorkbook('closeSession', 'POST');
+    } catch (error) {
+      throw new Error(`${failure ? `${failure.message} ` : ''}Could not close the workbook save session. Refresh before retrying.`, { cause: error });
+    }
+    if (failure) throw failure;
+    return true;
   }
 
   async upload(data, path, eTag) {

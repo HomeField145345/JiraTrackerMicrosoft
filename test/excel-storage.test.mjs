@@ -4,7 +4,7 @@ import test from 'node:test';
 import vm from 'node:vm';
 import ExcelJS from 'exceljs/dist/exceljs.min.js';
 
-function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204, setupFailure } = {}) {
+function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLookup, omitMetadataDownloadUrl, omitItemDownloadUrl, commitStatus, cancelStatus = 204, setupFailure, workbookApiUnsupported = false } = {}) {
   const transfer = 'https://storage.example.test';
   const folder = sharepoint ? '/drives/library/items/folder' : '/me/drive/root';
   const itemPath = sharepoint ? '/drives/library/items/file' : '/me/drive/items/file';
@@ -57,6 +57,7 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       if (operation === 'createSession') {
         assert.equal(init.method, 'POST');
         assert.equal(JSON.parse(init.body).persistChanges, true);
+        if (workbookApiUnsupported) return json({ error: { code: 'notSupported' } }, 501);
         assert.equal(setupSessionOpen, false);
         setupSessionOpen = true;
         return json({ id: 'setup-session' }, 201);
@@ -75,20 +76,43 @@ function harness({ foreignWorkbook, sharepoint, fileName, folderPath, expectedLo
       }
       const workbook = new ExcelJS.Workbook();
       await workbook.xlsx.load(bytes);
-      const body = JSON.parse(init.body);
+      const body = init.body ? JSON.parse(init.body) : {};
+      const colToNumber = letters => {
+        let num = 0;
+        for (const ch of letters) num = num * 26 + (ch.charCodeAt(0) - 64);
+        return num;
+      };
+      const clearMatch = operation.match(/^worksheets\/([^/]+)\/range\(address='([A-Z]+)(\d+):([A-Z]+)(\d+)'\)\/clear$/);
       if (operation === 'worksheets/add') {
         assert.equal(init.method, 'POST');
         workbook.addWorksheet(body.name);
+      } else if (clearMatch) {
+        assert.equal(init.method, 'POST');
+        const sheet = workbook.getWorksheet(clearMatch[1]);
+        assert.ok(sheet, 'clear must target an existing worksheet');
+        const c1 = colToNumber(clearMatch[2]);
+        const r1 = Number(clearMatch[3]);
+        const c2 = colToNumber(clearMatch[4]);
+        const r2 = Number(clearMatch[5]);
+        for (let r = r1; r <= r2; r++) {
+          for (let c = c1; c <= c2; c++) {
+            sheet.getCell(r, c).value = null;
+          }
+        }
       } else {
         assert.equal(init.method, 'PATCH');
         const range = operation.match(/^worksheets\/([^/]+)\/range\(address='([^']+)'\)$/);
         if (range) {
           const sheet = workbook.getWorksheet(range[1]);
-          assert.ok(sheet, 'header writes must target an existing worksheet');
-          assert.equal(sheet.actualRowCount, 0, 'setup must not overwrite existing rows');
-          assert.equal(range[2], body.values[0].length === 1 ? 'A1' : `A1:${sheet.getColumn(body.values[0].length).letter}1`);
-          body.values[0].forEach((value, index) => {
-            sheet.getCell(1, index + 1).value = value;
+          assert.ok(sheet, 'range writes must target an existing worksheet');
+          const addrMatch = range[2].match(/^([A-Z]+)(\d+)(?::([A-Z]+)(\d+))?$/);
+          assert.ok(addrMatch, `invalid range address: ${range[2]}`);
+          const startCol = colToNumber(addrMatch[1]);
+          const startRow = Number(addrMatch[2]);
+          body.values.forEach((rowValues, rOffset) => {
+            rowValues.forEach((value, cOffset) => {
+              sheet.getCell(startRow + rOffset, startCol + cOffset).value = value === '' ? null : value;
+            });
           });
         } else {
           assert.equal(operation, 'worksheets/_ProjectHub');
@@ -860,7 +884,7 @@ test('refuses to configure a workbook with an unrelated populated sheet', async 
 });
 
 test('does not commit when the workbook changes during upload', async () => {
-  const graph = harness();
+  const graph = harness({ workbookApiUnsupported: true });
   const { itemId } = await graph.run('connect');
   graph.interfere();
   await assert.rejects(graph.run('addTask', itemId, 'Conflicting task'), /file changed/);
@@ -876,13 +900,47 @@ test('cancels a locked upload without replacing the workbook', async () => {
   const graph = harness({
     fileName: 'Existing.xlsx',
     foreignWorkbook: await workbook.xlsx.writeBuffer(),
-    commitStatus: 423
+    commitStatus: 423,
+    workbookApiUnsupported: true
   });
   const { itemId } = await graph.run('connect');
   await assert.rejects(graph.run('addTask', itemId, 'Not saved'), /Microsoft HTTP 423/);
   assert.equal(graph.cancellations(), 1);
   assert.equal(graph.revision(), 0);
   assert.equal((await graph.workbook()).getWorksheet('IndependentTasks').rowCount, 1);
+});
+
+test('saves edits in place via workbook session API without replacing the file or losing formatting', async () => {
+  const source = harness();
+  await source.run('connect');
+  const workbook = await source.workbook();
+  workbook.getWorksheet('JiraData').getColumn(2).width = 42;
+  workbook.getWorksheet('JiraData').getCell('A1').font = { bold: true, color: { argb: 'FF006FC1' } };
+  const graph = harness({
+    fileName: 'Shared.xlsx',
+    foreignWorkbook: await workbook.xlsx.writeBuffer()
+  });
+
+  const { itemId } = await graph.run('connect');
+  const added = await graph.run('addTask', itemId, 'Co-authored task');
+  assert.equal(added.projects.independentTasks.length, 1);
+  assert.equal(added.projects.independentTasks[0].Title, 'Co-authored task');
+  // Must have used workbook session API, never whole-file createUploadSession
+  assert.equal(graph.uploadSessions(), 0);
+  assert.equal(graph.closedSetupSessions(), 1);
+  assert.ok(graph.setupWrites() >= 1);
+
+  // Untouched sheet formatting and column width are preserved
+  const afterEdit = await graph.workbook();
+  assert.equal(afterEdit.getWorksheet('JiraData').getColumn(2).width, 42);
+  assert.equal(afterEdit.getWorksheet('JiraData').getCell('A1').font.color.argb, 'FF006FC1');
+
+  // Deleting the task clears the trailing row cleanly via /clear
+  const ownerObjectId = '33333333-3333-3333-3333-333333333333';
+  const taskId = added.projects.independentTasks[0].ID;
+  const deleted = await graph.run('mutate', itemId, { method: 'deleteTaskAndSync', args: [taskId] }, ownerObjectId, ownerObjectId);
+  assert.equal(deleted.projects.independentTasks.length, 0);
+  assert.equal(graph.uploadSessions(), 0);
 });
 
 test('reports cleanup failure along with the original commit failure', async () => {

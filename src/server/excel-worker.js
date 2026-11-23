@@ -12,6 +12,10 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
   if (needsSetup && action !== 'configure') return { ...connection, needsSetup };
   if (needsSetup) await storage.configure(workbook, item);
   WorkbookService.replaceAll([data]);
+  const beforeSheets = new Map((data.sheets || []).map(sheet => [
+    sheet.name,
+    (sheet.rows || []).map(row => (row || []).map(v => v instanceof Date ? new Date(v.getTime()) : v))
+  ]));
   Platform.cache().clear();
   let currentUser = null;
   if (userObjectId) {
@@ -63,7 +67,7 @@ async function runExcelOperation({ action, accessToken, target, itemId, payload,
     if (response?.status === 'error') throw new Error(response.message || 'The workbook update failed.');
   }
   const changes = WorkbookService.takeChanges();
-  if (changes) await storage.save(changes.upserts[0], item);
+  if (changes) await storage.save(changes.upserts[0], item, beforeSheets);
   const projects = currentUser ? getProjectData_(currentUser) : _getRawProjectData(null);
   if (!projects || projects.error) throw new Error(projects?.message || 'Could not read the tracker data from Excel.');
   return { ...connection, message, response, projects, user: currentUser };

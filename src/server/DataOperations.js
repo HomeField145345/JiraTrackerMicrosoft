@@ -177,6 +177,10 @@ function saveConfiguration_(optionsData) {
         var manager = entry.manager == null ? '' : String(entry.manager).trim();
         var hasSprintOverrides = Object.prototype.hasOwnProperty.call(entry, 'sprintOverrides');
         var sprintOverrides = hasSprintOverrides ? normalizeDeveloperSprintOverrides_(entry.sprintOverrides) : null;
+        var hasPtoDates = Object.prototype.hasOwnProperty.call(entry, 'ptoDates') ||
+          Boolean(entry.sprintOverrides && Array.isArray(entry.sprintOverrides.__ptoDates__));
+        var ptoDates = hasPtoDates ?
+          normalizeDeveloperPtoDates_(entry.ptoDates || (entry.sprintOverrides && entry.sprintOverrides.__ptoDates__)) : null;
         return {
           developer: developer,
           capacity: capacity,
@@ -184,6 +188,8 @@ function saveConfiguration_(optionsData) {
           hasManager: Object.prototype.hasOwnProperty.call(entry, 'manager'),
           hasSprintOverrides: hasSprintOverrides,
           sprintOverrides: sprintOverrides,
+          hasPtoDates: hasPtoDates,
+          ptoDates: ptoDates,
           key: key
         };
       });
@@ -206,7 +212,11 @@ function saveConfiguration_(optionsData) {
         var row = rowByName.get(update.key);
         var old = existingByName.get(update.key);
         var managerValue = update.hasManager ? update.manager : (old && old.manager ? old.manager : '');
-        var overridesObj = update.hasSprintOverrides ? update.sprintOverrides : (old && old.sprintOverrides ? old.sprintOverrides : {});
+        var overridesObj = Object.assign({}, update.hasSprintOverrides ? update.sprintOverrides : (old && old.sprintOverrides ? old.sprintOverrides : {}));
+        var ptoDatesArr = update.hasPtoDates ? update.ptoDates : (old && old.ptoDates ? old.ptoDates : []);
+        if (ptoDatesArr && ptoDatesArr.length > 0) {
+          overridesObj.__ptoDates__ = ptoDatesArr;
+        }
         var overridesValue = overridesObj && Object.keys(overridesObj).length > 0 ? JSON.stringify(overridesObj) : '';
         var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp, managerValue, overridesValue];
         if (row) sheet.getRange(row, 1, 1, schemaHeaders.length).setValues([values]);

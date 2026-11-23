@@ -2649,18 +2649,14 @@ function renderDeveloperCapacityConfig() {
         workdaysInput.value = rawSettings.sprintWorkdays > 0 ? String(rawSettings.sprintWorkdays) : '10';
     }
     var addHolidayBtn = document.getElementById('add-company-holiday-btn');
-    if (addHolidayBtn && !addHolidayBtn._wired) {
-        addHolidayBtn._wired = true;
-        addHolidayBtn.addEventListener('click', function () {
-            if (addHolidayBtn) {
-                addHolidayBtn.onclick = function () {
-                    var known = getKnownCapacitySprints_();
-                    developerCompanyHolidaysState_.push({ name: '', sprint: known[0] || '', days: 1 });
-                    renderCompanyHolidaysConfig_();
-                });
-    };
-}
-renderCompanyHolidaysConfig_();
+    if (addHolidayBtn) {
+        addHolidayBtn.onclick = function () {
+            var known = getKnownCapacitySprints_();
+            developerCompanyHolidaysState_.push({ name: '', sprint: known[0] || '', days: 1 });
+            renderCompanyHolidaysConfig_();
+        };
+    }
+    renderCompanyHolidaysConfig_();
 
 var sprintList = document.getElementById('developer-sprint-options');
 if (sprintList) {
@@ -2714,7 +2710,6 @@ if (managerList) {
 var developers = Array.from(names.values()).sort(function (a, b) { return a.localeCompare(b); });
 if (!developers.length) {
     var empty = body.insertRow().insertCell();
-    empty.colSpan = 3;
     empty.colSpan = 4;
     empty.className = 'px-3 py-8 text-gray-600';
     empty.textContent = 'No Jira assignees found.';
@@ -2771,7 +2766,6 @@ developers.forEach(function (name, index) {
 
     var ptoRow = body.insertRow();
     ptoRow.hidden = true;
-    ptoRow.className = 'bg-[#F6F6F6]/80 border-b border-[#D8DADA]';
     ptoRow.className = 'bg-[#F6F6F6]/80 border-b border-[#D8DADA] hidden';
     var ptoDetailsCell = ptoRow.insertCell();
     ptoDetailsCell.colSpan = 4;
@@ -2802,13 +2796,6 @@ developers.forEach(function (name, index) {
         }
     };
     if (typeof ptoToggle.addEventListener === 'function') {
-        ptoToggle.addEventListener('click', function () {
-            var expand = ptoRow.hidden;
-            ptoRow.hidden = !expand;
-            if (typeof ptoToggle.setAttribute === 'function') {
-                ptoToggle.setAttribute('aria-expanded', String(expand));
-            }
-        });
         ptoToggle.addEventListener('click', togglePtoRow);
     }
 });

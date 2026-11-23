@@ -832,6 +832,77 @@ function createDropdown(options, selectedValue, jiraId, field) {
     return select;
 }
 
+function getStoryAtRiskInfo_(item) {
+    if (!item || typeof item !== 'object') return null;
+    var issueType = String(item['Issue Type'] || '').trim().toLowerCase();
+    if (issueType === 'epic') return null;
+    var jiraKey = String(item['Jira #'] || '').trim();
+    if (!jiraKey || jiraKey === 'UNASSIGNED') return null;
+
+    var status = String(item.Status || '').trim().toLowerCase();
+    var stage = String(item['Project Stage'] || '').trim().toLowerCase();
+    var closedStatuses = ['done', 'closed', 'resolved', 'fixed', 'complete', 'completed', 'ready for production', 'in production', 'canceled', 'cancelled'];
+    var closedStages = ['done', 'production', 'in production', 'prod', 'fixed', 'canceled', 'cancelled'];
+    if (closedStatuses.indexOf(status) !== -1 || (stage && closedStages.indexOf(stage) !== -1)) {
+        return null;
+    }
+
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var rawCap = allData.sprintCapacity;
+    if (!rawCap || !rawCap.sprintName || rawCap.sprintName === 'None') return null;
+    var cap = typeof resolveSprintCapacityWithDates_ === 'function' ? resolveSprintCapacityWithDates_(rawCap) : rawCap;
+    var currentSprintName = String((cap && cap.sprintName) || '').trim().toLowerCase();
+    if (!currentSprintName || currentSprintName === 'none') return null;
+
+    var targetKey = jiraKey.toLowerCase();
+    var matchedDev = null;
+    var matchedIssue = null;
+    ((cap && cap.developers) || []).forEach(function (dev) {
+        if (!dev || matchedDev) return;
+        ((dev.issues) || []).forEach(function (iss) {
+            if (iss && String(iss.jiraKey || '').trim().toLowerCase() === targetKey) {
+                matchedDev = dev;
+                matchedIssue = iss;
+            }
+        });
+    });
+
+    if (!matchedDev) {
+        var sprintStr = String(item.sprint || item.Sprint || '').trim().toLowerCase();
+        if (!sprintStr || sprintStr.indexOf(currentSprintName) === -1) return null;
+        var assignee = String(item.Assignee || item['Assigned Dev'] || '').trim().toLowerCase();
+        if (!assignee || assignee === 'unassigned') return null;
+        matchedDev = ((cap && cap.developers) || []).find(function (dev) {
+            return dev && String(dev.developer || '').trim().toLowerCase() === assignee;
+        }) || null;
+    }
+
+    if (!matchedDev || typeof isCapacityDeveloperAtRisk_ !== 'function' || !isCapacityDeveloperAtRisk_(matchedDev)) {
+        return null;
+    }
+    if (matchedIssue && matchedIssue.workState === 'completed') {
+        return null;
+    }
+
+    var reasons = [];
+    if (matchedDev.remaining != null && matchedDev.remaining < 0) {
+        reasons.push(matchedDev.developer + ' is over capacity by ' + Math.abs(Math.round(matchedDev.remaining * 100) / 100) + ' pts');
+    }
+    if (matchedDev.pace && (matchedDev.pace.status === 'at_risk' || matchedDev.pace.status === 'behind')) {
+        reasons.push(matchedDev.developer + ' is ' + (matchedDev.pace.label || 'behind sprint pace').toLowerCase());
+    }
+    var rawPts = item['Story Points'] !== undefined ? item['Story Points'] : item.storyPoints;
+    var pts = parseFloat(String(rawPts == null ? '' : rawPts).trim());
+    if (!Number.isFinite(pts) || pts <= 0) {
+        reasons.push('Unestimated story in current sprint');
+    }
+    return {
+        isAtRisk: true,
+        developer: matchedDev.developer,
+        reasons: reasons.length ? reasons : [matchedDev.developer + ' is at risk in ' + cap.sprintName]
+    };
+}
+
 function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, isLastChild, openChildrenCount) {
     var row = document.createElement('tr');
     row.className = 'row-' + type;
@@ -923,12 +994,26 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
         }
 
         var syncStatusHtml = item['Sync Status'] ? '<span class="text-xs font-bold mr-1" title="Sync Status: ' + item['Sync Status'] + '">' + item['Sync Status'] + '</span>' : '';
-        jiraCellHtml = '<div class="flex items-center gap-2">' + expanderHtml + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button></div>';
+        var storyAtRisk = getStoryAtRiskInfo_(item);
+        var storyAtRiskHtml = '';
+        if (storyAtRisk && storyAtRisk.isAtRisk) {
+            row.dataset.atRisk = 'true';
+            var riskTitle = ('At Risk: ' + storyAtRisk.reasons.join(' · ')).replace(/"/g, '&quot;');
+            storyAtRiskHtml = '<span class="story-at-risk-badge inline-flex items-center rounded-full bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 text-[11px] font-semibold text-[#B95319] whitespace-nowrap" data-at-risk-story="' + item['Jira #'] + '" title="' + riskTitle + '">At Risk</span>';
+        }
+        jiraCellHtml = '<div class="flex items-center gap-2">' + expanderHtml + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Story Details">' + infoIconSvg + '</button>' + storyAtRiskHtml + '</div>';
     } else if (type === 'bug-child') {
         row.dataset.parentEpic = parentEpicId; // Actually parent Story ID
         var infoIconSvg = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/><path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/></svg>';
         var syncStatusHtml = item['Sync Status'] ? '<span class="text-xs font-bold mr-1" title="Sync Status: ' + item['Sync Status'] + '">' + item['Sync Status'] + '</span>' : '';
-        jiraCellHtml = '<div class="flex items-center gap-2">' + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Bug Details">' + infoIconSvg + '</button></div>';
+        var bugAtRisk = getStoryAtRiskInfo_(item);
+        var bugAtRiskHtml = '';
+        if (bugAtRisk && bugAtRisk.isAtRisk) {
+            row.dataset.atRisk = 'true';
+            var bugRiskTitle = ('At Risk: ' + bugAtRisk.reasons.join(' · ')).replace(/"/g, '&quot;');
+            bugAtRiskHtml = '<span class="story-at-risk-badge inline-flex items-center rounded-full bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 text-[11px] font-semibold text-[#B95319] whitespace-nowrap" data-at-risk-story="' + item['Jira #'] + '" title="' + bugRiskTitle + '">At Risk</span>';
+        }
+        jiraCellHtml = '<div class="flex items-center gap-2">' + syncStatusHtml + '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a><button class="info-icon-btn" data-jira-id="' + item['Jira #'] + '" title="View Bug Details">' + infoIconSvg + '</button>' + bugAtRiskHtml + '</div>';
     } else { // Fallback for independent tasks on the old task view
         jiraCellHtml = item['Jira #'] ? '<a href="https://onejira.verizon.com/browse/' + item['Jira #'] + '" target="_blank" class="text-blue-600 hover:underline font-medium">' + item['Jira #'] + '</a>' : '—';
     }
@@ -1401,10 +1486,31 @@ function countClientIsoWorkdays_(startIso, endIso) {
 
 function resolveSprintCapacityWithDates_(capacity) {
     if (!capacity || !capacity.sprintName || capacity.sprintName === 'None') return capacity;
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var capSettings = allData.capacitySettings;
+    var devCapList = allData.developerCapacity;
+    var devConfigByName = new Map();
+    (devCapList || []).forEach(function (c) {
+        if (c && c.developer) devConfigByName.set(String(c.developer).trim().toLowerCase(), c);
+    });
+    var syncDevMeta = function (devList) {
+        return (devList || []).map(function (dev) {
+            if (!dev || dev.developer === 'Unassigned') return dev;
+            var cfg = devConfigByName.get(String(dev.developer || '').trim().toLowerCase());
+            if (!cfg) return dev;
+            var next = Object.assign({}, dev);
+            if (cfg.manager !== undefined) next.manager = String(cfg.manager || '').trim();
+            if (cfg.pct) next.pct = String(cfg.pct).trim();
+            return next;
+        });
+    };
+
     var override = getStoredSprintDateOverride_(capacity.sprintName);
     var startKey = override ? override.start : toClientIsoDateKey_(capacity.sprintStart);
     var endKey = override ? override.end : toClientIsoDateKey_(capacity.sprintEnd);
-    if (!startKey || !endKey) return capacity;
+    if (!startKey || !endKey) {
+        return devConfigByName.size ? Object.assign({}, capacity, { developers: syncDevMeta(capacity.developers) }) : capacity;
+    }
 
     var startIso = override ? new Date(override.start + 'T00:00:00').toISOString() : capacity.sprintStart;
     var endIso = override ? new Date(override.end + 'T23:59:59').toISOString() : capacity.sprintEnd;
@@ -1417,15 +1523,14 @@ function resolveSprintCapacityWithDates_(capacity) {
         inProgressIssues: 0
     }) : capacity.pace;
 
-    var allData = (APP_STATE && APP_STATE.allData) || {};
-    var capSettings = allData.capacitySettings;
-    var devCapList = allData.developerCapacity;
     var hasDateBasedRules = Boolean(
         (capSettings && Array.isArray(capSettings.companyHolidays) && capSettings.companyHolidays.some(function (h) { return h && h.date; })) ||
         (Array.isArray(devCapList) && devCapList.some(function (d) { return d && Array.isArray(d.ptoDates) && d.ptoDates.length > 0; }))
     );
 
-    if (!override && !hasDateBasedRules) return capacity;
+    if (!override && !hasDateBasedRules) {
+        return devConfigByName.size ? Object.assign({}, capacity, { developers: syncDevMeta(capacity.developers) }) : capacity;
+    }
 
     var sprintName = capacity.sprintName;
     var workdays = capSettings && Number(capSettings.sprintWorkdays) > 0 ? Number(capSettings.sprintWorkdays) : (capacity.sprintWorkdays || 10);
@@ -1448,11 +1553,6 @@ function resolveSprintCapacityWithDates_(capacity) {
         sprintHolidayDays = capacity.holidayDays;
         matchedHolidays = capacity.holidays || [];
     }
-
-    var devConfigByName = new Map();
-    (devCapList || []).forEach(function (c) {
-        if (c && c.developer) devConfigByName.set(String(c.developer).trim().toLowerCase(), c);
-    });
 
     var totalCapacity = 0;
     var hasConfiguredCapacity = false;
@@ -1484,7 +1584,7 @@ function resolveSprintCapacityWithDates_(capacity) {
         var sprintOvr = null;
         if (cfg && cfg.sprintOverrides && typeof cfg.sprintOverrides === 'object') {
             Object.keys(cfg.sprintOverrides).forEach(function (k) {
-                if (k !== '__ptoDates__' && k.trim().toLowerCase() === sprintName.toLowerCase()) {
+                if (k !== '__ptoDates__' && k !== '__pct__' && k.trim().toLowerCase() === sprintName.toLowerCase()) {
                     sprintOvr = cfg.sprintOverrides[k];
                 }
             });
@@ -1535,6 +1635,10 @@ function resolveSprintCapacityWithDates_(capacity) {
             remaining: effCap == null ? null : Math.round((effCap - dev.storyPoints) * 100) / 100,
             pace: devPace
         });
+        if (cfg) {
+            if (cfg.manager !== undefined) updatedDev.manager = String(cfg.manager || '').trim();
+            if (cfg.pct) updatedDev.pct = String(cfg.pct).trim();
+        }
         if (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride != null || notes) {
             updatedDev.baseCapacity = baseCapacity;
             if (ptoDays > 0) updatedDev.ptoDays = ptoDays; else delete updatedDev.ptoDays;
@@ -1905,9 +2009,102 @@ var capacityGroupByPct_ = (function () {
         return false;
     }
 })();
+var capacityExpandAllIssues_ = false;
+
+function buildClientActPctResolver_() {
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var projects = allData.projects || [];
+    var devCapList = allData.developerCapacity || [];
+    var norm = function (v) {
+        return String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+    };
+    var actPctByJiraKey = new Map();
+    var actPctBySummary = new Map();
+    var projectByJiraKey = new Map();
+    projects.forEach(function (p) {
+        if (!p || typeof p !== 'object') return;
+        var jk = norm(p['Jira #']);
+        var sum = norm(p.Summary || p.Title);
+        var ap = String(p['ACT/PCT'] || '').trim();
+        if (jk) projectByJiraKey.set(jk, p);
+        if (ap) {
+            if (jk) actPctByJiraKey.set(jk, ap);
+            if (sum) actPctBySummary.set(sum, ap);
+        }
+    });
+    var resolveProjectPct = function (p, visited) {
+        if (!p || typeof p !== 'object') return '';
+        var direct = String(p['ACT/PCT'] || '').trim();
+        if (direct) return direct;
+        var epicLink = norm(p['Epic Link']);
+        if (epicLink) {
+            var byKey = actPctByJiraKey.get(epicLink);
+            if (byKey) return byKey;
+            var bySum = actPctBySummary.get(epicLink);
+            if (bySum) return bySum;
+        }
+        var rawLinks = String(p['Links'] || p['Linked Issues'] || '').trim();
+        if (rawLinks) {
+            var seen = visited || new Set();
+            var selfKey = norm(p['Jira #']);
+            if (selfKey) seen.add(selfKey);
+            var parts = rawLinks.split(',');
+            for (var i = 0; i < parts.length; i++) {
+                var lk = norm(parts[i]);
+                if (!lk || seen.has(lk)) continue;
+                var directLinked = actPctByJiraKey.get(lk);
+                if (directLinked) return directLinked;
+                var linkedProj = projectByJiraKey.get(lk);
+                if (linkedProj) {
+                    seen.add(lk);
+                    var nested = resolveProjectPct(linkedProj, seen);
+                    if (nested) return nested;
+                }
+            }
+        }
+        return '';
+    };
+    var configuredPctByDev = new Map();
+    devCapList.forEach(function (c) {
+        if (!c || !c.developer) return;
+        var dk = norm(c.developer);
+        var explicitPct = String(c.pct || (c.sprintOverrides && c.sprintOverrides.__pct__) || '').trim();
+        if (dk && explicitPct) configuredPctByDev.set(dk, explicitPct);
+    });
+    var fallbackPctByDev = new Map();
+    projects.forEach(function (p) {
+        var dev = norm(p && (p.Assignee || p.assignee || p['Assigned Dev']));
+        if (!dev || dev === 'unassigned' || fallbackPctByDev.has(dev)) return;
+        var resolved = resolveProjectPct(p);
+        if (resolved) fallbackPctByDev.set(dev, resolved);
+    });
+    return {
+        resolveForDeveloper: function (developer) {
+            if (!developer || developer.developer === 'Unassigned') return '';
+            var dk = norm(developer.developer);
+            if (configuredPctByDev.has(dk)) return configuredPctByDev.get(dk);
+            if (developer.pct && String(developer.pct).trim()) return String(developer.pct).trim();
+            var sprintIssues = developer.issues || [];
+            for (var i = 0; i < sprintIssues.length; i++) {
+                var iss = sprintIssues[i];
+                var ik = norm(iss && iss.jiraKey);
+                if (ik && projectByJiraKey.has(ik)) {
+                    var issPct = resolveProjectPct(projectByJiraKey.get(ik));
+                    if (issPct) return issPct;
+                }
+            }
+            return fallbackPctByDev.get(dk) || '';
+        }
+    };
+}
 
 function syncCapacityGroupButton_() {
     var showGrouping = activeCapacityTab_ === 'current' || activeCapacityTab_ === 'future';
+    var drillToolbar = document.getElementById('capacity-drilldown-toolbar');
+    if (drillToolbar) {
+        drillToolbar.hidden = !showGrouping;
+        drillToolbar.className = showGrouping ? 'flex flex-wrap items-center gap-2' : 'flex flex-wrap items-center gap-2 hidden';
+    }
     var btn = document.getElementById('capacity-group-by-manager');
     if (btn) {
         btn.hidden = !showGrouping;
@@ -1926,6 +2123,56 @@ function syncCapacityGroupButton_() {
             'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
         pctBtn.className = showGrouping ? pctClass : (pctClass + ' hidden');
     }
+    var expandBtn = document.getElementById('capacity-expand-all-issues');
+    if (expandBtn) {
+        expandBtn.hidden = !showGrouping;
+        expandBtn.setAttribute('aria-pressed', String(capacityExpandAllIssues_));
+        var expLabel = expandBtn.querySelector ? expandBtn.querySelector('span') : null;
+        var text = capacityExpandAllIssues_ ? 'Collapse all issues' : 'Expand all issues';
+        if (expLabel) expLabel.textContent = text; else expandBtn.textContent = text;
+        var expClass = capacityExpandAllIssues_ ?
+            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
+            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-[#F6F6F6] px-3 py-1.5 text-xs font-medium text-black hover:border-black transition-colors';
+        expandBtn.className = showGrouping ? expClass : (expClass + ' hidden');
+    }
+}
+
+function syncCapacityFilterBanner_(allDevs, displayedDevs, numberFormat) {
+    var banner = document.getElementById('capacity-filter-banner');
+    var bannerText = document.getElementById('capacity-filter-banner-text');
+    if (!banner) return;
+    var show = (activeCapacityTab_ === 'current' || activeCapacityTab_ === 'future') && Boolean(capacityCurrentFilter_);
+    if (!show) {
+        banner.hidden = true;
+        banner.className = 'hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/70 px-4 py-2 text-xs text-black';
+        return;
+    }
+    var list = displayedDevs || [];
+    var overPts = 0;
+    var behindCount = 0;
+    var unestCount = 0;
+    list.forEach(function (d) {
+        if (!d) return;
+        if (d.remaining != null && d.remaining < 0) overPts += Math.abs(d.remaining);
+        if (d.pace && (d.pace.status === 'at_risk' || d.pace.status === 'behind')) behindCount++;
+        if (d.unestimatedCount > 0) unestCount += d.unestimatedCount;
+    });
+    var filterLabel = capacityCurrentFilter_ === 'at_risk' ? 'at-risk' :
+        capacityCurrentFilter_ === 'over_capacity' ? 'over-capacity' : 'under-capacity';
+    var details = [];
+    if (overPts > 0) details.push(numberFormat.format(Math.round(overPts * 100) / 100) + ' pts over capacity');
+    if (behindCount > 0) details.push(numberFormat.format(behindCount) + ' behind pace');
+    if (unestCount > 0) details.push(numberFormat.format(unestCount) + (unestCount === 1 ? ' unestimated story in Jira' : ' unestimated stories in Jira'));
+    if (bannerText) {
+        bannerText.textContent = 'Showing ' + numberFormat.format(list.length) + ' ' + filterLabel +
+            (list.length === 1 ? ' developer' : ' developers') +
+            (details.length ? ' · ' + details.join(' · ') : '');
+    }
+    var isUnder = capacityCurrentFilter_ === 'under_capacity';
+    banner.hidden = false;
+    banner.className = isUnder ?
+        'mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#A3E2B9] bg-[#DCF5E6]/70 px-4 py-2 text-xs text-black' :
+        'mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/70 px-4 py-2 text-xs text-black';
 }
 
 function setActiveCapacityTab_(tabKey) {
@@ -2037,6 +2284,25 @@ function bindCapacitySubTabs_() {
                 }
             } catch (e) { }
             syncCapacityGroupButton_();
+            renderCapacityView();
+        });
+    }
+    var expandAllBtn = document.getElementById('capacity-expand-all-issues');
+    if (expandAllBtn && !expandAllBtn._capExpandBound) {
+        expandAllBtn._capExpandBound = true;
+        expandAllBtn.addEventListener('click', function () {
+            capacityExpandAllIssues_ = !capacityExpandAllIssues_;
+            syncCapacityGroupButton_();
+            renderCapacityView();
+        });
+    }
+    var resetFilterBtn = document.getElementById('capacity-filter-reset');
+    if (resetFilterBtn && !resetFilterBtn._capResetBound) {
+        resetFilterBtn._capResetBound = true;
+        resetFilterBtn.addEventListener('click', function () {
+            capacityCurrentFilter_ = '';
+            capacityFilterAtRisk_ = false;
+            syncCapacityFilterButtons_();
             renderCapacityView();
         });
     }

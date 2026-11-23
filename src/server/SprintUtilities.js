@@ -528,22 +528,76 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries, option
     });
   });
 
+  var normalizeLookupText = function (val) {
+    return String(val == null ? '' : val).replace(/\s+/g, ' ').trim().toLowerCase();
+  };
   var epicActPctByKey = new Map();
+  var epicActPctBySummary = new Map();
+  var itemByJiraKey = new Map();
   var inferredPctByDev = new Map();
+  var sprintPctByDev = new Map();
   (items || []).forEach(function (item) {
-    var jiraKey = String(item['Jira #'] || '').trim();
+    if (!item || typeof item !== 'object') return;
+    var jiraKey = normalizeLookupText(item['Jira #']);
+    var summary = normalizeLookupText(item.Summary || item.Title);
     var actPct = String(item['ACT/PCT'] || '').trim();
-    if (jiraKey && actPct) epicActPctByKey.set(jiraKey.toLowerCase(), actPct);
+    if (jiraKey) itemByJiraKey.set(jiraKey, item);
+    if (actPct) {
+      if (jiraKey) epicActPctByKey.set(jiraKey, actPct);
+      if (summary) epicActPctBySummary.set(summary, actPct);
+    }
   });
+  var resolveItemActPct = function (item, visited) {
+    if (!item || typeof item !== 'object') return '';
+    var directPct = String(item['ACT/PCT'] || '').trim();
+    if (directPct) return directPct;
+    var epicLink = normalizeLookupText(item['Epic Link']);
+    if (epicLink) {
+      var byKey = epicActPctByKey.get(epicLink);
+      if (byKey) return byKey;
+      var bySummary = epicActPctBySummary.get(epicLink);
+      if (bySummary) return bySummary;
+    }
+    var rawLinks = String(item['Links'] || item['Linked Issues'] || '').trim();
+    if (rawLinks) {
+      var seen = visited || new Set();
+      var selfKey = normalizeLookupText(item['Jira #']);
+      if (selfKey) seen.add(selfKey);
+      var linkParts = rawLinks.split(',');
+      for (var li = 0; li < linkParts.length; li++) {
+        var linkedKey = normalizeLookupText(linkParts[li]);
+        if (!linkedKey || seen.has(linkedKey)) continue;
+        var directLinkedPct = epicActPctByKey.get(linkedKey);
+        if (directLinkedPct) return directLinkedPct;
+        var linkedItem = itemByJiraKey.get(linkedKey);
+        if (linkedItem) {
+          seen.add(linkedKey);
+          var nestedPct = resolveItemActPct(linkedItem, seen);
+          if (nestedPct) return nestedPct;
+        }
+      }
+    }
+    return '';
+  };
   (items || []).forEach(function (item) {
     var dev = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
     if (!dev || dev.toLowerCase() === 'unassigned') return;
     var dKey = dev.toLowerCase();
-    if (inferredPctByDev.has(dKey)) return;
-    var directPct = String(item['ACT/PCT'] || '').trim();
-    var epicKey = String(item['Epic Link'] || '').trim().toLowerCase();
-    var resolvedPct = directPct || (epicKey ? epicActPctByKey.get(epicKey) : '');
-    if (resolvedPct) inferredPctByDev.set(dKey, resolvedPct);
+    var resolvedPct = resolveItemActPct(item);
+    if (!resolvedPct) return;
+    if (!inferredPctByDev.has(dKey)) {
+      inferredPctByDev.set(dKey, resolvedPct);
+    }
+    if (hasSprint && !sprintPctByDev.has(dKey)) {
+      var spEntries = parseSprintEntries_(item.sprint || item.Sprint);
+      var inTargetSprint = spEntries.some(function (entry) {
+        var entryName = formatSprint(entry.name);
+        return (entryName === '—' ? entry.name : entryName).toLowerCase() === sprintName.toLowerCase();
+      });
+      if (inTargetSprint) {
+        sprintPctByDev.set(dKey, resolvedPct);
+      }
+    }
   });
 
   var capacitySettings = (opts && opts.capacitySettings) || {};
@@ -747,7 +801,8 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries, option
     entry.issueCount = entry.issues.length;
     entry.capacity = capacity;
     entry.manager = config && config.manager ? config.manager : '';
-    var resolvedDevPct = (config && config.pct) ? config.pct : (entry.developer !== 'Unassigned' ? (inferredPctByDev.get(entry.developer.toLowerCase()) || '') : '');
+    var resolvedDevPct = (config && config.pct) ? config.pct :
+      (entry.developer !== 'Unassigned' ? (sprintPctByDev.get(entry.developer.toLowerCase()) || inferredPctByDev.get(entry.developer.toLowerCase()) || '') : '');
     if (resolvedDevPct) {
       entry.pct = resolvedDevPct;
     }

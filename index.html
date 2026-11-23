@@ -682,61 +682,85 @@
           </div>
         </div>
 
-        <!-- Section Sub-Tabs -->
-        <div class="px-4 mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Capacity sections">
-            <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab" aria-selected="true"
-              class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
-              <span>Current sprint</span>
-            </button>
-            <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab" aria-selected="false"
-              class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Future sprints</span>
-              <span id="capacity-tab-future-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
-            <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
-              aria-selected="false"
-              class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>No sprint assigned</span>
-              <span id="capacity-tab-nosprint-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
-            <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
-              aria-selected="false"
-              class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Past sprint open</span>
-              <span id="capacity-tab-pastopen-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
+        <!-- Section Sub-Tabs & Step 2 Drill-Down Controls -->
+        <div class="px-4 mb-3">
+          <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D8DADA] bg-white px-3.5 py-2.5">
+            <div class="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Capacity sections">
+              <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab" aria-selected="true"
+                class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
+                <span>Current sprint</span>
+              </button>
+              <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab" aria-selected="false"
+                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                <span>Future sprints</span>
+                <span id="capacity-tab-future-count"
+                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+              </button>
+              <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
+                aria-selected="false"
+                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                <span>No sprint assigned</span>
+                <span id="capacity-tab-nosprint-count"
+                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+              </button>
+              <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
+                aria-selected="false"
+                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                <span>Past sprint open</span>
+                <span id="capacity-tab-pastopen-count"
+                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+              </button>
+            </div>
+            <div id="capacity-drilldown-toolbar" class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Capacity risk filters">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Filter</span>
+                <button type="button" id="capacity-filter-at-risk" aria-pressed="false"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                  <span>At risk only</span>
+                  <span id="capacity-filter-at-risk-count"
+                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                </button>
+                <button type="button" id="capacity-filter-over-capacity" aria-pressed="false"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                  <span>Over capacity</span>
+                  <span id="capacity-filter-over-capacity-count"
+                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                </button>
+                <button type="button" id="capacity-filter-under-capacity" aria-pressed="false"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                  <span>Under capacity</span>
+                  <span id="capacity-filter-under-capacity-count"
+                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                </button>
+              </div>
+              <span class="hidden sm:inline-block h-4 w-px bg-[#D8DADA]" aria-hidden="true"></span>
+              <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Group developers">
+                <span class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Group</span>
+                <button type="button" id="capacity-group-by-manager" aria-pressed="false"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                  <span>Group by manager</span>
+                </button>
+                <button type="button" id="capacity-group-by-pct" aria-pressed="false"
+                  class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                  <span>Group by PCT</span>
+                </button>
+              </div>
+              <span class="hidden sm:inline-block h-4 w-px bg-[#D8DADA]" aria-hidden="true"></span>
+              <button type="button" id="capacity-expand-all-issues" aria-pressed="false"
+                class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-[#F6F6F6] px-3 py-1.5 text-xs font-medium text-black hover:border-black transition-colors">
+                <span>Expand all issues</span>
+              </button>
+            </div>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button type="button" id="capacity-filter-at-risk" aria-pressed="false"
-              class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>At risk only</span>
-              <span id="capacity-filter-at-risk-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
-            <button type="button" id="capacity-filter-over-capacity" aria-pressed="false"
-              class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Over capacity</span>
-              <span id="capacity-filter-over-capacity-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
-            <button type="button" id="capacity-filter-under-capacity" aria-pressed="false"
-              class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Under capacity</span>
-              <span id="capacity-filter-under-capacity-count"
-                class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-            </button>
-            <button type="button" id="capacity-group-by-manager" aria-pressed="false"
-              class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Group by manager</span>
-            </button>
-            <button type="button" id="capacity-group-by-pct" aria-pressed="false"
-              class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-              <span>Group by PCT</span>
-            </button>
+          <!-- Active Drill-Down Filter Banner -->
+          <div id="capacity-filter-banner" class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/70 px-4 py-2 text-xs text-black">
+            <div id="capacity-filter-banner-text" class="font-medium"></div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="capacity-filter-reset"
+                class="inline-flex items-center rounded-lg border border-black bg-white px-2.5 py-1 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                Show all developers
+              </button>
+            </div>
           </div>
         </div>
 

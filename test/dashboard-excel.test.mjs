@@ -976,4 +976,17 @@ test('capacity view groups developers by PCT with rolled-up workload when toggle
   });
   assert.equal(Boolean(atRiskInfo && atRiskInfo.isAtRisk), true);
   assert.match(atRiskInfo.reasons.join(' '), /over capacity/i);
+
+  // Verify Actual vs. Expected Sidebar and Hero Planned / Done / Target pills
+  elements['capacity-pace-sidebar'] = new Element('aside');
+  elements['capacity-sidebar-team-name'] = new Element('h3');
+  elements['capacity-sidebar-team-bar'] = new Element('div');
+  elements['capacity-sidebar-team-caption'] = new Element('span');
+  elements['capacity-sidebar-team-total'] = new Element('span');
+  elements['capacity-sidebar-member-count'] = new Element('span');
+  elements['capacity-sidebar-members'] = new Element('div');
+  context.renderCapacityView();
+  assert.equal(elements['capacity-sidebar-member-count'].textContent, '3 devs');
+  assert.equal(elements['capacity-sidebar-members'].children.length, 3);
+  assert.match(elements['capacity-sidebar-team-caption'].textContent, /7p completed of 7p expected/);
 });

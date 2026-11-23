@@ -1756,6 +1756,7 @@ function appendStackedSegments_(track, breakdown, denominator) {
 
 function renderCapacityPace_(capacity, numberFormat, percentFormat) {
     var paceBadge = document.getElementById('capacity-pace-badge');
+    var daysLeftBadge = document.getElementById('capacity-days-left-badge');
     var sprintDates = document.getElementById('capacity-sprint-dates');
     var paceCard = document.getElementById('capacity-pace-card');
     var paceSummary = document.getElementById('capacity-pace-summary');
@@ -1763,6 +1764,9 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
     var paceBreakdown = document.getElementById('capacity-pace-breakdown');
     var paceBar = document.getElementById('capacity-pace-bar');
     var teamSummary = document.getElementById('capacity-team-summary');
+    var pillPlanned = document.getElementById('capacity-pill-planned');
+    var pillDone = document.getElementById('capacity-pill-done');
+    var pillTarget = document.getElementById('capacity-pill-target');
     var startInput = document.getElementById('capacity-sprint-start');
     var endInput = document.getElementById('capacity-sprint-end');
 
@@ -1779,6 +1783,18 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
         } else {
             paceBadge.className = 'hidden';
             paceBadge.textContent = '';
+        }
+    }
+
+    if (daysLeftBadge) {
+        if (hasSprint && pace && pace.daysRemaining != null) {
+            daysLeftBadge.className = 'inline-flex items-center rounded-md bg-[#EBF5FF] border border-[#B8DCFF] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#006FC1]';
+            daysLeftBadge.textContent = pace.daysRemaining === 0 && pace.timeElapsedPct >= 1 ?
+                'SPRINT END REACHED' :
+                numberFormat.format(pace.daysRemaining) + ' DAY(S) LEFT';
+        } else {
+            daysLeftBadge.className = 'hidden';
+            daysLeftBadge.textContent = '';
         }
     }
 
@@ -1803,15 +1819,20 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
 
     if (!paceCard) return;
     if (!hasSprint || !pace) {
-        paceCard.className = 'mt-4 pt-4 border-t border-[#D8DADA] hidden';
+        paceCard.className = 'mt-3.5 pt-3.5 border-t border-[#D8DADA] hidden';
         return;
     }
 
-    paceCard.className = 'mt-4 pt-4 border-t border-[#D8DADA]';
+    paceCard.className = 'mt-3.5 pt-3.5 border-t border-[#D8DADA]';
     var completedPts = capacity.completedPoints || 0;
     var inProgressPts = capacity.inProgressPoints || 0;
     var notStartedPts = capacity.notStartedPoints || 0;
     var totalPts = capacity.totalStoryPoints || 0;
+    var expectedTargetPts = pace.timeElapsedPct != null ?
+        Math.round((totalPts * Math.min(1, Math.max(0, pace.timeElapsedPct))) * 10) / 10 : totalPts;
+    if (pillPlanned) pillPlanned.textContent = numberFormat.format(totalPts);
+    if (pillDone) pillDone.textContent = numberFormat.format(completedPts);
+    if (pillTarget) pillTarget.textContent = numberFormat.format(expectedTargetPts);
 
     if (paceSummary) {
         var basisLabel = pace.metricBasis === 'issues' ? 'issues' : 'points';
@@ -1898,6 +1919,68 @@ var capacityGroupByManager_ = (function () {
 
 var capacityFilterAtRisk_ = false;
 var capacityCurrentFilter_ = '';
+var capacityTeamScope_ = '';
+var capacityUiPrefs_ = {
+    showPaceSidebar: true,
+    showTodayIndicator: true,
+    showSprintEndIndicator: true
+};
+
+function matchesCapacityTeamScope_(developer, pctResolver) {
+    if (!capacityTeamScope_) return true;
+    if (!developer || developer.developer === 'Unassigned') return false;
+    var resolver = pctResolver || buildClientActPctResolver_();
+    if (capacityTeamScope_.indexOf('pct:') === 0) {
+        var targetPct = capacityTeamScope_.slice(4).trim().toLowerCase();
+        var devPct = String(resolver.resolveForDeveloper(developer) || '').trim().toLowerCase();
+        return devPct === targetPct;
+    }
+    if (capacityTeamScope_.indexOf('mgr:') === 0) {
+        var targetMgr = capacityTeamScope_.slice(4).trim().toLowerCase();
+        var devMgr = String(developer.manager || '').trim().toLowerCase();
+        return devMgr === targetMgr;
+    }
+    return true;
+}
+
+function populateCapacityTeamScopeDropdown_(developers) {
+    var select = document.getElementById('capacity-team-scope');
+    if (!select || typeof select.replaceChildren !== 'function') return;
+    var resolver = buildClientActPctResolver_();
+    var pcts = new Set();
+    var managers = new Set();
+    (developers || []).forEach(function (dev) {
+        if (!dev || dev.developer === 'Unassigned') return;
+        var p = resolver.resolveForDeveloper(dev);
+        if (p) pcts.add(p);
+        var m = String(dev.manager || '').trim();
+        if (m) managers.add(m);
+    });
+    ((APP_STATE && APP_STATE.allData && APP_STATE.allData.developerCapacity) || []).forEach(function (c) {
+        if (!c) return;
+        if (c.pct) pcts.add(String(c.pct).trim());
+        if (c.manager) managers.add(String(c.manager).trim());
+    });
+    var prev = capacityTeamScope_;
+    select.replaceChildren();
+    var allOpt = document.createElement('option');
+    allOpt.value = '';
+    allOpt.textContent = 'All Team Members';
+    select.appendChild(allOpt);
+    Array.from(pcts).filter(Boolean).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = 'pct:' + p;
+        opt.textContent = 'PCT: ' + p;
+        select.appendChild(opt);
+    });
+    Array.from(managers).filter(Boolean).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (m) {
+        var opt = document.createElement('option');
+        opt.value = 'mgr:' + m;
+        opt.textContent = 'Manager: ' + m;
+        select.appendChild(opt);
+    });
+    select.value = prev;
+}
 
 function isCapacityDeveloperAtRisk_(developer) {
     if (!developer || developer.developer === 'Unassigned') return false;
@@ -1924,6 +2007,10 @@ function setCapacityCurrentFilter_(filterKey) {
 
 function filterCapacityDevelopers_(developers) {
     var list = developers || [];
+    if (capacityTeamScope_) {
+        var resolver = buildClientActPctResolver_();
+        list = list.filter(function (d) { return matchesCapacityTeamScope_(d, resolver); });
+    }
     if (capacityCurrentFilter_ === 'at_risk') return list.filter(isCapacityDeveloperAtRisk_);
     if (capacityCurrentFilter_ === 'over_capacity') return list.filter(isCapacityDeveloperOverCapacity_);
     if (capacityCurrentFilter_ === 'under_capacity') return list.filter(isCapacityDeveloperUnderCapacity_);
@@ -2302,11 +2389,239 @@ function bindCapacitySubTabs_() {
         resetFilterBtn.addEventListener('click', function () {
             capacityCurrentFilter_ = '';
             capacityFilterAtRisk_ = false;
+            capacityTeamScope_ = '';
+            var scopeSel = document.getElementById('capacity-team-scope');
+            if (scopeSel) scopeSel.value = '';
             syncCapacityFilterButtons_();
             renderCapacityView();
         });
     }
+    var tileCommitted = document.getElementById('capacity-tile-committed');
+    if (tileCommitted && !tileCommitted._capCommittedBound) {
+        tileCommitted._capCommittedBound = true;
+        tileCommitted.addEventListener('click', function () {
+            capacityCurrentFilter_ = '';
+            capacityFilterAtRisk_ = false;
+            setActiveCapacityTab_('current');
+            syncCapacityFilterButtons_();
+            renderCapacityView();
+        });
+    }
+    var teamScopeSelect = document.getElementById('capacity-team-scope');
+    if (teamScopeSelect && !teamScopeSelect._capScopeBound) {
+        teamScopeSelect._capScopeBound = true;
+        teamScopeSelect.addEventListener('change', function () {
+            capacityTeamScope_ = String(teamScopeSelect.value || '');
+            renderCapacityView();
+        });
+    }
+    var openSettingsBtn = document.getElementById('capacity-open-settings-btn');
+    if (openSettingsBtn && !openSettingsBtn._capSettingsBound) {
+        openSettingsBtn._capSettingsBound = true;
+        openSettingsBtn.addEventListener('click', function () {
+            openCapacityQuickSettingsModal_();
+        });
+    }
     syncCapacityGroupButton_();
+}
+
+function getDeveloperInitials_(name) {
+    var clean = String(name || '').trim();
+    if (!clean || clean === 'Unassigned') return '?';
+    var parts = clean.split(/[\s._-]+/).filter(Boolean);
+    if (parts.length >= 2) {
+        return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    return clean.slice(0, 2).toUpperCase();
+}
+
+function renderCapacityPaceSidebar_(capacity, displayedDevs, numberFormat) {
+    var sidebar = document.getElementById('capacity-pace-sidebar');
+    var mainCol = document.getElementById('capacity-main-table-col');
+    if (!sidebar) return;
+    if (!capacityUiPrefs_.showPaceSidebar) {
+        sidebar.hidden = true;
+        sidebar.className = 'hidden';
+        if (mainCol) mainCol.className = 'lg:col-span-12 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm';
+        return;
+    }
+    sidebar.hidden = false;
+    sidebar.className = 'lg:col-span-4 rounded-xl border border-[#D8DADA] bg-white p-4 shadow-sm';
+    if (mainCol) mainCol.className = 'lg:col-span-8 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm';
+
+    var teamNameEl = document.getElementById('capacity-sidebar-team-name');
+    var teamBarEl = document.getElementById('capacity-sidebar-team-bar');
+    var teamCaptionEl = document.getElementById('capacity-sidebar-team-caption');
+    var teamTotalEl = document.getElementById('capacity-sidebar-team-total');
+    var memberCountEl = document.getElementById('capacity-sidebar-member-count');
+    var membersContainer = document.getElementById('capacity-sidebar-members');
+
+    var scopeLabel = 'All Team Members';
+    if (capacityTeamScope_.indexOf('pct:') === 0) scopeLabel = capacityTeamScope_.slice(4);
+    else if (capacityTeamScope_.indexOf('mgr:') === 0) scopeLabel = capacityTeamScope_.slice(4) + ' Team';
+    if (teamNameEl) teamNameEl.textContent = scopeLabel;
+
+    var pace = capacity && capacity.pace;
+    var elapsedRatio = (pace && typeof pace.timeElapsedPct === 'number') ?
+        Math.min(1, Math.max(0, pace.timeElapsedPct)) : 0.5;
+
+    var members = (displayedDevs || []).filter(function (d) { return d && d.developer !== 'Unassigned'; });
+    if (memberCountEl) {
+        memberCountEl.textContent = numberFormat.format(members.length) + (members.length === 1 ? ' dev' : ' devs');
+    }
+
+    var teamCompleted = 0;
+    var teamAssigned = 0;
+    var teamCapacity = 0;
+    var hasTeamCap = false;
+    members.forEach(function (dev) {
+        var bd = getDeveloperPointBreakdown_(dev);
+        teamCompleted += bd.completed;
+        teamAssigned += dev.storyPoints || 0;
+        if (dev.capacity != null) {
+            teamCapacity += dev.capacity;
+            hasTeamCap = true;
+        }
+    });
+    var teamExpected = Math.round((teamAssigned * elapsedRatio) * 10) / 10;
+    var teamVsExpectedPct = teamExpected > 0 ? Math.round((teamCompleted / teamExpected) * 1000) / 10 :
+        (teamCompleted > 0 ? 100 : 0);
+
+    if (teamBarEl) {
+        teamBarEl.replaceChildren();
+        var denom = Math.max(teamAssigned, teamCapacity, 1);
+        var fillWrap = document.createElement('div');
+        fillWrap.className = 'flex h-full w-full overflow-hidden rounded-full';
+        var fill = document.createElement('div');
+        fill.className = teamCompleted >= teamExpected ? 'h-full bg-[#008331]' : 'h-full bg-[#D97706]';
+        fill.style.width = Math.min(100, (teamCompleted / denom) * 100) + '%';
+        fillWrap.appendChild(fill);
+        teamBarEl.appendChild(fillWrap);
+        if (capacityUiPrefs_.showTodayIndicator && teamAssigned > 0) {
+            var marker = document.createElement('div');
+            marker.className = 'absolute -top-1 -bottom-1 w-0.5 bg-black pointer-events-none';
+            marker.style.left = Math.min(100, (teamExpected / denom) * 100) + '%';
+            marker.title = 'Expected completed today: ' + numberFormat.format(teamExpected) + 'p';
+            teamBarEl.appendChild(marker);
+        }
+    }
+    if (teamCaptionEl) {
+        teamCaptionEl.textContent = '(' + numberFormat.format(teamCompleted) + 'p completed of ' +
+            numberFormat.format(teamExpected) + 'p expected) ' + numberFormat.format(teamVsExpectedPct) + '%';
+    }
+    if (teamTotalEl) {
+        teamTotalEl.textContent = hasTeamCap ?
+            (numberFormat.format(teamAssigned) + ' / ' + numberFormat.format(teamCapacity) + 'p') :
+            (numberFormat.format(teamAssigned) + 'p');
+    }
+
+    if (!membersContainer) return;
+    membersContainer.replaceChildren();
+    if (!members.length) {
+        var emptyEl = document.createElement('p');
+        emptyEl.className = 'text-xs text-[#6F7171] py-4 text-center';
+        emptyEl.textContent = 'No matching developers for current filter.';
+        membersContainer.appendChild(emptyEl);
+        return;
+    }
+
+    var avatarColors = [
+        'bg-[#D97706] text-white',
+        'bg-[#006FC1] text-white',
+        'bg-[#008331] text-white',
+        'bg-[#7C3AED] text-white',
+        'bg-[#DC2626] text-white',
+        'bg-[#0D9488] text-white'
+    ];
+    members.forEach(function (dev, idx) {
+        var bd = getDeveloperPointBreakdown_(dev);
+        var assigned = dev.storyPoints || 0;
+        var cap = dev.capacity;
+        var overCap = dev.remaining != null && dev.remaining < 0;
+        var expected = Math.round((assigned * elapsedRatio) * 10) / 10;
+        var vsExpPct = expected > 0 ? Math.round((bd.completed / expected) * 1000) / 10 :
+            (bd.completed > 0 ? 100 : 0);
+        var isBehind = bd.completed < expected && assigned > 0;
+
+        var card = document.createElement('div');
+        card.className = overCap ?
+            'rounded-lg border border-[#F5C6A5] bg-[#FFECE0]/40 p-2.5 cursor-pointer hover:border-[#B95319] transition-colors' :
+            'rounded-lg border border-[#D8DADA]/80 bg-[#F6F6F6]/40 p-2.5 cursor-pointer hover:border-black transition-colors';
+        card.setAttribute('data-sidebar-developer', dev.developer);
+
+        var topRow = document.createElement('div');
+        topRow.className = 'flex items-center justify-between gap-2';
+
+        var leftInfo = document.createElement('div');
+        leftInfo.className = 'flex items-center gap-2 min-w-0';
+        var avatar = document.createElement('span');
+        avatar.className = 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ' +
+            avatarColors[idx % avatarColors.length];
+        avatar.textContent = getDeveloperInitials_(dev.developer);
+        leftInfo.appendChild(avatar);
+
+        var nameSpan = document.createElement('span');
+        nameSpan.className = 'text-xs font-semibold text-black truncate';
+        nameSpan.textContent = dev.developer;
+        leftInfo.appendChild(nameSpan);
+        topRow.appendChild(leftInfo);
+
+        var loadPill = document.createElement('span');
+        if (cap != null) {
+            loadPill.className = overCap ?
+                'inline-flex items-center rounded-md bg-[#FFECE0] border border-[#F5C6A5] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]' :
+                'inline-flex items-center rounded-md bg-[#DCF5E6] border border-[#A3E2B9] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#008331]';
+            loadPill.textContent = numberFormat.format(assigned) + ' / ' + numberFormat.format(cap);
+        } else {
+            loadPill.className = 'inline-flex items-center rounded-md bg-[#F6F6F6] border border-[#D8DADA] px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-[#6F7171]';
+            loadPill.textContent = numberFormat.format(assigned) + 'p';
+        }
+        topRow.appendChild(loadPill);
+        card.appendChild(topRow);
+
+        var barTrack = document.createElement('div');
+        barTrack.className = 'relative mt-2 h-2.5 w-full overflow-visible rounded-full bg-white border border-[#D8DADA]';
+        var denom = Math.max(assigned, cap || 0, 1);
+        var barInner = document.createElement('div');
+        barInner.className = 'flex h-full w-full overflow-hidden rounded-full';
+        var barFill = document.createElement('div');
+        barFill.className = overCap ? 'h-full bg-[#B95319]' : (isBehind ? 'h-full bg-[#D97706]' : 'h-full bg-[#008331]');
+        barFill.style.width = Math.min(100, (bd.completed / denom) * 100) + '%';
+        barInner.appendChild(barFill);
+        barTrack.appendChild(barInner);
+        if (capacityUiPrefs_.showTodayIndicator && assigned > 0) {
+            var expMarker = document.createElement('div');
+            expMarker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-black pointer-events-none';
+            expMarker.style.left = Math.min(100, (expected / denom) * 100) + '%';
+            expMarker.title = 'Expected today: ' + numberFormat.format(expected) + 'p';
+            barTrack.appendChild(expMarker);
+        }
+        card.appendChild(barTrack);
+
+        var capRow = document.createElement('div');
+        capRow.className = 'mt-1 flex items-center justify-between gap-2 text-[11px] tabular-nums';
+        var leftCap = document.createElement('span');
+        leftCap.className = 'text-[#6F7171]';
+        leftCap.textContent = '(' + numberFormat.format(bd.completed) + 'p out of expected ' +
+            numberFormat.format(expected) + 'p) ' + numberFormat.format(vsExpPct) + '%';
+        var rightCap = document.createElement('span');
+        rightCap.className = 'font-medium text-black';
+        rightCap.textContent = numberFormat.format(assigned) + 'p';
+        capRow.appendChild(leftCap);
+        capRow.appendChild(rightCap);
+        card.appendChild(capRow);
+
+        card.addEventListener('click', function () {
+            var detailsEl = document.getElementById('capacity-issues-current-' + idx);
+            if (detailsEl) {
+                detailsEl.hidden = !detailsEl.hidden;
+                if (typeof detailsEl.scrollIntoView === 'function') {
+                    detailsEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+        });
+        membersContainer.appendChild(card);
+    });
 }
 
 function renderCapacityFooter_(tfoot, capacity, numberFormat) {
@@ -2360,6 +2675,7 @@ function renderCapacityView() {
     if (totalIssues) totalIssues.textContent = numberFormat.format(capacity.totalIssues || 0);
     renderCapacityPace_(capacity, numberFormat, percentFormat);
     var allCurrentDevs = capacity.developers || [];
+    populateCapacityTeamScopeDropdown_(allCurrentDevs);
     var atRiskDevs = allCurrentDevs.filter(isCapacityDeveloperAtRisk_);
     var overCapDevs = allCurrentDevs.filter(isCapacityDeveloperOverCapacity_);
     var underCapDevs = allCurrentDevs.filter(isCapacityDeveloperUnderCapacity_);
@@ -2403,6 +2719,7 @@ function renderCapacityView() {
     syncCapacityFilterBanner_(allCurrentDevs, displayedCurrentDevs, numberFormat);
     renderCapacityRows_(body, displayedCurrentDevs, numberFormat, 'current', true);
     renderCapacityFooter_(document.getElementById('capacity-table-footer'), capacity, numberFormat);
+    renderCapacityPaceSidebar_(capacity, displayedCurrentDevs, numberFormat);
 
     var futureSprints = APP_STATE.allData.futureSprintCapacity || [];
     var noSprint = APP_STATE.allData.noSprintCapacity || { totalIssues: 0, totalStoryPoints: 0, developers: [] };
@@ -2757,7 +3074,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
     var pctResolver = buildClientActPctResolver_();
     var renderDeveloperRow = function (developer, index, indent) {
         var row = body.insertRow();
-        row.className = 'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/60 transition-colors';
+        var isOverCapRow = developer && developer.developer !== 'Unassigned' && developer.remaining != null && developer.remaining < 0;
+        row.className = isOverCapRow ?
+            'border-b border-[#F5C6A5] bg-[#FFECE0]/35 hover:bg-[#FFECE0]/60 transition-colors' :
+            'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/60 transition-colors';
         var nameCell = row.insertCell();
         nameCell.className = (indent ? 'pl-8 pr-4' : 'px-4') + ' py-3 text-black';
         var name = document.createElement('span');
@@ -3072,6 +3392,377 @@ function createDeveloperPeopleEditButton_(developerName) {
         });
     }
     return btn;
+}
+
+function openCapacityQuickSettingsModal_() {
+    var allData = (APP_STATE && APP_STATE.allData) || {};
+    var rawSettings = allData.capacitySettings || { sprintWorkdays: 10, companyHolidays: [] };
+    var localWorkdays = Number(rawSettings.sprintWorkdays) > 0 ? Number(rawSettings.sprintWorkdays) : 10;
+    var localHolidays = (rawSettings.companyHolidays || []).map(function (h) {
+        return {
+            name: h.name || '',
+            date: h.date || '',
+            sprint: h.sprint || '',
+            days: h.days != null ? Number(h.days) : 1
+        };
+    });
+
+    var modal = document.getElementById('capacity-quick-settings-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'capacity-quick-settings-modal';
+        if (document.body && typeof document.body.appendChild === 'function') {
+            document.body.appendChild(modal);
+        }
+    }
+    modal.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4';
+    modal.hidden = false;
+    if (typeof modal.setAttribute === 'function') {
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+    }
+    modal.replaceChildren();
+
+    var card = document.createElement('div');
+    card.className = 'w-full max-w-2xl rounded-xl border border-[#D8DADA] bg-white shadow-xl overflow-hidden flex flex-col max-h-[85vh]';
+
+    var header = document.createElement('div');
+    header.className = 'flex items-center justify-between border-b border-[#D8DADA] px-6 py-4 bg-white';
+    var titleEl = document.createElement('h3');
+    titleEl.className = 'text-base font-semibold text-black';
+    titleEl.textContent = 'Settings';
+    header.appendChild(titleEl);
+
+    var closeModal = function () {
+        modal.className = 'hidden';
+        modal.hidden = true;
+    };
+    var closeBtn = document.createElement('button');
+    closeBtn.id = 'capacity-settings-close';
+    closeBtn.type = 'button';
+    closeBtn.className = 'rounded-lg border border-[#D8DADA] px-2.5 py-1 text-xs text-[#6F7171] hover:text-black';
+    closeBtn.textContent = '✕';
+    if (typeof closeBtn.addEventListener === 'function') closeBtn.addEventListener('click', closeModal);
+    header.appendChild(closeBtn);
+    card.appendChild(header);
+
+    var tabBar = document.createElement('div');
+    tabBar.className = 'flex items-center gap-6 border-b border-[#D8DADA] px-6 bg-[#F6F6F6]/60 text-xs font-medium';
+    var tabDefs = [
+        { key: 'timeoff', label: 'Team Time Off' },
+        { key: 'metrics', label: 'Metrics' },
+        { key: 'ui', label: 'User Interface' }
+    ];
+    var tabBtns = {};
+    var tabPanels = {};
+    var setActiveTab = function (activeKey) {
+        tabDefs.forEach(function (t) {
+            var isAct = t.key === activeKey;
+            if (tabBtns[t.key]) {
+                tabBtns[t.key].className = isAct ?
+                    'py-3 border-b-2 border-[#006FC1] text-[#006FC1] font-semibold' :
+                    'py-3 border-b-2 border-transparent text-[#6F7171] hover:text-black';
+            }
+            if (tabPanels[t.key]) {
+                tabPanels[t.key].hidden = !isAct;
+                tabPanels[t.key].className = isAct ? 'space-y-4' : 'space-y-4 hidden';
+            }
+        });
+    };
+    tabDefs.forEach(function (t) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.id = 'capacity-settings-tab-' + t.key;
+        b.textContent = t.label;
+        if (typeof b.addEventListener === 'function') {
+            b.addEventListener('click', function () { setActiveTab(t.key); });
+        }
+        tabBtns[t.key] = b;
+        tabBar.appendChild(b);
+    });
+    card.appendChild(tabBar);
+
+    var body = document.createElement('div');
+    body.className = 'p-6 overflow-y-auto flex-1';
+
+    // Tab 1: Team Time Off (Modeled after Image 3)
+    var timeoffPanel = document.createElement('div');
+    tabPanels.timeoff = timeoffPanel;
+    var addRow = document.createElement('div');
+    addRow.className = 'grid grid-cols-1 sm:grid-cols-12 gap-2 items-end rounded-xl border border-[#D8DADA] bg-[#F6F6F6] p-3';
+
+    var dateCol = document.createElement('div');
+    dateCol.className = 'sm:col-span-4';
+    var dateLbl = document.createElement('label');
+    dateLbl.className = 'block text-[11px] font-medium text-[#6F7171] mb-1';
+    dateLbl.textContent = 'Select date';
+    var dateInp = document.createElement('input');
+    dateInp.id = 'capacity-settings-holiday-date';
+    dateInp.type = 'date';
+    dateInp.className = 'w-full rounded-lg border border-[#D8DADA] bg-white px-2.5 py-1.5 text-xs text-black';
+    dateCol.appendChild(dateLbl);
+    dateCol.appendChild(dateInp);
+    addRow.appendChild(dateCol);
+
+    var reasonCol = document.createElement('div');
+    reasonCol.className = 'sm:col-span-5';
+    var reasonLbl = document.createElement('label');
+    reasonLbl.className = 'block text-[11px] font-medium text-[#6F7171] mb-1';
+    reasonLbl.textContent = 'Reason / Holiday Name';
+    var reasonInp = document.createElement('input');
+    reasonInp.id = 'capacity-settings-holiday-name';
+    reasonInp.type = 'text';
+    reasonInp.placeholder = 'e.g. Labor Day, Team Event';
+    reasonInp.className = 'w-full rounded-lg border border-[#D8DADA] bg-white px-2.5 py-1.5 text-xs text-black';
+    reasonCol.appendChild(reasonLbl);
+    reasonCol.appendChild(reasonInp);
+    addRow.appendChild(reasonCol);
+
+    var daysCol = document.createElement('div');
+    daysCol.className = 'sm:col-span-1';
+    var daysLbl = document.createElement('label');
+    daysLbl.className = 'block text-[11px] font-medium text-[#6F7171] mb-1';
+    daysLbl.textContent = 'Days';
+    var daysInp = document.createElement('input');
+    daysInp.id = 'capacity-settings-holiday-days';
+    daysInp.type = 'number';
+    daysInp.min = '0.5';
+    daysInp.step = '0.5';
+    daysInp.value = '1';
+    daysInp.className = 'w-full rounded-lg border border-[#D8DADA] bg-white px-2 py-1.5 text-xs text-right text-black';
+    daysCol.appendChild(daysLbl);
+    daysCol.appendChild(daysInp);
+    addRow.appendChild(daysCol);
+
+    var addBtnCol = document.createElement('div');
+    addBtnCol.className = 'sm:col-span-2';
+    var addHolBtn = document.createElement('button');
+    addHolBtn.id = 'capacity-settings-holiday-add';
+    addHolBtn.type = 'button';
+    addHolBtn.className = 'w-full rounded-lg bg-[#006FC1] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90';
+    addHolBtn.textContent = 'Add';
+    addBtnCol.appendChild(addHolBtn);
+    addRow.appendChild(addBtnCol);
+    timeoffPanel.appendChild(addRow);
+
+    var holTableWrap = document.createElement('div');
+    holTableWrap.className = 'rounded-xl border border-[#D8DADA] overflow-hidden';
+    var renderHolTable = function () {
+        holTableWrap.replaceChildren();
+        if (!localHolidays.length) {
+            var emptyHol = document.createElement('p');
+            emptyHol.className = 'px-4 py-6 text-center text-xs text-[#6F7171]';
+            emptyHol.textContent = 'No company holidays or team events configured.';
+            holTableWrap.appendChild(emptyHol);
+            return;
+        }
+        var tbl = document.createElement('table');
+        tbl.className = 'w-full text-xs';
+        var thRow = tbl.createTHead().insertRow();
+        thRow.className = 'bg-[#F6F6F6] border-b border-[#D8DADA] text-left font-semibold text-black';
+        ['Date / Sprint', 'Reason', 'Days', 'Remove'].forEach(function (hText, idx) {
+            var th = document.createElement('th');
+            th.className = 'px-3 py-2' + (idx >= 2 ? ' text-right' : '');
+            th.textContent = hText;
+            thRow.appendChild(th);
+        });
+        var tb = tbl.createTBody();
+        localHolidays.forEach(function (h, hIdx) {
+            var tr = tb.insertRow();
+            tr.className = 'border-b border-[#D8DADA]/60';
+            var matchedSp = h.date ? findMatchingSprintForDate_(h.date) : '';
+            var effSp = matchedSp || h.sprint || '';
+            var c1 = tr.insertCell();
+            c1.className = 'px-3 py-2 font-medium text-black';
+            c1.textContent = (h.date || '—') + (effSp ? ' (' + effSp + ')' : '');
+            var c2 = tr.insertCell();
+            c2.className = 'px-3 py-2 text-[#6F7171]';
+            c2.textContent = h.name || 'Company Holiday';
+            var c3 = tr.insertCell();
+            c3.className = 'px-3 py-2 text-right tabular-nums text-black';
+            c3.textContent = String(h.days != null ? h.days : 1) + 'd';
+            var c4 = tr.insertCell();
+            c4.className = 'px-3 py-2 text-right';
+            var rmBtn = document.createElement('button');
+            rmBtn.type = 'button';
+            rmBtn.className = 'text-[#B95319] hover:underline font-medium';
+            rmBtn.textContent = 'Remove';
+            if (typeof rmBtn.addEventListener === 'function') {
+                rmBtn.addEventListener('click', function () {
+                    localHolidays.splice(hIdx, 1);
+                    renderHolTable();
+                });
+            }
+            c4.appendChild(rmBtn);
+        });
+        holTableWrap.appendChild(tbl);
+    };
+    if (typeof addHolBtn.addEventListener === 'function') {
+        addHolBtn.addEventListener('click', function () {
+            var dVal = toClientIsoDateKey_(dateInp.value);
+            var nVal = String(reasonInp.value || '').trim() || 'Company Holiday';
+            var dyVal = Number(daysInp.value) > 0 ? Number(daysInp.value) : 1;
+            var spMatch = dVal ? findMatchingSprintForDate_(dVal) : ((allData.sprintCapacity && allData.sprintCapacity.sprintName) || '');
+            localHolidays.push({
+                name: nVal,
+                date: dVal || '',
+                sprint: spMatch || '',
+                days: dyVal
+            });
+            reasonInp.value = '';
+            renderHolTable();
+        });
+    }
+    renderHolTable();
+    timeoffPanel.appendChild(holTableWrap);
+    body.appendChild(timeoffPanel);
+
+    // Tab 2: Metrics
+    var metricsPanel = document.createElement('div');
+    tabPanels.metrics = metricsPanel;
+    var workdaysCard = document.createElement('div');
+    workdaysCard.className = 'rounded-xl border border-[#D8DADA] bg-[#F6F6F6]/60 p-4 space-y-3';
+    var wdLabel = document.createElement('label');
+    wdLabel.className = 'block text-xs font-semibold text-black';
+    wdLabel.textContent = 'Standard Sprint Workdays';
+    var wdInp = document.createElement('input');
+    wdInp.id = 'capacity-settings-workdays';
+    wdInp.type = 'number';
+    wdInp.min = '1';
+    wdInp.step = '1';
+    wdInp.value = String(localWorkdays);
+    wdInp.className = 'rounded-lg border border-[#D8DADA] bg-white px-3 py-1.5 text-sm text-black w-32';
+    if (typeof wdInp.addEventListener === 'function') {
+        wdInp.addEventListener('input', function () {
+            if (Number(wdInp.value) > 0) localWorkdays = Number(wdInp.value);
+        });
+    }
+    var wdDaysRow = document.createElement('div');
+    wdDaysRow.className = 'flex flex-wrap items-center gap-1.5 pt-2';
+    ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].forEach(function (day, dIdx) {
+        var pill = document.createElement('span');
+        pill.className = dIdx < 5 ?
+            'rounded-md bg-[#EBF5FF] border border-[#B8DCFF] px-2.5 py-1 text-[11px] font-semibold text-[#006FC1]' :
+            'rounded-md bg-[#F6F6F6] border border-[#D8DADA] px-2.5 py-1 text-[11px] text-[#6F7171]';
+        pill.textContent = day;
+        wdDaysRow.appendChild(pill);
+    });
+    workdaysCard.appendChild(wdLabel);
+    workdaysCard.appendChild(wdInp);
+    workdaysCard.appendChild(wdDaysRow);
+    metricsPanel.appendChild(workdaysCard);
+    body.appendChild(metricsPanel);
+
+    // Tab 3: User Interface
+    var uiPanel = document.createElement('div');
+    tabPanels.ui = uiPanel;
+    [
+        { key: 'showPaceSidebar', label: 'Actual vs. Expected Sidebar', desc: 'Show live team and member actual vs. expected progress bars alongside the table' },
+        { key: 'showTodayIndicator', label: 'Today / Expected Target Indicator', desc: 'Show vertical target marker line on sprint and developer progress bars' },
+        { key: 'expandAll', label: 'Expand Developer Story Lists by Default', desc: 'Automatically open all developer issue drawers in the sprint table' }
+    ].forEach(function (pref) {
+        var row = document.createElement('label');
+        row.className = 'flex items-center justify-between gap-4 rounded-xl border border-[#D8DADA] p-3.5 cursor-pointer hover:bg-[#F6F6F6]/50';
+        var txtWrap = document.createElement('div');
+        var t1 = document.createElement('div');
+        t1.className = 'text-xs font-semibold text-black';
+        t1.textContent = pref.label;
+        var t2 = document.createElement('div');
+        t2.className = 'text-[11px] text-[#6F7171] mt-0.5';
+        t2.textContent = pref.desc;
+        txtWrap.appendChild(t1);
+        txtWrap.appendChild(t2);
+        var chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.checked = pref.key === 'expandAll' ? Boolean(capacityExpandAllIssues_) : Boolean(capacityUiPrefs_[pref.key]);
+        if (typeof chk.addEventListener === 'function') {
+            chk.addEventListener('change', function () {
+                if (pref.key === 'expandAll') {
+                    capacityExpandAllIssues_ = Boolean(chk.checked);
+                } else {
+                    capacityUiPrefs_[pref.key] = Boolean(chk.checked);
+                }
+                syncCapacityGroupButton_();
+                renderCapacityView();
+            });
+        }
+        row.appendChild(txtWrap);
+        row.appendChild(chk);
+        uiPanel.appendChild(row);
+    });
+    body.appendChild(uiPanel);
+    card.appendChild(body);
+    setActiveTab('timeoff');
+
+    var footer = document.createElement('div');
+    footer.className = 'flex items-center justify-between gap-3 border-t border-[#D8DADA] bg-[#F6F6F6] px-6 py-3.5';
+    var statusEl = document.createElement('p');
+    statusEl.id = 'capacity-settings-status';
+    statusEl.className = 'text-xs text-[#6F7171]';
+    footer.appendChild(statusEl);
+
+    var btnGroup = document.createElement('div');
+    btnGroup.className = 'flex items-center gap-2';
+    var cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'rounded-lg border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:border-black';
+    cancelBtn.textContent = 'Close';
+    if (typeof cancelBtn.addEventListener === 'function') cancelBtn.addEventListener('click', closeModal);
+    btnGroup.appendChild(cancelBtn);
+
+    var saveBtn = document.createElement('button');
+    saveBtn.id = 'capacity-settings-save';
+    saveBtn.type = 'button';
+    saveBtn.className = 'rounded-lg border border-black bg-black px-4 py-1.5 text-xs font-medium text-white hover:opacity-90';
+    saveBtn.textContent = 'Save settings';
+    if (typeof saveBtn.addEventListener === 'function') {
+        saveBtn.addEventListener('click', function () {
+            if (!checkAuth()) return;
+            var entries = (allData.developerCapacity || []).map(function (e) {
+                var copy = {
+                    developer: e.developer,
+                    capacity: e.capacity == null ? '' : String(e.capacity),
+                    manager: e.manager || ''
+                };
+                if (e.pct) copy.pct = e.pct;
+                if (e.sprintOverrides) copy.sprintOverrides = e.sprintOverrides;
+                if (e.ptoDates) copy.ptoDates = e.ptoDates;
+                return copy;
+            });
+            var sprintDatesMap = {};
+            getKnownSprintDateWindows_().forEach(function (w) {
+                sprintDatesMap[w.sprintName] = { start: w.start, end: w.end };
+            });
+            var settingsPayload = {
+                sprintWorkdays: localWorkdays > 0 ? localWorkdays : 10,
+                companyHolidays: localHolidays
+            };
+            if (Object.keys(sprintDatesMap).length > 0) {
+                settingsPayload.sprintDates = sprintDatesMap;
+            }
+            saveBtn.disabled = true;
+            statusEl.textContent = 'Saving...';
+            callServer('saveDeveloperCapacity', [entries, settingsPayload]).then(function (res) {
+                if (!res || res.status !== 'success') {
+                    throw new Error((res && res.message) || 'Could not save settings.');
+                }
+                return callServer('getProjectData', []).then(function (data) {
+                    if (!handleDataLoaded(data)) throw new Error('Settings saved, but refresh failed.');
+                    renderCapacityView();
+                    closeModal();
+                });
+            }).catch(function (err) {
+                statusEl.textContent = getErrorMessage_(err);
+                statusEl.className = 'text-xs text-[#B95319] font-medium';
+            }).finally(function () {
+                saveBtn.disabled = false;
+            });
+        });
+    }
+    btnGroup.appendChild(saveBtn);
+    footer.appendChild(btnGroup);
+    card.appendChild(footer);
+    modal.appendChild(card);
 }
 
 function openDeveloperQuickEditModal_(developerName) {

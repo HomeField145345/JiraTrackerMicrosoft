@@ -222,7 +222,7 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
     developers: [
         {
         developer: 'Avery', issueCount: 2, storyPoints: 5, completedPoints: 3, inProgressPoints: 0, notStartedPoints: 2,
-        completedIssues: 1, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 4, remaining: -1, pace: null,
+        completedIssues: 1, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 4, manager: '', remaining: -1, pace: null,
         issues: [
             { issueType: 'Story', jiraKey: 'TEAM-1', summary: 'Update checkout', status: 'Done', storyPoints: 3, workState: 'completed' },
           { issueType: 'Bug', jiraKey: '', summary: '', status: '', storyPoints: 2, workState: 'notStarted' }
@@ -230,16 +230,16 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
       },
         {
         developer: 'Blair', issueCount: 1, storyPoints: 5, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 5,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: null, remaining: null, pace: null,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null,
         issues: [{ issueType: 'VZAgile Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 5, workState: 'notStarted' }]
       },
       {
         developer: 'Casey', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 7, remaining: 7, pace: null, issues: []
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 7, manager: '', remaining: 7, pace: null, issues: []
       },
       {
         developer: 'Unassigned', issueCount: 2, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 2, unestimatedCount: 2, capacity: null, remaining: null, pace: null,
+        completedIssues: 0, inProgressIssues: 0, notStartedIssues: 2, unestimatedCount: 2, capacity: null, manager: '', remaining: null, pace: null,
         issues: [
             { issueType: 'Story', jiraKey: '', summary: '', status: '', storyPoints: 0, workState: 'notStarted' },
           { issueType: 'Bug', jiraKey: 'TEAM-3', summary: 'Fix login', status: 'Open', storyPoints: 0, workState: 'notStarted' }
@@ -256,7 +256,7 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
   assert.deepEqual(JSON.parse(JSON.stringify(noSprint.developers)), [
       {
       developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 0, remaining: null, pace: null, issues: []
+      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: 0, manager: '', remaining: null, pace: null, issues: []
     }
   ]);
 });
@@ -358,7 +358,7 @@ test('plans capacity for identifiable future sprints without counting closed spr
   assert.deepEqual(Array.from(plan.future, sprint => sprint.sprintName), ['Sprint 13', 'Sprint 14', 'Sprint 16']);
   assert.deepEqual(JSON.parse(JSON.stringify(plan.future[0].developers.find(dev => dev.developer === 'Avery'))), {
     developer: 'Avery', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4,
-    completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 5, remaining: 1, pace: null,
+    completedIssues: 0, inProgressIssues: 0, notStartedIssues: 1, unestimatedCount: 0, capacity: 5, manager: '', remaining: 1, pace: null,
     issues: [{ issueType: 'Story', jiraKey: 'TEAM-2', summary: '', status: '', storyPoints: 4, workState: 'notStarted' }]
   });
   assert.equal(plan.future[1].totalStoryPoints, 2);
@@ -722,7 +722,7 @@ test('filters project data and capacity to the mapped non-admin workbook user', 
   assert.deepEqual(JSON.parse(JSON.stringify(memberData.projects.sprintCapacity.developers)), [
     {
       developer: 'Avery', issueCount: 0, storyPoints: 0, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 0,
-      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: null, remaining: null, pace: null, issues: []
+      completedIssues: 0, inProgressIssues: 0, notStartedIssues: 0, unestimatedCount: 0, capacity: null, manager: '', remaining: null, pace: null, issues: []
     }
   ]);
   assert.equal(memberData.projects.sprintCapacity.sprintName, 'None');

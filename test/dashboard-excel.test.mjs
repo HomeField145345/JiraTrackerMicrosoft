@@ -467,3 +467,53 @@ test('dashboard initialization script and index.html inline scripts have valid s
     if (body) new vm.Script(body);
   }
 });
+
+test('capacity view groups developers by manager with rolled-up workload when toggled', () => {
+  class Element {
+    constructor(tag = '') {
+      this.tag = tag; this.children = []; this.textContent = ''; this.attributes = {}; this.listeners = {}; this.style = {}; this.dataset = {};
+    }
+    appendChild(child) { this.children.push(child); return child; }
+    replaceChildren() { this.children = []; }
+    insertRow() { return this.appendChild(new Element('tr')); }
+    insertCell() { return this.appendChild(new Element('td')); }
+    createTHead() { return this.appendChild(new Element('thead')); }
+    createTBody() { return this.appendChild(new Element('tbody')); }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener(name, callback) { this.listeners[name] = callback; }
+    click() { if (this.listeners.click) this.listeners.click(); }
+  }
+  const elements = Object.fromEntries([
+    'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
+    'capacity-table-body', 'capacity-group-by-manager', 'future-sprint-capacities'
+  ].map(id => [id, new Element()]));
+  const state = {
+    allData: {
+      sprintCapacity: {
+        sprintName: 'Sprint 20', totalStoryPoints: 14, totalIssues: 3, totalCapacity: 15,
+        developers: [
+          { developer: 'Avery', manager: 'Jordan', issueCount: 1, storyPoints: 6, completedPoints: 3, inProgressPoints: 3, notStartedPoints: 0, capacity: 5, remaining: -1, issues: [{ jiraKey: 'T-1', summary: 'A', issueType: 'Story', status: 'Done', storyPoints: 6, workState: 'completed' }] },
+          { developer: 'Blair', manager: 'Jordan', issueCount: 1, storyPoints: 4, completedPoints: 4, inProgressPoints: 0, notStartedPoints: 0, capacity: 5, remaining: 1, issues: [{ jiraKey: 'T-2', summary: 'B', issueType: 'Story', status: 'Done', storyPoints: 4, workState: 'completed' }] },
+          { developer: 'Casey', manager: '', issueCount: 1, storyPoints: 4, completedPoints: 0, inProgressPoints: 0, notStartedPoints: 4, capacity: 5, remaining: 1, issues: [{ jiraKey: 'T-3', summary: 'C', issueType: 'Story', status: 'To Do', storyPoints: 4, workState: 'notStarted' }] }
+        ]
+      },
+      futureSprintCapacity: []
+    }
+  };
+  const context = vm.createContext({
+    window: { addEventListener() { } }, APP_STATE: state,
+    Intl: { NumberFormat: function (_, options) { return new Intl.NumberFormat('en-US', options); } },
+    document: { getElementById: id => elements[id], createElement: tag => new Element(tag) }
+  });
+  vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
+  context.renderCapacityView();
+  // Toggle Group by manager ON
+  elements['capacity-group-by-manager'].click();
+  assert.equal(elements['capacity-group-by-manager'].attributes['aria-pressed'], 'true');
+  const groupRows = elements['capacity-table-body'].children.filter(r => r.attributes['data-manager-group']);
+  assert.deepEqual(groupRows.map(r => r.attributes['data-manager-group']), ['Jordan', 'No manager assigned']);
+  assert.equal(groupRows[0].children[0].textContent, 'Jordan (2 devs)');
+  assert.equal(groupRows[0].children[2].textContent, '10'); // 6 + 4 pts
+  assert.equal(groupRows[0].children[3].textContent, '10'); // 5 + 5 cap
+  assert.equal(groupRows[0].children[4].textContent, '0');  // 0 remaining
+});

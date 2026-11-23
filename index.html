@@ -662,33 +662,38 @@
                     </div>
 
                     <!-- Section Sub-Tabs -->
-                    <div class="px-4 mb-3 flex flex-wrap items-center gap-2" role="tablist"
-                      aria-label="Capacity sections">
-                      <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab"
-                        aria-selected="true"
-                        class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
-                        <span>Current sprint</span>
-                      </button>
-                      <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
-                        aria-selected="false"
-                        class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                        <span>Future sprints</span>
-                        <span id="capacity-tab-future-count"
-                          class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                      </button>
-                      <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
-                        aria-selected="false"
-                        class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                        <span>No sprint assigned</span>
-                        <span id="capacity-tab-nosprint-count"
-                          class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                      </button>
-                      <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
-                        aria-selected="false"
-                        class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                        <span>Past sprint open</span>
-                        <span id="capacity-tab-pastopen-count"
-                          class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                    <div class="px-4 mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Capacity sections">
+                        <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab"
+                          aria-selected="true"
+                          class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
+                          <span>Current sprint</span>
+                        </button>
+                        <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
+                          aria-selected="false"
+                          class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                          <span>Future sprints</span>
+                          <span id="capacity-tab-future-count"
+                            class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                        </button>
+                        <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
+                          aria-selected="false"
+                          class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                          <span>No sprint assigned</span>
+                          <span id="capacity-tab-nosprint-count"
+                            class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                        </button>
+                        <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
+                          aria-selected="false"
+                          class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                          <span>Past sprint open</span>
+                          <span id="capacity-tab-pastopen-count"
+                            class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                        </button>
+                      </div>
+                      <button type="button" id="capacity-group-by-manager" aria-pressed="false"
+                        class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                        <span>Group by manager</span>
                       </button>
                     </div>
 

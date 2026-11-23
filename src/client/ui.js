@@ -2015,6 +2015,85 @@ function renderPastSprintOpenCapacity_(pastOpen, numberFormat) {
     container.appendChild(tableWrapper);
 }
 
+function renderCapacityManagerGroupRow_(body, managerName, members, numberFormat, percentFormat) {
+    var totalIssues = 0;
+    var totalPoints = 0;
+    var totalCap = 0;
+    var hasCap = false;
+    var completed = 0;
+    var inProgress = 0;
+    var notStarted = 0;
+    members.forEach(function (dev) {
+        totalIssues += dev.issueCount || 0;
+        totalPoints += dev.storyPoints || 0;
+        if (dev.capacity != null) {
+            totalCap += dev.capacity;
+            hasCap = true;
+        }
+        var bd = getDeveloperPointBreakdown_(dev);
+        completed += bd.completed;
+        inProgress += bd.inProgress;
+        notStarted += bd.notStarted;
+    });
+
+    var row = body.insertRow();
+    row.className = 'bg-[#F6F6F6] border-y border-[#D8DADA] text-xs font-semibold text-black';
+    row.setAttribute('data-manager-group', managerName);
+
+    var nameCell = row.insertCell();
+    nameCell.className = 'px-4 py-2.5';
+    nameCell.textContent = managerName + ' (' + members.length + (members.length === 1 ? ' dev' : ' devs') + ')';
+
+    var issuesCell = row.insertCell();
+    issuesCell.className = 'px-3 py-2.5 text-right tabular-nums text-[#6F7171]';
+    issuesCell.textContent = numberFormat.format(totalIssues);
+
+    var ptsCell = row.insertCell();
+    ptsCell.className = 'px-3 py-2.5 text-right tabular-nums text-black';
+    ptsCell.textContent = numberFormat.format(totalPoints);
+
+    var capCell = row.insertCell();
+    capCell.className = 'px-3 py-2.5 text-right tabular-nums text-black';
+    capCell.textContent = hasCap ? numberFormat.format(totalCap) : '—';
+
+    var rem = hasCap ? totalCap - totalPoints : null;
+    var remCell = row.insertCell();
+    var remClass = rem == null ? 'text-[#6F7171]' : rem < 0 ? 'text-[#B95319]' : rem > 0 ? 'text-[#008331]' : 'text-[#6F7171]';
+    remCell.className = 'px-3 py-2.5 text-right tabular-nums ' + remClass;
+    remCell.textContent = rem == null ? '—' : numberFormat.format(rem);
+
+    var wkCell = row.insertCell();
+    wkCell.className = 'px-3 py-2.5 min-w-[180px] text-xs font-normal text-[#6F7171] whitespace-nowrap';
+    if (hasCap && totalCap > 0) {
+        var ratio = totalPoints / totalCap;
+        var pctSpan = document.createElement('span');
+        pctSpan.className = 'font-medium text-black';
+        pctSpan.textContent = percentFormat.format(ratio);
+        wkCell.appendChild(pctSpan);
+        if (rem < 0) {
+            var badge = document.createElement('span');
+            badge.className = 'ml-2 inline-block rounded-full bg-[#FFF9DE] px-2 py-0.5 text-[#4B3F04] font-medium';
+            badge.textContent = 'Over capacity';
+            wkCell.appendChild(badge);
+        }
+        var track = document.createElement('div');
+        track.className = 'relative mt-1 h-2 rounded-full bg-white border border-[#D8DADA]';
+        track.setAttribute('aria-hidden', 'true');
+        appendStackedSegments_(track, { completed: completed, inProgress: inProgress, notStarted: notStarted }, Math.max(totalCap, totalPoints));
+        if (rem < 0 && totalPoints > 0) {
+            var marker = document.createElement('div');
+            marker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-black';
+            marker.style.left = ((totalCap / totalPoints) * 100) + '%';
+            track.appendChild(marker);
+        }
+        wkCell.appendChild(track);
+    } else if (totalPoints > 0) {
+        wkCell.textContent = numberFormat.format(completed) + ' done · ' + numberFormat.format(inProgress) + ' active · ' + numberFormat.format(notStarted) + ' to do';
+    } else {
+        wkCell.textContent = '—';
+    }
+}
+
 function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurrentSprint) {
     body.replaceChildren();
     if (!developers || developers.length === 0) {
@@ -2027,11 +2106,11 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
     }
 
     var percentFormat = new Intl.NumberFormat(undefined, { style: 'percent', maximumFractionDigits: 1 });
-    developers.forEach(function (developer, index) {
+    var renderDeveloperRow = function (developer, index, indent) {
         var row = body.insertRow();
         row.className = 'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/60 transition-colors';
         var nameCell = row.insertCell();
-        nameCell.className = 'px-4 py-3 text-black';
+        nameCell.className = (indent ? 'pl-8 pr-4' : 'px-4') + ' py-3 text-black';
         var name = document.createElement('span');
         name.className = 'font-medium text-black mr-2';
         name.textContent = developer.developer;
@@ -2092,6 +2171,43 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         remCell.className = 'px-3 py-3 text-right tabular-nums ' + remClass;
         remCell.textContent = developer.remaining == null ? '—' : numberFormat.format(developer.remaining);
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
+    };
+
+    if (!capacityGroupByManager_) {
+        developers.forEach(function (developer, index) {
+            renderDeveloperRow(developer, index, false);
+        });
+        return;
+    }
+
+    var groups = new Map();
+    var unassignedDevs = [];
+    developers.forEach(function (developer) {
+        if (developer.developer === 'Unassigned') {
+            unassignedDevs.push(developer);
+            return;
+        }
+        var mgr = String(developer.manager || '').trim() || 'No manager assigned';
+        var key = mgr.toLowerCase();
+        if (!groups.has(key)) groups.set(key, { name: mgr, members: [] });
+        groups.get(key).members.push(developer);
+    });
+
+    var sortedGroups = Array.from(groups.values()).sort(function (a, b) {
+        if (a.name === 'No manager assigned' && b.name !== 'No manager assigned') return 1;
+        if (b.name === 'No manager assigned' && a.name !== 'No manager assigned') return -1;
+        return a.name.localeCompare(b.name);
+    });
+
+    var rowIndex = 0;
+    sortedGroups.forEach(function (group) {
+        renderCapacityManagerGroupRow_(body, group.name, group.members, numberFormat, percentFormat);
+        group.members.forEach(function (dev) {
+            renderDeveloperRow(dev, rowIndex++, true);
+        });
+    });
+    unassignedDevs.forEach(function (dev) {
+        renderDeveloperRow(dev, rowIndex++, false);
     });
 }
 
@@ -2218,13 +2334,32 @@ function renderDeveloperCapacityConfig() {
         var name = String(project.Assignee || '').trim();
         if (name && name.toLowerCase() !== 'unassigned' && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name);
     });
-    var capacities = new Map((APP_STATE.allData.developerCapacity || []).map(function (entry) {
-        return [entry.developer.toLowerCase(), entry.capacity];
-    }));
+    var capacities = new Map();
+    var managers = new Map();
+    var distinctManagers = new Set();
+    (APP_STATE.allData.developerCapacity || []).forEach(function (entry) {
+        if (!entry || !entry.developer) return;
+        var key = entry.developer.toLowerCase();
+        capacities.set(key, entry.capacity);
+        var mgr = String(entry.manager || '').trim();
+        if (mgr) {
+            managers.set(key, mgr);
+            distinctManagers.add(mgr);
+        }
+    });
+    var managerList = document.getElementById('developer-manager-options');
+    if (managerList) {
+        managerList.replaceChildren();
+        Array.from(distinctManagers).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (mgr) {
+            var opt = document.createElement('option');
+            opt.value = mgr;
+            managerList.appendChild(opt);
+        });
+    }
     var developers = Array.from(names.values()).sort(function (a, b) { return a.localeCompare(b); });
     if (!developers.length) {
         var empty = body.insertRow().insertCell();
-        empty.colSpan = 2;
+        empty.colSpan = 3;
         empty.className = 'px-3 py-8 text-gray-600';
         empty.textContent = 'No Jira assignees found.';
     }
@@ -2238,6 +2373,23 @@ function renderDeveloperCapacityConfig() {
         label.className = 'text-black font-normal';
         label.textContent = name;
         nameCell.appendChild(label);
+
+        var managerCell = row.insertCell();
+        managerCell.className = 'px-4 py-3';
+        var managerInput = document.createElement('input');
+        managerInput.id = 'developer-manager-' + index;
+        managerInput.type = 'text';
+        managerInput.maxLength = 128;
+        managerInput.placeholder = 'Assign manager';
+        if (typeof managerInput.setAttribute === 'function') {
+            managerInput.setAttribute('list', 'developer-manager-options');
+            managerInput.setAttribute('aria-label', name + ' manager');
+        }
+        managerInput.dataset.developerManager = name;
+        managerInput.className = 'border border-[#D8DADA] focus:border-black focus:outline-none rounded-lg px-3 py-1.5 w-44 bg-white text-black';
+        managerInput.value = managers.get(name.toLowerCase()) || '';
+        managerCell.appendChild(managerInput);
+
         var cell = row.insertCell();
         cell.className = 'px-4 py-3 text-right';
         var input = document.createElement('input');
@@ -2258,7 +2410,14 @@ function saveDeveloperCapacity(event) {
     if (!checkAuth()) return;
     var status = document.getElementById('developer-capacity-status');
     var button = document.getElementById('save-developer-capacity');
-    var inputs = Array.from(document.querySelectorAll('#developer-capacity-body input'));
+    var inputs = Array.from(document.querySelectorAll('#developer-capacity-body input[data-developer]'));
+    var managerInputs = Array.from(document.querySelectorAll('#developer-capacity-body input[data-developer-manager]'));
+    var managerByDev = new Map();
+    managerInputs.forEach(function (input) {
+        if (input && input.dataset && input.dataset.developerManager) {
+            managerByDev.set(input.dataset.developerManager.toLowerCase(), String(input.value || '').trim());
+        }
+    });
     var invalid = inputs.find(function (input) {
         return !input.validity.valid || (input.value !== '' && (!Number.isFinite(Number(input.value)) || Number(input.value) < 0));
     });
@@ -2270,10 +2429,16 @@ function saveDeveloperCapacity(event) {
         return;
     }
     var entries = inputs.map(function (input) {
-        return { developer: input.dataset.developer, capacity: input.value };
+        var dev = input.dataset.developer;
+        var entry = { developer: dev, capacity: input.value };
+        if (managerByDev.has(dev.toLowerCase())) {
+            entry.manager = managerByDev.get(dev.toLowerCase());
+        }
+        return entry;
     });
     button.disabled = true;
     inputs.forEach(function (input) { input.disabled = true; });
+    managerInputs.forEach(function (input) { input.disabled = true; });
     status.textContent = 'Saving capacity...';
     status.classList.remove('config-status-error', 'config-status-success');
     status.classList.add('config-status-neutral');
@@ -2296,6 +2461,7 @@ function saveDeveloperCapacity(event) {
     }).finally(function () {
         button.disabled = false;
         inputs.forEach(function (input) { input.disabled = false; });
+        managerInputs.forEach(function (input) { input.disabled = false; });
     });
 }
 

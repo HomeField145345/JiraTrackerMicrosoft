@@ -475,6 +475,12 @@ test('dashboard initialization script and index.html inline scripts have valid s
     const body = match[1].trim();
     if (body) new vm.Script(body);
   }
+  const idCounts = {};
+  for (const match of html.matchAll(/\bid="([^"]+)"/g)) {
+    idCounts[match[1]] = (idCounts[match[1]] || 0) + 1;
+  }
+  const duplicateIds = Object.entries(idCounts).filter(([, count]) => count > 1);
+  assert.deepEqual(duplicateIds, []);
 });
 
 test('capacity view groups developers by manager with rolled-up workload when toggled', () => {

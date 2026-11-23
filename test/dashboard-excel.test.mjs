@@ -951,4 +951,29 @@ test('capacity view groups developers by PCT with rolled-up workload when toggle
   assert.equal(pctRows[0].children[2].textContent, '10'); // 6 + 4 pts
   assert.equal(pctRows[0].children[3].textContent, '10'); // 5 + 5 cap
   assert.equal(pctRows[0].children[4].textContent, '0');  // 0 remaining
+
+  // Verify PCT inference from Epic Summary (Jira Epic Link) and Linked Issues when developer.pct is blank
+  state.allData.projects = [
+    { 'Jira #': 'EPIC-100', Summary: 'Mobile Wallet Modernization', 'Issue Type': 'Epic', 'ACT/PCT': 'Wallet PCT' },
+    { 'Jira #': 'STORY-201', Summary: 'Apple Pay button', 'Issue Type': 'Story', Assignee: 'Casey', 'Epic Link': 'Mobile Wallet Modernization' }
+  ];
+  context.renderCapacityView();
+  const updatedPctRows = elements['capacity-table-body'].children.filter(r => r.attributes['data-pct-group']);
+  assert.deepEqual(updatedPctRows.map(r => r.attributes['data-pct-group']), ['Checkout PCT', 'Wallet PCT']);
+
+  // Verify getStoryAtRiskInfo_ identifies open current-sprint stories assigned to at-risk developers
+  state.allData.sprintCapacity.developers[0].issues = [
+    { jiraKey: 'STORY-900', summary: 'Critical checkout fix', issueType: 'Story', status: 'In Progress', storyPoints: 6, workState: 'inProgress' }
+  ];
+  const atRiskInfo = context.getStoryAtRiskInfo_({
+    'Jira #': 'STORY-900',
+    Summary: 'Critical checkout fix',
+    'Issue Type': 'Story',
+    Status: 'In Progress',
+    Assignee: 'Avery',
+    sprint: 'Sprint 20',
+    'Story Points': 6
+  });
+  assert.equal(Boolean(atRiskInfo && atRiskInfo.isAtRisk), true);
+  assert.match(atRiskInfo.reasons.join(' '), /over capacity/i);
 });

@@ -816,6 +816,8 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   const elements = Object.fromEntries([
     'capacity-sprint-name', 'capacity-total-points', 'capacity-total-issues',
     'capacity-table-body', 'capacity-filter-at-risk', 'capacity-filter-at-risk-count',
+    'capacity-filter-over-capacity', 'capacity-filter-over-capacity-count',
+    'capacity-filter-under-capacity', 'capacity-filter-under-capacity-count',
     'future-sprint-capacities'
   ].map(id => [id, new Element()]));
   const state = {
@@ -839,8 +841,10 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   vm.runInContext(readFileSync(new URL('../src/client/ui.js', import.meta.url), 'utf8'), context);
   context.renderCapacityView();
 
-  // Initially shows all 3 developers (6 rows including details rows), and badge count is 2 (Blair over capacity + Casey at_risk)
+  // Initially shows all 3 developers (6 rows including details rows), and badge counts are populated
   assert.equal(elements['capacity-filter-at-risk-count'].textContent, '2');
+  assert.equal(elements['capacity-filter-over-capacity-count'].textContent, '1');
+  assert.equal(elements['capacity-filter-under-capacity-count'].textContent, '1');
   assert.equal(elements['capacity-table-body'].children.length, 6);
 
   // Toggle "At risk only" ON -> only Blair and Casey remain (4 rows including details rows)
@@ -850,8 +854,22 @@ test('at-risk filter on current sprint shows only developers who are at risk, be
   assert.equal(elements['capacity-table-body'].children[0].children[0].children[0].textContent, 'Blair');
   assert.equal(elements['capacity-table-body'].children[2].children[0].children[0].textContent, 'Casey');
 
-  // Toggle "At risk only" OFF -> all 3 developers shown again
-  elements['capacity-filter-at-risk'].click();
+  // Switch directly to "Over capacity" -> only Blair remains (remaining = -1)
+  elements['capacity-filter-over-capacity'].click();
   assert.equal(elements['capacity-filter-at-risk'].attributes['aria-pressed'], 'false');
+  assert.equal(elements['capacity-filter-over-capacity'].attributes['aria-pressed'], 'true');
+  assert.equal(elements['capacity-table-body'].children.length, 2);
+  assert.equal(elements['capacity-table-body'].children[0].children[0].children[0].textContent, 'Blair');
+
+  // Switch directly to "Under capacity" -> only Avery remains (remaining = +3)
+  elements['capacity-filter-under-capacity'].click();
+  assert.equal(elements['capacity-filter-over-capacity'].attributes['aria-pressed'], 'false');
+  assert.equal(elements['capacity-filter-under-capacity'].attributes['aria-pressed'], 'true');
+  assert.equal(elements['capacity-table-body'].children.length, 2);
+  assert.equal(elements['capacity-table-body'].children[0].children[0].children[0].textContent, 'Avery');
+
+  // Toggle "Under capacity" OFF -> all 3 developers shown again
+  elements['capacity-filter-under-capacity'].click();
+  assert.equal(elements['capacity-filter-under-capacity'].attributes['aria-pressed'], 'false');
   assert.equal(elements['capacity-table-body'].children.length, 6);
 });

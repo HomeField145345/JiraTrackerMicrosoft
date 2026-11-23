@@ -1793,6 +1793,7 @@ var capacityGroupByManager_ = (function () {
 })();
 
 var capacityFilterAtRisk_ = false;
+var capacityCurrentFilter_ = '';
 
 function isCapacityDeveloperAtRisk_(developer) {
     if (!developer || developer.developer === 'Unassigned') return false;
@@ -1802,24 +1803,68 @@ function isCapacityDeveloperAtRisk_(developer) {
     return false;
 }
 
-function syncCapacityAtRiskButton_(atRiskCount) {
-    var btn = document.getElementById('capacity-filter-at-risk');
-    if (!btn) return;
-    btn.setAttribute('aria-pressed', String(capacityFilterAtRisk_));
-    btn.className = capacityFilterAtRisk_ ?
-        'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors' :
-        'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
-    var countEl = document.getElementById('capacity-filter-at-risk-count');
-    if (countEl && typeof atRiskCount === 'number') {
-        countEl.textContent = String(atRiskCount);
-        if (capacityFilterAtRisk_) {
-            countEl.className = 'rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white';
-        } else {
-            countEl.className = atRiskCount > 0 ?
-                'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]' :
-                'rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]';
+function isCapacityDeveloperOverCapacity_(developer) {
+    if (!developer || developer.developer === 'Unassigned') return false;
+    return developer.remaining != null && developer.remaining < 0;
+}
+
+function isCapacityDeveloperUnderCapacity_(developer) {
+    if (!developer || developer.developer === 'Unassigned') return false;
+    return developer.remaining != null && developer.remaining > 0;
+}
+
+function setCapacityCurrentFilter_(filterKey) {
+    capacityCurrentFilter_ = capacityCurrentFilter_ === filterKey ? '' : filterKey;
+    capacityFilterAtRisk_ = capacityCurrentFilter_ === 'at_risk';
+}
+
+function syncCapacityFilterButtons_(counts) {
+    var c = counts || {};
+    var configs = [
+        {
+            key: 'at_risk',
+            btnId: 'capacity-filter-at-risk',
+            countId: 'capacity-filter-at-risk-count',
+            count: c.atRisk,
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors',
+            highlightCountClass: 'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]'
+        },
+        {
+            key: 'over_capacity',
+            btnId: 'capacity-filter-over-capacity',
+            countId: 'capacity-filter-over-capacity-count',
+            count: c.overCapacity,
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors',
+            highlightCountClass: 'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]'
+        },
+        {
+            key: 'under_capacity',
+            btnId: 'capacity-filter-under-capacity',
+            countId: 'capacity-filter-under-capacity-count',
+            count: c.underCapacity,
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#008331] bg-[#008331] px-3 py-1.5 text-xs font-medium text-white transition-colors',
+            highlightCountClass: 'rounded-full bg-[#DCF5E6] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#008331]'
         }
-    }
+    ];
+    configs.forEach(function (cfg) {
+        var btn = document.getElementById(cfg.btnId);
+        var isActive = capacityCurrentFilter_ === cfg.key;
+        if (btn) {
+            btn.setAttribute('aria-pressed', String(isActive));
+            btn.className = isActive ? cfg.activeBtnClass :
+                'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        }
+        var countEl = document.getElementById(cfg.countId);
+        if (countEl && typeof cfg.count === 'number') {
+            countEl.textContent = String(cfg.count);
+            if (isActive) {
+                countEl.className = 'rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white';
+            } else {
+                countEl.className = cfg.count > 0 ? cfg.highlightCountClass :
+                    'rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]';
+            }
+        }
+    });
 }
 
 function syncCapacityGroupButton_() {
@@ -1868,15 +1913,21 @@ function bindCapacitySubTabs_() {
         tilePastOpen._capTabBound = true;
         tilePastOpen.addEventListener('click', function () { setActiveCapacityTab_('pastopen'); });
     }
-    var atRiskBtn = document.getElementById('capacity-filter-at-risk');
-    if (atRiskBtn && !atRiskBtn._capAtRiskBound) {
-        atRiskBtn._capAtRiskBound = true;
-        atRiskBtn.addEventListener('click', function () {
-            capacityFilterAtRisk_ = !capacityFilterAtRisk_;
-            syncCapacityAtRiskButton_();
-            renderCapacityView();
-        });
-    }
+    [
+        { id: 'capacity-filter-at-risk', key: 'at_risk' },
+        { id: 'capacity-filter-over-capacity', key: 'over_capacity' },
+        { id: 'capacity-filter-under-capacity', key: 'under_capacity' }
+    ].forEach(function (item) {
+        var filterBtn = document.getElementById(item.id);
+        if (filterBtn && !filterBtn._capFilterBound) {
+            filterBtn._capFilterBound = true;
+            filterBtn.addEventListener('click', function () {
+                setCapacityCurrentFilter_(item.key);
+                syncCapacityFilterButtons_();
+                renderCapacityView();
+            });
+        }
+    });
     var groupBtn = document.getElementById('capacity-group-by-manager');
     if (groupBtn && !groupBtn._capGroupBound) {
         groupBtn._capGroupBound = true;
@@ -1946,8 +1997,16 @@ function renderCapacityView() {
     renderCapacityPace_(capacity, numberFormat, percentFormat);
     var allCurrentDevs = capacity.developers || [];
     var atRiskDevs = allCurrentDevs.filter(isCapacityDeveloperAtRisk_);
-    syncCapacityAtRiskButton_(atRiskDevs.length);
-    var displayedCurrentDevs = capacityFilterAtRisk_ ? atRiskDevs : allCurrentDevs;
+    var overCapDevs = allCurrentDevs.filter(isCapacityDeveloperOverCapacity_);
+    var underCapDevs = allCurrentDevs.filter(isCapacityDeveloperUnderCapacity_);
+    syncCapacityFilterButtons_({
+        atRisk: atRiskDevs.length,
+        overCapacity: overCapDevs.length,
+        underCapacity: underCapDevs.length
+    });
+    var displayedCurrentDevs = capacityCurrentFilter_ === 'at_risk' ? atRiskDevs :
+        capacityCurrentFilter_ === 'over_capacity' ? overCapDevs :
+            capacityCurrentFilter_ === 'under_capacity' ? underCapDevs : allCurrentDevs;
     renderCapacityRows_(body, displayedCurrentDevs, numberFormat, 'current', true);
     renderCapacityFooter_(document.getElementById('capacity-table-footer'), capacity, numberFormat);
 
@@ -2288,8 +2347,13 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var emptyCell = emptyRow.insertCell();
         emptyCell.colSpan = 6;
         emptyCell.className = 'px-3 py-8 text-center text-gray-500';
-        emptyCell.textContent = (isCurrentSprint && capacityFilterAtRisk_) ?
-            'No at-risk developers in the current sprint.' : 'No developers found.';
+        var emptyMsg = 'No developers found.';
+        if (isCurrentSprint) {
+            if (capacityCurrentFilter_ === 'at_risk') emptyMsg = 'No at-risk developers in the current sprint.';
+            else if (capacityCurrentFilter_ === 'over_capacity') emptyMsg = 'No over-capacity developers in the current sprint.';
+            else if (capacityCurrentFilter_ === 'under_capacity') emptyMsg = 'No under-capacity developers in the current sprint.';
+        }
+        emptyCell.textContent = emptyMsg;
         return;
     }
 

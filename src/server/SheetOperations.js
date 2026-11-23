@@ -262,7 +262,7 @@ function normalizeDeveloperSprintOverrides_(raw) {
   const result = {};
   Object.keys(parsed).forEach(sprintKey => {
     const sprintName = String(sprintKey || '').trim();
-    if (!sprintName || sprintName === '__ptoDates__') return;
+    if (!sprintName || sprintName === '__ptoDates__' || sprintName === '__pct__') return;
     const item = parsed[sprintKey];
     if (!item || typeof item !== 'object') return;
     const rawPto = item.ptoDays;
@@ -299,6 +299,22 @@ function extractDeveloperPtoDatesFromCell_(raw) {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
   return normalizeDeveloperPtoDates_(parsed.__ptoDates__);
+}
+
+function extractDeveloperPctFromCell_(raw) {
+  if (!raw) return '';
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (e) {
+      return '';
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return '';
+  return parsed.__pct__ == null ? '' : String(parsed.__pct__).trim();
 }
 
 function normalizeDeveloperCapacitySettings_(raw) {
@@ -422,6 +438,10 @@ function readDeveloperCapacity(sheet) {
     const ptoDates = extractDeveloperPtoDatesFromCell_(row[sprintOverridesIndex]);
     if (ptoDates.length > 0) {
       entry.ptoDates = ptoDates;
+    }
+    const pct = extractDeveloperPctFromCell_(row[sprintOverridesIndex]);
+    if (pct) {
+      entry.pct = pct;
     }
   }
   entries.push(entry);

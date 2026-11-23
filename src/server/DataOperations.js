@@ -175,6 +175,9 @@ function saveConfiguration_(optionsData) {
           throw new Error('Capacity must be a non-negative number or blank.');
         }
         var manager = entry.manager == null ? '' : String(entry.manager).trim();
+        var hasPct = Object.prototype.hasOwnProperty.call(entry, 'pct') ||
+          Boolean(entry.sprintOverrides && typeof entry.sprintOverrides.__pct__ === 'string');
+        var pct = hasPct ? String(entry.pct != null ? entry.pct : (entry.sprintOverrides && entry.sprintOverrides.__pct__) || '').trim() : '';
         var hasSprintOverrides = Object.prototype.hasOwnProperty.call(entry, 'sprintOverrides');
         var sprintOverrides = hasSprintOverrides ? normalizeDeveloperSprintOverrides_(entry.sprintOverrides) : null;
         var hasPtoDates = Object.prototype.hasOwnProperty.call(entry, 'ptoDates') ||
@@ -186,6 +189,8 @@ function saveConfiguration_(optionsData) {
           capacity: capacity,
           manager: manager,
           hasManager: Object.prototype.hasOwnProperty.call(entry, 'manager'),
+          pct: pct,
+          hasPct: hasPct,
           hasSprintOverrides: hasSprintOverrides,
           sprintOverrides: sprintOverrides,
           hasPtoDates: hasPtoDates,
@@ -212,10 +217,14 @@ function saveConfiguration_(optionsData) {
         var row = rowByName.get(update.key);
         var old = existingByName.get(update.key);
         var managerValue = update.hasManager ? update.manager : (old && old.manager ? old.manager : '');
+        var pctValue = update.hasPct ? update.pct : (old && old.pct ? old.pct : '');
         var overridesObj = Object.assign({}, update.hasSprintOverrides ? update.sprintOverrides : (old && old.sprintOverrides ? old.sprintOverrides : {}));
         var ptoDatesArr = update.hasPtoDates ? update.ptoDates : (old && old.ptoDates ? old.ptoDates : []);
         if (ptoDatesArr && ptoDatesArr.length > 0) {
           overridesObj.__ptoDates__ = ptoDatesArr;
+        }
+        if (pctValue) {
+          overridesObj.__pct__ = pctValue;
         }
         var overridesValue = overridesObj && Object.keys(overridesObj).length > 0 ? JSON.stringify(overridesObj) : '';
         var values = [update.developer, update.capacity === null ? '' : update.capacity, old ? old.notes : '', timestamp, managerValue, overridesValue];

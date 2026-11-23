@@ -522,9 +522,28 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries, option
       developer: name,
       capacity: typeof points === 'number' && Number.isFinite(points) && points >= 0 ? points : null,
       manager: config.manager == null ? '' : String(config.manager).trim(),
+      pct: config.pct == null ? '' : String(config.pct).trim(),
       sprintOverrides: config.sprintOverrides && typeof config.sprintOverrides === 'object' ? config.sprintOverrides : null,
       ptoDates: Array.isArray(config.ptoDates) ? config.ptoDates : []
     });
+  });
+
+  var epicActPctByKey = new Map();
+  var inferredPctByDev = new Map();
+  (items || []).forEach(function (item) {
+    var jiraKey = String(item['Jira #'] || '').trim();
+    var actPct = String(item['ACT/PCT'] || '').trim();
+    if (jiraKey && actPct) epicActPctByKey.set(jiraKey.toLowerCase(), actPct);
+  });
+  (items || []).forEach(function (item) {
+    var dev = String(item.Assignee || item.assignee || item['Assigned Dev'] || '').trim();
+    if (!dev || dev.toLowerCase() === 'unassigned') return;
+    var dKey = dev.toLowerCase();
+    if (inferredPctByDev.has(dKey)) return;
+    var directPct = String(item['ACT/PCT'] || '').trim();
+    var epicKey = String(item['Epic Link'] || '').trim().toLowerCase();
+    var resolvedPct = directPct || (epicKey ? epicActPctByKey.get(epicKey) : '');
+    if (resolvedPct) inferredPctByDev.set(dKey, resolvedPct);
   });
 
   var capacitySettings = (opts && opts.capacitySettings) || {};
@@ -653,7 +672,7 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries, option
     var target = sprintName.toLowerCase();
     var keys = Object.keys(overrides);
     for (var i = 0; i < keys.length; i++) {
-      if (keys[i] !== '__ptoDates__' && String(keys[i] || '').trim().toLowerCase() === target) {
+      if (keys[i] !== '__ptoDates__' && keys[i] !== '__pct__' && String(keys[i] || '').trim().toLowerCase() === target) {
         return overrides[keys[i]];
       }
     }
@@ -728,6 +747,10 @@ function analyzeSprintCapacity(items, currentSprintName, capacityEntries, option
     entry.issueCount = entry.issues.length;
     entry.capacity = capacity;
     entry.manager = config && config.manager ? config.manager : '';
+    var resolvedDevPct = (config && config.pct) ? config.pct : (entry.developer !== 'Unassigned' ? (inferredPctByDev.get(entry.developer.toLowerCase()) || '') : '');
+    if (resolvedDevPct) {
+      entry.pct = resolvedDevPct;
+    }
     if (hasSprint && entry.developer !== 'Unassigned' && (ptoDays > 0 || sprintHolidayDays > 0 || manualOverride !== null || combinedNotes)) {
       entry.baseCapacity = baseCapacity;
       if (ptoDays > 0) entry.ptoDays = ptoDays;

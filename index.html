@@ -9,32 +9,7 @@
   <link rel="stylesheet" href="./assets/css/Gantt.css">
   <link rel="stylesheet" href="./assets/css/Dashboard.css">
   <link rel="stylesheet" href="./assets/css/Config.css">
-  <script>
-    window.__deferredDashboardAssets = window.__deferredDashboardAssets || {};
-
-    window.getStoredProjectHubUser = function() {
-      return (window.ProjectHubExcel && window.ProjectHubExcel.user()) || {};
-    };
-
-    function loadDeferredDashboardAsset(filename) {
-      if (!/^(gantt|Config)\.js$/.test(filename)) {
-        return Promise.reject(new Error('Asset not allowed: ' + filename));
-      }
-      if (!window.__deferredDashboardAssets[filename]) {
-        window.__def erredDashboardAssets[filename] = new Promise(function(resolve, reject) {
-          var script = document.c reateElement('script');
-          script.src = './src/client/' + filename;
-          script.onload = function() { resolve(); };
-          script.onerror = function() {
-            delete window.__deferredDashboardAssets[filename];
-            reject(new Error('Could not load ' + filename + '.'));
-          };
-          document.body.appendChild(script);
-        });
-      }
-      return window.__deferredDashboardAssets[filename];
-    }
-  </script>
+  <script src="./src/client/dashboard-init.js"></script>
 </head>
 
 <body>
@@ -1551,42 +1526,6 @@
   <script src="./src/client/api.js"></script>
   <script src="./src/client/events.js"></script>
   <script src="./src/client/Dashboard.js"></script>
-
-  <script>
-    // Config Modal L       document.addEventListener('DOMContentLoaded', function() {
-            configBtn = document.get        'configBtn');
-        const configModal         .getElementById('config-modal');
-        const closeConfigBtn = document.getElementById('closeConfigBtn');
-        c          nfig      r =      t.getElementById('closeCo        r');
-        const overlay = document      ent      nfig-modal-overlay');
-
-        function openConfig() {
-                   l.classList.remove('                loadDe      shboa      'Config.js')
-            .then(function() {
-              if (typeof loadCo       === 'function') {
-                loadConfigData();
-              }
-            })
-          .catch(function(error) {
-              alert('Failed to load      ration tools: ' + (error && error.message ? error.message : error));
-            }         }
-
-        function closeConfig() {
-            configModal.classList.add('hidden');
-        }
-
-        i(co) configBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            openConfig();
-        });
-
-        if (closeConfigBtn) closeConfigBtn.addEventListener('click', closeConfig);
-        if (closeConfigBtnFooter) closeConfigBtnFooter.addEventListener('click', closeConfig);
-        if (overlay) overlay.addEventListener('click', closeConfig);
-        const developerCapacityForm = document.getElementById('developer-capacity-form');
-        if (developerCapacityForm) developerCapacityForm.addEventListener('submit', saveDeveloperCapacity);
-    });
-  </script>
 </body>
 
 </html>

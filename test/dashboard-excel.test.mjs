@@ -440,3 +440,12 @@ test('configuration footer keeps inactive actions and asynchronous statuses hidd
   assert.equal(elements.configStatus.classList.contains('hidden'), false);
   assert.equal(elements.saveConfigBtn.classList.contains('hidden'), false);
 });
+
+test('dashboard initialization script and index.html inline scripts have valid syntax', () => {
+  new vm.Script(readFileSync(new URL('../src/client/dashboard-init.js', import.meta.url), 'utf8'));
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  for (const match of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
+    const body = match[1].trim();
+    if (body) new vm.Script(body);
+  }
+});

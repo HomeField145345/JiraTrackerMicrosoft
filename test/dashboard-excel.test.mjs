@@ -292,7 +292,8 @@ test('capacity view shows developer workload and expands sprint assignments inde
     'capacity-sprint-name', 'capacity-sprint-dates', 'capacity-pace-badge', 'capacity-pace-card',
     'capacity-pace-summary', 'capacity-pace-burnrate', 'capacity-pace-breakdown', 'capacity-pace-bar',
     'capacity-team-summary', 'capacity-sprint-start', 'capacity-sprint-end',
-    'capacity-total-points', 'capacity-total-issues', 'capacity-table-body', 'future-sprint-capacities'
+    'capacity-total-points', 'capacity-total-issues', 'capacity-table-body', 'future-sprint-capacities',
+    'no-sprint-capacity', 'past-sprint-open-capacity'
   ].map(id => [id, new Element()]));
   const future = {
     sprintName: 'Sprint 13', totalStoryPoints: 4, totalIssues: 1,
@@ -332,7 +333,18 @@ test('capacity view shows developer workload and expands sprint assignments inde
           }
         ]
       },
-      futureSprintCapacity: [future]
+      futureSprintCapacity: [future],
+      noSprintCapacity: {
+        totalIssues: 1, totalStoryPoints: 3, unestimatedIssues: 0,
+        developers: [{
+          developer: 'Unassigned', issueCount: 1, storyPoints: 3, inProgressPoints: 0, notStartedPoints: 3, unestimatedCount: 0,
+          issues: [{ jiraKey: 'BACK-1', summary: 'Unscheduled story', issueType: 'Story', status: 'To Do', storyPoints: 3, workState: 'notStarted' }]
+        }]
+      },
+      pastSprintOpenCapacity: {
+        totalIssues: 1, totalStoryPoints: 2, unestimatedIssues: 0,
+        issues: [{ jiraKey: 'OLD-1', summary: 'Carryover bug', issueType: 'Bug', status: 'In Progress', assignee: 'Blair', sprintName: 'Sprint 11', storyPoints: 2, workState: 'inProgress' }]
+      }
     }
   };
   const context = vm.createContext({
@@ -417,6 +429,10 @@ test('capacity view shows developer workload and expands sprint assignments inde
   state.allData.futureSprintCapacity = [];
   context.renderCapacityView();
   assert.equal(elements['future-sprint-capacities'].children.length, 0);
+  assert.equal(elements['no-sprint-capacity'].children[0].textContent, 'No sprint assigned');
+  assert.match(elements['no-sprint-capacity'].children[1].textContent, /3 story points · 1 open issue/);
+  assert.equal(elements['past-sprint-open-capacity'].children[0].children[0].textContent, 'Open items in past sprints');
+  assert.equal(elements['past-sprint-open-capacity'].children[0].children[1].textContent, '1 open');
 });
 
 test('configuration footer keeps inactive actions and asynchronous statuses hidden', () => {

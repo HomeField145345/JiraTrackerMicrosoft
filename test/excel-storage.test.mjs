@@ -313,6 +313,32 @@ test('computes stacked work states and sprint pace from elapsed workdays', () =>
   assert.equal(finished.pace.status, 'completed');
 });
 
+test('groups unscheduled open stories into noSprint and open past-sprint stories into pastOpen', () => {
+  const graph = harness();
+  const sprint = (n, state, dates = '') => `com.atlassian.Sprint@1[id=${n},state=${state},name=Sprint ${n}${dates}]`;
+  const items = [
+    { 'Jira #': 'CUR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'In Progress', 'Story Points': 5, sprint: sprint(12, 'ACTIVE') },
+    { 'Jira #': 'FUT-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 3, sprint: sprint(13, 'FUTURE') },
+    { 'Jira #': 'NOSPR-1', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 4, sprint: '' },
+    { 'Jira #': 'NOSPR-2', 'Issue Type': 'Story', Assignee: '', Status: 'Open', 'Story Points': 2 },
+    { 'Jira #': 'NOSPR-DONE', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'Done', 'Story Points': 8, sprint: '' },
+    { 'Jira #': 'NOSPR-EPIC', 'Issue Type': 'Epic', Assignee: 'Avery', Status: 'Open', 'Story Points': 13, sprint: '' },
+    { 'Jira #': 'PAST-OPEN', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'In Progress', 'Story Points': 3, sprint: sprint(11, 'CLOSED') },
+    { 'Jira #': 'PAST-DONE', 'Issue Type': 'Story', Assignee: 'Blair', Status: 'Done', 'Story Points': 5, sprint: sprint(11, 'CLOSED') },
+    { 'Jira #': 'PAST-MOVED', 'Issue Type': 'Story', Assignee: 'Avery', Status: 'To Do', 'Story Points': 2, sprint: `${sprint(11, 'CLOSED')}, ${sprint(12, 'ACTIVE')}` }
+  ];
+  const plan = graph.analyzeCapacityPlan(items, items, [{ developer: 'Avery', capacity: 10 }]);
+  assert.equal(plan.future.length, 1);
+  assert.equal(plan.future[0].sprintName, 'Sprint 13');
+  assert.equal(plan.noSprint.totalIssues, 2);
+  assert.equal(plan.noSprint.totalStoryPoints, 6);
+  assert.deepEqual(JSON.parse(JSON.stringify(plan.noSprint.developers.map(d => [d.developer, d.storyPoints]))), [['Avery', 4], ['Unassigned', 2]]);
+  assert.equal(plan.pastOpen.totalIssues, 1);
+  assert.equal(plan.pastOpen.totalStoryPoints, 3);
+  assert.equal(plan.pastOpen.issues[0].jiraKey, 'PAST-OPEN');
+  assert.equal(plan.pastOpen.issues[0].sprintName, 'Sprint 11');
+});
+
 test('plans capacity for identifiable future sprints without counting closed sprints', () => {
   const graph = harness();
   const sprint = (number, state, dates = '') =>

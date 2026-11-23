@@ -1427,13 +1427,13 @@ function getCapacityPaceBadgeClass_(status) {
     switch (status) {
         case 'on_track':
         case 'completed':
-            return 'inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-medium text-emerald-800';
+            return 'inline-flex items-center rounded-full bg-[#DCF5E6] px-2.5 py-0.5 text-xs font-medium text-[#008331]';
         case 'at_risk':
-            return 'inline-flex items-center rounded-full bg-[#FFF9DE] border border-amber-300 px-2.5 py-0.5 text-xs font-medium text-amber-900';
+            return 'inline-flex items-center rounded-full bg-[#FFF9DE] px-2.5 py-0.5 text-xs font-medium text-[#4B3F04]';
         case 'behind':
-            return 'inline-flex items-center rounded-full bg-red-50 border border-red-200 px-2.5 py-0.5 text-xs font-medium text-red-700';
+            return 'inline-flex items-center rounded-full bg-[#FFECE0] px-2.5 py-0.5 text-xs font-medium text-[#B95319]';
         default:
-            return 'inline-flex items-center rounded-full bg-gray-100 border border-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700';
+            return 'inline-flex items-center rounded-full bg-[#EDEDED] px-2.5 py-0.5 text-xs font-medium text-[#333333]';
     }
 }
 
@@ -1484,7 +1484,7 @@ function appendStackedSegments_(track, breakdown, denominator) {
     var inner = document.createElement('div');
     inner.className = 'flex h-full w-full overflow-hidden rounded-full';
     var segments = [
-        { key: 'completed', value: breakdown.completed, className: 'h-full bg-emerald-600' },
+        { key: 'completed', value: breakdown.completed, className: 'h-full bg-[#008331]' },
         { key: 'inProgress', value: breakdown.inProgress, className: 'h-full bg-[#006FC1]' },
         { key: 'notStarted', value: breakdown.notStarted, className: 'h-full bg-slate-300' }
     ];
@@ -1549,11 +1549,11 @@ function renderCapacityPace_(capacity, numberFormat, percentFormat) {
 
     if (!paceCard) return;
     if (!hasSprint || !pace) {
-        paceCard.className = 'mx-4 mb-4 rounded-xl border border-[#D8DADA] bg-[#F6F6F6] p-4 hidden';
+        paceCard.className = 'mt-4 pt-4 border-t border-[#D8DADA] hidden';
         return;
     }
 
-    paceCard.className = 'mx-4 mb-4 rounded-xl border border-[#D8DADA] bg-[#F6F6F6] p-4';
+    paceCard.className = 'mt-4 pt-4 border-t border-[#D8DADA]';
     var completedPts = capacity.completedPoints || 0;
     var inProgressPts = capacity.inProgressPoints || 0;
     var notStartedPts = capacity.notStartedPoints || 0;

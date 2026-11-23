@@ -2823,27 +2823,25 @@ function saveDeveloperCapacity(event) {
         var dev = input.dataset.developer;
         var key = dev.toLowerCase();
         var entry = { developer: dev, capacity: input.value };
-        if (managerByDev.has(dev.toLowerCase())) {
-            entry.manager = managerByDev.get(dev.toLowerCase());
-            if (managerByDev.has(key)) {
-                entry.manager = managerByDev.get(key);
-            }
-            if (developerSprintOverridesState_.has(key)) {
-                var overrideMap = {};
-                (developerSprintOverridesState_.get(key) || []).forEach(function (item) {
-                    var sp = String(item.sprint || '').trim();
-                    if (!sp) return;
-                    var pto = item.ptoDays === '' || item.ptoDays == null ? 0 : Number(item.ptoDays);
-                    var ovr = item.capacityOverride === '' || item.capacityOverride == null ? null : Number(item.capacityOverride);
-                    var notes = String(item.notes || '').trim();
-                    if (pto > 0 || ovr !== null || notes) {
-                        overrideMap[sp] = { ptoDays: pto, capacityOverride: ovr, notes: notes };
-                    }
-                });
-                entry.sprintOverrides = overrideMap;
-            }
-            return entry;
-        });
+        if (managerByDev.has(key)) {
+            entry.manager = managerByDev.get(key);
+        }
+        if (developerSprintOverridesState_.has(key)) {
+            var overrideMap = {};
+            (developerSprintOverridesState_.get(key) || []).forEach(function (item) {
+                var sp = String(item.sprint || '').trim();
+                if (!sp) return;
+                var pto = item.ptoDays === '' || item.ptoDays == null ? 0 : Number(item.ptoDays);
+                var ovr = item.capacityOverride === '' || item.capacityOverride == null ? null : Number(item.capacityOverride);
+                var notes = String(item.notes || '').trim();
+                if (pto > 0 || ovr !== null || notes) {
+                    overrideMap[sp] = { ptoDays: pto, capacityOverride: ovr, notes: notes };
+                }
+            });
+            entry.sprintOverrides = overrideMap;
+        }
+        return entry;
+    });
     var workdaysEl = document.getElementById('developer-sprint-workdays');
     var holidaysListEl = document.getElementById('developer-company-holidays-list');
     var serverArgs = [entries];
@@ -2866,29 +2864,28 @@ function saveDeveloperCapacity(event) {
     status.textContent = 'Saving capacity...';
     status.classList.remove('config-status-error', 'config-status-success');
     status.classList.add('config-status-neutral');
-    callServer('saveDeveloperCapacity', [entries]).then(function (response) {
-        callServer('saveDeveloperCapacity', serverArgs).then(function (response) {
-            if (!response || response.status !== 'success') {
-                throw new Error(response && response.message ? response.message : 'Could not save capacity.');
-            }
-            return callServer('getProjectData', []).then(function (data) {
-                if (!handleDataLoaded(data)) throw new Error('Capacity saved, but refresh failed. Reload the page.');
-                status.textContent = 'Capacity saved.';
-                status.classList.remove('config-status-neutral', 'config-status-error');
-                status.classList.add('config-status-success');
-            }, function (error) {
-                throw new Error('Capacity saved, but refresh failed: ' + getErrorMessage_(error));
-            });
-        }).catch(function (error) {
-            status.textContent = getErrorMessage_(error);
-            status.classList.remove('config-status-neutral', 'config-status-success');
-            status.classList.add('config-status-error');
-        }).finally(function () {
-            button.disabled = false;
-            inputs.forEach(function (input) { input.disabled = false; });
-            managerInputs.forEach(function (input) { input.disabled = false; });
+    callServer('saveDeveloperCapacity', serverArgs).then(function (response) {
+        if (!response || response.status !== 'success') {
+            throw new Error(response && response.message ? response.message : 'Could not save capacity.');
+        }
+        return callServer('getProjectData', []).then(function (data) {
+            if (!handleDataLoaded(data)) throw new Error('Capacity saved, but refresh failed. Reload the page.');
+            status.textContent = 'Capacity saved.';
+            status.classList.remove('config-status-neutral', 'config-status-error');
+            status.classList.add('config-status-success');
+        }, function (error) {
+            throw new Error('Capacity saved, but refresh failed: ' + getErrorMessage_(error));
         });
-    }
+    }).catch(function (error) {
+        status.textContent = getErrorMessage_(error);
+        status.classList.remove('config-status-neutral', 'config-status-success');
+        status.classList.add('config-status-error');
+    }).finally(function () {
+        button.disabled = false;
+        inputs.forEach(function (input) { input.disabled = false; });
+        managerInputs.forEach(function (input) { input.disabled = false; });
+    });
+}
 
 function renderKPIs() {
             // Update KPI card values

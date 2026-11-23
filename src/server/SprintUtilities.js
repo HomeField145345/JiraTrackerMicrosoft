@@ -335,9 +335,11 @@ function analyzeSprintData(items) {
     var totalPoints = Number(metrics.totalStoryPoints) || 0;
     var completedPoints = Number(metrics.completedPoints) || 0;
     var inProgressPoints = Number(metrics.inProgressPoints) || 0;
+    var remainingPoints = Math.max(0, totalPoints - completedPoints);
     var totalIssues = Number(metrics.totalIssues) || 0;
     var completedIssues = Number(metrics.completedIssues) || 0;
     var inProgressIssues = Number(metrics.inProgressIssues) || 0;
+    var remainingIssues = Math.max(0, totalIssues - completedIssues);
 
     var usePoints = totalPoints > 0;
     var completedPct = usePoints ? completedPoints / totalPoints : (totalIssues > 0 ? completedIssues / totalIssues : 0);
@@ -349,9 +351,14 @@ function analyzeSprintData(items) {
         status: 'no_work',
         label: 'No work',
         timeElapsedPct: null,
+        timeRemainingPct: null,
         completedPct: 0,
         activePct: 0,
         delta: null,
+        remainingPoints: 0,
+        remainingIssues: 0,
+        requiredPointsPerDay: null,
+        expectedPointsPerDay: null,
         totalDays: null,
         daysElapsed: null,
         daysRemaining: null,
@@ -370,9 +377,14 @@ function analyzeSprintData(items) {
         status: completedPct >= 1 ? 'completed' : 'no_dates',
         label: completedPct >= 1 ? 'Completed' : 'Dates unavailable',
         timeElapsedPct: null,
+        timeRemainingPct: null,
         completedPct: completedPct,
         activePct: activePct,
         delta: null,
+        remainingPoints: remainingPoints,
+        remainingIssues: remainingIssues,
+        requiredPointsPerDay: null,
+        expectedPointsPerDay: null,
         totalDays: null,
         daysElapsed: null,
         daysRemaining: null,
@@ -383,7 +395,12 @@ function analyzeSprintData(items) {
 
     var now = nowDate instanceof Date && !isNaN(nowDate.getTime()) ? nowDate : new Date();
     var timing = calculateWorkdayProgress_(start, end, now);
+    var timeRemainingPct = Math.max(0, Math.min(1, 1 - timing.timeElapsedPct));
     var delta = completedPct - timing.timeElapsedPct;
+    var remainingWork = usePoints ? remainingPoints : remainingIssues;
+    var totalWork = usePoints ? totalPoints : totalIssues;
+    var requiredPointsPerDay = remainingWork <= 0 ? 0 : (timing.daysRemaining > 0 ? remainingWork / timing.daysRemaining : null);
+    var expectedPointsPerDay = timing.totalDays > 0 ? totalWork / timing.totalDays : null;
     var status;
     var label;
 
@@ -419,9 +436,14 @@ function analyzeSprintData(items) {
       status: status,
       label: label,
       timeElapsedPct: timing.timeElapsedPct,
+      timeRemainingPct: timeRemainingPct,
       completedPct: completedPct,
       activePct: activePct,
       delta: delta,
+      remainingPoints: remainingPoints,
+      remainingIssues: remainingIssues,
+      requiredPointsPerDay: requiredPointsPerDay,
+      expectedPointsPerDay: expectedPointsPerDay,
       totalDays: timing.totalDays,
       daysElapsed: timing.daysElapsed,
       daysRemaining: timing.daysRemaining,

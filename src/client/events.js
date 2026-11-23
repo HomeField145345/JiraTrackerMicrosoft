@@ -1955,6 +1955,7 @@ function updateCurrentSprintKPI() {
     var numberSpan = $('#current-sprint-number');
     var progressBar = $('#current-sprint-progress');
     var dateSpan = $('#current-sprint-date');
+    var paceBadge = $('#current-sprint-pace-badge');
     
     if (countCard) {
         countCard.textContent = currentSprintItems;
@@ -1988,6 +1989,24 @@ function updateCurrentSprintKPI() {
     if (progressBar) {
         var percentage = currentSprintItems > 0 ? (completedItems / currentSprintItems) * 100 : 0;
         progressBar.style.width = percentage + '%';
+    }
+
+    if (paceBadge) {
+        var cap = APP_STATE && APP_STATE.allData && APP_STATE.allData.sprintCapacity;
+        var resolved = typeof resolveSprintCapacityWithDates_ === 'function' ? resolveSprintCapacityWithDates_(cap) : cap;
+        var pace = resolved && resolved.pace;
+        if (pace && ['on_track', 'at_risk', 'behind', 'completed'].indexOf(pace.status) !== -1) {
+            paceBadge.className = typeof getCapacityPaceBadgeClass_ === 'function' ?
+                getCapacityPaceBadgeClass_(pace.status) : 'text-xs font-medium';
+            paceBadge.textContent = pace.label;
+            var remPts = pace.remainingPoints != null ? pace.remainingPoints : Math.max(0, (resolved.totalStoryPoints || 0) - (resolved.completedPoints || 0));
+            if (pace.daysRemaining != null) {
+                paceBadge.title = remPts + ' pts left · ' + pace.daysRemaining + ' ' + (pace.unit || 'workdays') + ' left';
+            }
+        } else {
+            paceBadge.className = 'hidden';
+            paceBadge.textContent = '';
+        }
     }
 }
 

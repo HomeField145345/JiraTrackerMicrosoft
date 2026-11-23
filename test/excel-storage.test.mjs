@@ -205,9 +205,14 @@ test('aggregates sprint assignments and remaining capacity for Jira assignees', 
       status: 'no_dates',
       label: 'Dates unavailable',
       timeElapsedPct: null,
+      timeRemainingPct: null,
       completedPct: 0.3,
       activePct: 0.3,
       delta: null,
+      remainingPoints: 7,
+      remainingIssues: 4,
+      requiredPointsPerDay: null,
+      expectedPointsPerDay: null,
       totalDays: null,
       daysElapsed: null,
       daysRemaining: null,
@@ -275,8 +280,11 @@ test('computes stacked work states and sprint pace from elapsed workdays', () =>
   assert.equal(midSprint.totalCapacity, 18);
   assert.equal(midSprint.pace.status, 'at_risk'); // 25% done vs 50% elapsed (-25% delta)
   assert.equal(midSprint.pace.label, 'At risk');
+  assert.equal(midSprint.pace.remainingPoints, 15);
   assert.equal(midSprint.pace.totalDays, 10);
   assert.equal(midSprint.pace.daysRemaining, 5);
+  assert.equal(midSprint.pace.requiredPointsPerDay, 3); // 15 pts left / 5 workdays left
+  assert.equal(midSprint.pace.expectedPointsPerDay, 2); // 20 total pts / 10 workdays
 
   const avery = midSprint.developers.find(d => d.developer === 'Avery');
   const blair = midSprint.developers.find(d => d.developer === 'Blair');

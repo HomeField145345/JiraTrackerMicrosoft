@@ -290,7 +290,8 @@ test('capacity view shows developer workload and expands sprint assignments inde
   }
   const elements = Object.fromEntries([
     'capacity-sprint-name', 'capacity-sprint-dates', 'capacity-pace-badge', 'capacity-pace-card',
-    'capacity-pace-summary', 'capacity-pace-breakdown', 'capacity-pace-bar', 'capacity-team-summary',
+    'capacity-pace-summary', 'capacity-pace-burnrate', 'capacity-pace-breakdown', 'capacity-pace-bar',
+    'capacity-team-summary', 'capacity-sprint-start', 'capacity-sprint-end',
     'capacity-total-points', 'capacity-total-issues', 'capacity-table-body', 'future-sprint-capacities'
   ].map(id => [id, new Element()]));
   const future = {
@@ -306,7 +307,7 @@ test('capacity view shows developer workload and expands sprint assignments inde
       sprintCapacity: {
         sprintName: 'Sprint 12', sprintStart: '2026-11-02T00:00:00.000Z', sprintEnd: '2026-11-13T23:59:59.000Z',
         totalStoryPoints: 4, completedPoints: 2, inProgressPoints: 1, notStartedPoints: 1, totalIssues: 3, totalCapacity: 2,
-        pace: { status: 'on_track', label: 'On track', timeElapsedPct: 0.5, completedPct: 0.5, activePct: 0.75, delta: 0, totalDays: 10, daysElapsed: 5, daysRemaining: 5, unit: 'workdays', metricBasis: 'points' },
+        pace: { status: 'on_track', label: 'On track', timeElapsedPct: 0.5, timeRemainingPct: 0.5, completedPct: 0.5, activePct: 0.75, delta: 0, remainingPoints: 2, remainingIssues: 1, requiredPointsPerDay: 0.4, expectedPointsPerDay: 0.4, totalDays: 10, daysElapsed: 5, daysRemaining: 5, unit: 'workdays', metricBasis: 'points' },
         developers: [
           {
             developer: 'Avery', issueCount: 2, storyPoints: 3, completedPoints: 2, inProgressPoints: 1, notStartedPoints: 0,
@@ -347,6 +348,7 @@ test('capacity view shows developer workload and expands sprint assignments inde
   assert.equal(elements['capacity-sprint-name'].textContent, 'Sprint 12');
   assert.equal(elements['capacity-pace-badge'].textContent, 'On track');
   assert.match(elements['capacity-pace-summary'].textContent, /On track.*50% points completed vs\. 50% time elapsed/);
+  assert.match(elements['capacity-pace-burnrate'].textContent, /2 pts remaining · 5 workdays left \(0\.4 pts\/day needed vs\. 0\.4 pts\/day target\)/);
   assert.match(elements['capacity-sprint-dates'].textContent, /Day 5 of 10 workdays/);
   assert.deepEqual(elements['capacity-pace-bar'].children[0].children.map(s => s.attributes['data-segment']), ['completed', 'inProgress', 'notStarted']);
   assert.equal(elements['capacity-pace-bar'].children[1].attributes['data-marker'], 'elapsed');

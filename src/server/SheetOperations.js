@@ -218,6 +218,34 @@ function readManualData(sheet) {
   return map;
 }
 
+function normalizeIsoDateString_(value) {
+  if (!value) return '';
+  const str = String(value).trim();
+  const match = str.match(/^(\d{4}-\d{2}-\d{2})/);
+  return match ? match[1] : '';
+}
+
+function normalizeDeveloperPtoDates_(rawList) {
+  if (!Array.isArray(rawList)) return [];
+  const list = [];
+  rawList.forEach(item => {
+    if (!item || typeof item !== 'object') return;
+    const startDate = normalizeIsoDateString_(item.startDate || item.date);
+    if (!startDate) return;
+    const rawEnd = normalizeIsoDateString_(item.endDate);
+    const endDate = rawEnd && rawEnd >= startDate ? rawEnd : startDate;
+    const rawDays = item.days;
+    const daysText = rawDays == null ? '' : String(rawDays).trim();
+    const days = daysText === '' ? null : Number(daysText);
+    if (days !== null && (!Number.isFinite(days) || days < 0)) {
+      throw new Error(`PTO days for ${startDate} must be a non-negative number or blank.`);
+    }
+    const notes = item.notes == null ? '' : String(item.notes).trim();
+    list.push({ startDate, endDate, days, notes });
+  });
+  return list;
+}
+
 function normalizeDeveloperSprintOverrides_(raw) {
   if (!raw) return {};
   let parsed = raw;
@@ -234,7 +262,7 @@ function normalizeDeveloperSprintOverrides_(raw) {
   const result = {};
   Object.keys(parsed).forEach(sprintKey => {
     const sprintName = String(sprintKey || '').trim();
-    if (!sprintName) return;
+    if (!sprintName || sprintName === '__ptoDates__') return;
     const item = parsed[sprintKey];
     if (!item || typeof item !== 'object') return;
     const rawPto = item.ptoDays;
@@ -257,8 +285,24 @@ function normalizeDeveloperSprintOverrides_(raw) {
   return result;
 }
 
+function extractDeveloperPtoDatesFromCell_(raw) {
+  if (!raw) return [];
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (e) {
+      return [];
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+  return normalizeDeveloperPtoDates_(parsed.__ptoDates__);
+}
+
 function normalizeDeveloperCapacitySettings_(raw) {
-  const defaults = { sprintWorkdays: 10, companyHolidays: [] };
+  const defaults = { sprintWorkdays: 10, companyHolidays: [], sprintDates: {} };
   if (!raw) return defaults;
   let parsed = raw;
   if (typeof raw === 'string') {
@@ -283,18 +327,36 @@ function normalizeDeveloperCapacitySettings_(raw) {
       if (!h || typeof h !== 'object') return;
       const name = String(h.name == null ? '' : h.name).trim();
       const sprint = String(h.sprint == null ? '' : h.sprint).trim();
+      const date = normalizeIsoDateString_(h.date);
       const rawHolDays = h.days;
       const holText = rawHolDays == null ? '' : String(rawHolDays).trim();
       const days = holText === '' ? 1 : Number(holText);
       if (!Number.isFinite(days) || days < 0) {
         throw new Error('Company holiday days must be a non-negative number.');
       }
-      if ((name || sprint) && days > 0) {
-        companyHolidays.push({ name: name || 'Company Holiday', sprint, days });
+      if ((name || sprint || date) && days > 0) {
+        const holEntry = { name: name || 'Company Holiday', sprint, days };
+        if (date) holEntry.date = date;
+        companyHolidays.push(holEntry);
       }
     });
   }
-  return { sprintWorkdays, companyHolidays };
+  const sprintDates = {};
+  if (parsed.sprintDates && typeof parsed.sprintDates === 'object' && !Array.isArray(parsed.sprintDates)) {
+    Object.keys(parsed.sprintDates).forEach(k => {
+      const sName = String(k || '').trim();
+      const val = parsed.sprintDates[k];
+      if (!sName || !val || typeof val !== 'object') return;
+      const start = normalizeIsoDateString_(val.start || val.startDate);
+      const end = normalizeIsoDateString_(val.end || val.endDate);
+      if (start && end && end >= start) {
+        sprintDates[sName] = { start, end };
+      }
+    });
+  }
+  return Object.keys(sprintDates).length > 0 ?
+    { sprintWorkdays, companyHolidays, sprintDates } :
+    { sprintWorkdays, companyHolidays };
 }
 
 function readDeveloperCapacitySettings(sheet) {
@@ -356,6 +418,10 @@ function readDeveloperCapacity(sheet) {
     const overrides = normalizeDeveloperSprintOverrides_(row[sprintOverridesIndex]);
     if (Object.keys(overrides).length > 0) {
       entry.sprintOverrides = overrides;
+    }
+    const ptoDates = extractDeveloperPtoDatesFromCell_(row[sprintOverridesIndex]);
+    if (ptoDates.length > 0) {
+      entry.ptoDates = ptoDates;
     }
   }
   entries.push(entry);

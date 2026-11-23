@@ -2996,11 +2996,11 @@ function renderCapacityManagerGroupRow_(body, managerName, members, numberFormat
     });
 
     var row = body.insertRow();
-    row.className = 'bg-[#F6F6F6] border-y border-[#D8DADA] text-xs font-semibold text-black';
+    row.className = 'bg-[#F6F6F6] border-t-2 border-b border-[#D8DADA] text-xs font-semibold text-black';
     row.setAttribute('data-manager-group', managerName);
 
     var nameCell = row.insertCell();
-    nameCell.className = 'px-4 py-2.5';
+    nameCell.className = 'px-4 py-2.5 font-bold text-black tracking-tight';
     nameCell.textContent = managerName + ' (' + members.length + (members.length === 1 ? ' dev' : ' devs') + ')';
 
     var issuesCell = row.insertCell();
@@ -3076,12 +3076,12 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var row = body.insertRow();
         var isOverCapRow = developer && developer.developer !== 'Unassigned' && developer.remaining != null && developer.remaining < 0;
         row.className = isOverCapRow ?
-            'border-b border-[#F5C6A5] bg-[#FFECE0]/35 hover:bg-[#FFECE0]/60 transition-colors' :
-            'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/60 transition-colors';
+        'border-b border-[#F5C6A5] border-l-4 border-l-[#B95319] bg-[#FFECE0]/30 hover:bg-[#FFECE0]/55 transition-colors' :
+        'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/70 transition-colors';
         var nameCell = row.insertCell();
-        nameCell.className = (indent ? 'pl-8 pr-4' : 'px-4') + ' py-3 text-black';
+        nameCell.className = (indent ? 'pl-7 pr-4' : 'px-4') + ' py-3.5 text-black align-top';
         var name = document.createElement('span');
-        name.className = 'font-medium text-black mr-2';
+        name.className = 'font-semibold text-sm text-black mr-2 align-middle';
         name.textContent = developer.developer;
         nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
@@ -3090,7 +3090,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#D8DADA] bg-[#F6F6F6] px-2 py-0.5 text-xs text-black hover:border-black focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#D8DADA] bg-white px-2.5 py-0.5 text-[11px] font-medium text-black hover:border-black hover:bg-[#F6F6F6] align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
             var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
             var isExpanded = Boolean(capacityExpandAllIssues_);
             toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
@@ -3109,10 +3109,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             var detailsRow = body.insertRow();
             detailsRow.id = detailsId;
             detailsRow.hidden = !isExpanded;
-            detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]';
+            detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]/90';
             var detailsCell = detailsRow.insertCell();
             detailsCell.colSpan = 6;
-            detailsCell.className = 'px-4 py-3';
+            detailsCell.className = 'px-5 py-3.5';
             if (assignments.length) {
                 renderCapacityAssignments_(detailsCell, assignments, detailsLabel, numberFormat);
             } else {
@@ -3132,16 +3132,16 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             var devMgr = String(developer.manager || '').trim();
             if (devPct || devMgr) {
                 var metaWrap = document.createElement('div');
-                metaWrap.className = 'mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-[#6F7171]';
+                metaWrap.className = 'mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#6F7171]';
                 if (devPct) {
                     var pctBadge = document.createElement('span');
-                    pctBadge.className = 'inline-flex items-center rounded-md bg-[#F6F6F6] border border-[#D8DADA] px-1.5 py-0.5 text-[10px] font-medium text-black';
+                    pctBadge.className = 'inline-flex items-center rounded-md bg-[#EBF5FF] border border-[#B8DCFF] px-1.5 py-0.5 text-[10px] font-semibold text-[#006FC1]';
                     pctBadge.textContent = devPct;
                     metaWrap.appendChild(pctBadge);
                 }
                 if (devMgr) {
                     var mgrBadge = document.createElement('span');
-                    mgrBadge.className = 'text-[11px] text-[#6F7171]';
+                    mgrBadge.className = 'inline-flex items-center rounded-md bg-[#F6F6F6] border border-[#D8DADA] px-1.5 py-0.5 text-[10px] font-medium text-[#6F7171]';
                     mgrBadge.textContent = 'Mgr: ' + devMgr;
                     metaWrap.appendChild(mgrBadge);
                 }
@@ -3149,13 +3149,13 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             }
         }
         var issueCell = row.insertCell();
-        issueCell.className = 'px-3 py-3 text-right tabular-nums text-[#6F7171]';
+        issueCell.className = 'px-3 py-3.5 text-right tabular-nums text-xs font-medium text-[#6F7171] align-top';
         issueCell.textContent = numberFormat.format(developer.issueCount);
         var pointsCell = row.insertCell();
-        pointsCell.className = 'px-3 py-3 text-right tabular-nums font-medium text-black';
+        pointsCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm font-semibold text-black align-top';
         pointsCell.textContent = numberFormat.format(developer.storyPoints);
         var capCell = row.insertCell();
-        capCell.className = 'px-3 py-3 text-right tabular-nums text-black';
+        capCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm text-black align-top';
         var hasCapAdjustment = developer.ptoDays > 0 || developer.holidayDays > 0 || developer.capacityOverride != null;
         if (!hasCapAdjustment) {
             capCell.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
@@ -3184,7 +3184,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var remClass = developer.remaining == null ? 'text-[#6F7171]' :
             developer.remaining < 0 ? 'text-[#B95319] font-semibold' :
                 developer.remaining > 0 ? 'text-[#008331] font-medium' : 'text-[#6F7171]';
-        remCell.className = 'px-3 py-3 text-right tabular-nums ' + remClass;
+        remCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm align-top ' + remClass;
         remCell.textContent = developer.remaining == null ? '—' : numberFormat.format(developer.remaining);
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
     };
@@ -3236,7 +3236,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
 }
 
 function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, numberFormat, isCurrentSprint) {
-    cell.className = 'px-3 py-3 min-w-[180px] text-xs text-[#6F7171] whitespace-nowrap';
+    cell.className = 'px-4 py-3.5 min-w-[200px] text-xs text-[#6F7171] whitespace-nowrap align-top';
     if (unassigned) {
         cell.textContent = 'Needs assignee';
         return;
@@ -3250,12 +3250,13 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
     var ratio = developer.capacity > 0 ? Math.max(0, developer.storyPoints / developer.capacity) : null;
     if (ratio !== null) {
         var percent = document.createElement('span');
+        percent.className = 'font-semibold text-black tabular-nums';
         percent.textContent = percentFormat.format(ratio);
         cell.appendChild(percent);
     }
     if (overCapacity || ratio === null) {
         var status = document.createElement('span');
-        status.className = overCapacity ? 'inline-block rounded-full bg-[#FFF9DE] px-2 py-0.5 text-black' : '';
+        status.className = overCapacity ? 'inline-flex items-center rounded-full bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 text-[11px] font-semibold text-[#B95319]' : '';
         if (ratio !== null) status.className += ' ml-2';
         status.textContent = overCapacity ? 'Over capacity' : 'Zero capacity';
         cell.appendChild(status);
@@ -3271,7 +3272,7 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
         var breakdown = getDeveloperPointBreakdown_(developer);
         var denominator = Math.max(developer.capacity, developer.storyPoints);
         var track = document.createElement('div');
-        track.className = 'relative mt-1.5 h-2.5 rounded-full bg-[#F6F6F6] border border-[#D8DADA]/60';
+        track.className = 'relative mt-2 h-2 rounded-full bg-[#EDEDED] border border-[#D8DADA]/60';
         track.setAttribute('aria-hidden', 'true');
         track.title = numberFormat.format(breakdown.completed) + ' completed · ' +
             numberFormat.format(breakdown.inProgress) + ' in progress · ' +
@@ -3332,35 +3333,36 @@ function appendCapacityJiraKeyTrigger_(cell, jiraKey) {
 
 function renderCapacityAssignments_(container, assignments, label, numberFormat) {
     var table = document.createElement('table');
-    table.className = 'w-full text-sm text-black';
+    table.className = 'w-full text-xs text-black bg-white rounded-xl border border-[#D8DADA] overflow-hidden border-collapse';
     table.setAttribute('aria-label', label);
     var header = table.createTHead().insertRow();
-    header.className = 'border-b border-[#D8DADA] text-xs text-[#6F7171]';
+    header.className = 'bg-[#F6F6F6] border-b border-[#D8DADA] text-[11px] font-semibold uppercase tracking-wider text-[#6F7171]';
     var columns = ['Jira key', 'Summary', 'Type', 'Status', 'Story points'];
     columns.forEach(function (label, index) {
         var cell = document.createElement('th');
         cell.scope = 'col';
-        cell.className = 'px-3 py-2 font-normal ' + (index === columns.length - 1 ? 'text-right' : 'text-left');
+        cell.className = 'px-3 py-2 ' + (index === columns.length - 1 ? 'text-right' : 'text-left');
         cell.textContent = label;
         header.appendChild(cell);
     });
     var body = table.createTBody();
     assignments.forEach(function (issue) {
         var row = body.insertRow();
+        row.className = 'border-b border-[#D8DADA]/60 last:border-b-0 hover:bg-[#F6F6F6]/60 transition-colors';
         var keyCell = row.insertCell();
-        keyCell.className = 'px-3 py-2 whitespace-nowrap';
+        keyCell.className = 'px-3 py-2.5 whitespace-nowrap';
         appendCapacityJiraKeyTrigger_(keyCell, issue.jiraKey);
         var values = [issue.summary || 'Untitled', issue.issueType || '—', issue.status || '—', numberFormat.format(issue.storyPoints)];
         values.forEach(function (value, index) {
             var cell = row.insertCell();
             var extraClass = '';
             if (index === 2) {
-                extraClass = issue.workState === 'completed' ? ' text-[#008331] font-medium' :
-                    issue.workState === 'inProgress' ? ' text-[#006FC1] font-medium' : ' text-[#6F7171]';
+                extraClass = issue.workState === 'completed' ? ' text-[#008331] font-semibold' :
+                    issue.workState === 'inProgress' ? ' text-[#006FC1] font-semibold' : ' text-[#6F7171]';
             } else if (index === values.length - 1) {
-                extraClass = ' text-right tabular-nums font-medium';
+                extraClass = ' text-right tabular-nums font-semibold text-black';
             }
-            cell.className = 'px-3 py-2' + extraClass;
+            cell.className = 'px-3 py-2.5' + extraClass;
             cell.textContent = value;
         });
     });

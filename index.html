@@ -598,7 +598,8 @@
               <h2 id="capacity-title" class="text-lg font-semibold text-black">Capacity Planning</h2>
               <span class="text-[#D8DADA]" aria-hidden="true">·</span>
               <span id="capacity-sprint-name"
-                class="inline-flex items-center rounded-lg bg-black px-2.5 py-1 text-xs font-semibold text-white">Current sprint</span>
+                class="inline-flex items-center rounded-lg bg-black px-2.5 py-1 text-xs font-semibold text-white">Current
+                sprint</span>
               <span id="capacity-pace-badge" class="hidden"></span>
               <span id="capacity-days-left-badge"
                 class="hidden inline-flex items-center rounded-md bg-[#EBF5FF] border border-[#B8DCFF] px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[#006FC1]"></span>
@@ -714,8 +715,8 @@
               </div>
             </div>
             <div id="capacity-pace-bar"
-              class="relative h-3 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]"
-              role="img" aria-label="Sprint progress compared to elapsed time"></div>
+              class="relative h-3 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]" role="img"
+              aria-label="Sprint progress compared to elapsed time"></div>
           </div>
         </div>
 
@@ -729,8 +730,7 @@
                 class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
                 <span>Current sprint</span>
               </button>
-              <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
-                aria-selected="false"
+              <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab" aria-selected="false"
                 class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
                 <span>Future sprints</span>
                 <span id="capacity-tab-future-count"
@@ -811,23 +811,32 @@
             <div id="capacity-main-table-col"
               class="lg:col-span-8 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm">
               <table class="w-full text-sm">
-                <thead>
-                  <tr class="bg-[#F6F6F6] border-b border-[#D8DADA] text-left text-xs font-medium text-[#6F7171]">
-                    <th scope="col" class="px-4 py-2.5">Developer</th>
-                    <th scope="col" class="px-3 py-2.5 text-right">Issues</th>
-                    <th scope="col" class="px-3 py-2.5 text-right">Story points</th>
-                    <th scope="col" class="px-3 py-2.5 text-right">Capacity</th>
-                    <th scope="col" class="px-3 py-2.5 text-right">Remaining</th>
-                    <th scope="col" class="px-4 py-2.5 text-left">Workload</th>
-                  </tr>
-                </thead>
-                <tbody id="capacity-table-body">
-                  <tr>
-                    <td colspan="6" class="px-4 py-8 text-center text-[#6F7171]">No developers found.</td>
-                  </tr>
-                </tbody>
-                <tfoot id="capacity-table-footer"></tfoot>
-              </table>
+                <table class="w-full text-sm border-collapse">
+                  <thead>
+                    <tr class="bg-[#F6F6F6] border-b border-[#D8DADA] text-left text-xs font-medium text-[#6F7171]">
+                      <th scope="col" class="px-4 py-2.5">Developer</th>
+                      <th scope="col" class="px-3 py-2.5 text-right">Issues</th>
+                      <th scope="col" class="px-3 py-2.5 text-right">Story points</th>
+                      <th scope="col" class="px-3 py-2.5 text-right">Capacity</th>
+                      <th scope="col" class="px-3 py-2.5 text-right">Remaining</th>
+                      <th scope="col" class="px-4 py-2.5 text-left">Workload</th>
+                    <tr
+                      class="bg-[#F6F6F6] border-b border-[#D8DADA] text-left text-[11px] font-semibold uppercase tracking-wider text-[#6F7171]">
+                      <th scope="col" class="px-4 py-3">Developer</th>
+                      <th scope="col" class="px-3 py-3 text-right w-16">Issues</th>
+                      <th scope="col" class="px-3 py-3 text-right w-20">Points</th>
+                      <th scope="col" class="px-3 py-3 text-right w-24">Capacity</th>
+                      <th scope="col" class="px-3 py-3 text-right w-24">Remaining</th>
+                      <th scope="col" class="px-4 py-3 text-left min-w-[200px]">Workload</th>
+                    </tr>
+                  </thead>
+                  <tbody id="capacity-table-body">
+                    <tr>
+                      <td colspan="6" class="px-4 py-8 text-center text-[#6F7171]">No developers found.</td>
+                    </tr>
+                  </tbody>
+                  <tfoot id="capacity-table-footer"></tfoot>
+                </table>
             </div>
             <!-- Right Sidebar: Actual vs. Expected Tracking -->
             <aside id="capacity-pace-sidebar"
@@ -836,13 +845,15 @@
               <div class="pb-3.5 border-b border-[#D8DADA]">
                 <div class="flex items-center justify-between gap-2">
                   <h3 id="capacity-sidebar-team-name" class="text-sm font-semibold text-black">All Team Members</h3>
-                  <span class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Actual vs. Expected</span>
+                  <span class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Actual vs.
+                    Expected</span>
                 </div>
                 <div id="capacity-sidebar-team-bar"
                   class="relative mt-2.5 h-3.5 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]">
                 </div>
                 <div class="mt-1.5 flex items-center justify-between gap-2 text-xs">
-                  <span id="capacity-sidebar-team-caption" class="text-[#6F7171] tabular-nums">0p completed of 0p expected</span>
+                  <span id="capacity-sidebar-team-caption" class="text-[#6F7171] tabular-nums">0p completed of 0p
+                    expected</span>
                   <span id="capacity-sidebar-team-total" class="font-semibold text-black tabular-nums">0p</span>
                 </div>
               </div>
@@ -850,8 +861,8 @@
                 <div
                   class="flex items-center justify-between rounded-lg bg-[#F6F6F6] px-2.5 py-1.5 text-xs font-semibold text-black mb-2.5">
                   <span>Team Members</span>
-                  <span id="capacity-sidebar-member-count"
-                    class="text-[11px] font-normal text-[#6F7171] tabular-nums">0 devs</span>
+                  <span id="capacity-sidebar-member-count" class="text-[11px] font-normal text-[#6F7171] tabular-nums">0
+                    devs</span>
                 </div>
                 <div id="capacity-sidebar-members" class="space-y-3 max-h-[540px] overflow-y-auto pr-1"></div>
               </div>

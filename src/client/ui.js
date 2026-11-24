@@ -1681,13 +1681,13 @@ function getCapacityPaceBadgeClass_(status) {
     switch (status) {
         case 'on_track':
         case 'completed':
-            return 'inline-flex items-center rounded-full bg-[#DCF5E6] px-2.5 py-0.5 text-xs font-medium text-[#008331]';
+            return 'inline-flex items-center rounded-full bg-emerald-50 ring-1 ring-inset ring-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700';
         case 'at_risk':
-            return 'inline-flex items-center rounded-full bg-[#FFF9DE] px-2.5 py-0.5 text-xs font-medium text-[#4B3F04]';
+            return 'inline-flex items-center rounded-full bg-amber-50 ring-1 ring-inset ring-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700';
         case 'behind':
-            return 'inline-flex items-center rounded-full bg-[#FFECE0] px-2.5 py-0.5 text-xs font-medium text-[#B95319]';
+            return 'inline-flex items-center rounded-full bg-rose-50 ring-1 ring-inset ring-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-700';
         default:
-            return 'inline-flex items-center rounded-full bg-[#EDEDED] px-2.5 py-0.5 text-xs font-medium text-[#333333]';
+            return 'inline-flex items-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600';
     }
 }
 
@@ -1738,8 +1738,8 @@ function appendStackedSegments_(track, breakdown, denominator) {
     var inner = document.createElement('div');
     inner.className = 'flex h-full w-full overflow-hidden rounded-full';
     var segments = [
-        { key: 'completed', value: breakdown.completed, className: 'h-full bg-[#008331]' },
-        { key: 'inProgress', value: breakdown.inProgress, className: 'h-full bg-[#006FC1]' },
+        { key: 'completed', value: breakdown.completed, className: 'h-full bg-emerald-500' },
+        { key: 'inProgress', value: breakdown.inProgress, className: 'h-full bg-sky-500' },
         { key: 'notStarted', value: breakdown.notStarted, className: 'h-full bg-slate-300' }
     ];
     segments.forEach(function (segment) {
@@ -2629,25 +2629,25 @@ function renderCapacityFooter_(tfoot, capacity, numberFormat) {
     tfoot.replaceChildren();
     if (!capacity || !capacity.developers || !capacity.developers.length) return;
     var row = tfoot.insertRow();
-    row.className = 'bg-[#F6F6F6] border-t border-[#D8DADA] text-xs font-semibold text-black';
+    row.className = 'bg-slate-50 border-t border-slate-200 text-xs font-semibold text-slate-900';
     var labelCell = row.insertCell();
-    labelCell.className = 'px-4 py-2.5';
+    labelCell.className = 'px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500';
     labelCell.textContent = 'Team total';
     var issuesCell = row.insertCell();
-    issuesCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    issuesCell.className = 'px-3 py-3 text-right tabular-nums text-slate-600';
     issuesCell.textContent = numberFormat.format(capacity.totalIssues || 0);
     var pointsCell = row.insertCell();
-    pointsCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    pointsCell.className = 'px-3 py-3 text-right tabular-nums';
     pointsCell.textContent = numberFormat.format(capacity.totalStoryPoints || 0);
     var capCell = row.insertCell();
-    capCell.className = 'px-3 py-2.5 text-right tabular-nums';
+    capCell.className = 'px-3 py-3 text-right tabular-nums';
     capCell.textContent = capacity.totalCapacity == null ? '—' : numberFormat.format(capacity.totalCapacity);
     var remCell = row.insertCell();
     var teamRem = capacity.totalCapacity == null ? null : capacity.totalCapacity - (capacity.totalStoryPoints || 0);
-    remCell.className = 'px-3 py-2.5 text-right tabular-nums ' + (teamRem == null ? 'text-[#6F7171]' : teamRem < 0 ? 'text-[#B95319]' : teamRem > 0 ? 'text-[#008331]' : 'text-[#6F7171]');
+    remCell.className = 'px-3 py-3 text-right tabular-nums ' + (teamRem == null ? 'text-slate-400' : teamRem < 0 ? 'text-rose-600' : teamRem > 0 ? 'text-emerald-600' : 'text-slate-500');
     remCell.textContent = teamRem == null ? '—' : numberFormat.format(teamRem);
     var wkCell = row.insertCell();
-    wkCell.className = 'px-4 py-2.5 text-[#6F7171] font-normal';
+    wkCell.className = 'px-4 py-3 text-slate-500 font-medium';
     if (capacity.totalCapacity != null && capacity.totalCapacity > 0) {
         var pct = Math.round(((capacity.totalStoryPoints || 0) / capacity.totalCapacity) * 100);
         wkCell.textContent = pct + '% of configured team capacity';
@@ -2996,52 +2996,52 @@ function renderCapacityManagerGroupRow_(body, managerName, members, numberFormat
     });
 
     var row = body.insertRow();
-    row.className = 'bg-[#F6F6F6] border-t-2 border-b border-[#D8DADA] text-xs font-semibold text-black';
+    row.className = 'cap-group-row bg-indigo-50/60 border-y border-indigo-100 text-xs font-semibold text-slate-800';
     row.setAttribute('data-manager-group', managerName);
 
     var nameCell = row.insertCell();
-    nameCell.className = 'px-4 py-2.5 font-bold text-black tracking-tight';
+    nameCell.className = 'px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-indigo-700';
     nameCell.textContent = managerName + ' (' + members.length + (members.length === 1 ? ' dev' : ' devs') + ')';
 
     var issuesCell = row.insertCell();
-    issuesCell.className = 'px-3 py-2.5 text-right tabular-nums text-[#6F7171]';
+    issuesCell.className = 'px-3 py-2.5 text-right tabular-nums text-slate-500';
     issuesCell.textContent = numberFormat.format(totalIssues);
 
     var ptsCell = row.insertCell();
-    ptsCell.className = 'px-3 py-2.5 text-right tabular-nums text-black';
+    ptsCell.className = 'px-3 py-2.5 text-right tabular-nums text-slate-900';
     ptsCell.textContent = numberFormat.format(totalPoints);
 
     var capCell = row.insertCell();
-    capCell.className = 'px-3 py-2.5 text-right tabular-nums text-black';
+    capCell.className = 'px-3 py-2.5 text-right tabular-nums text-slate-900';
     capCell.textContent = hasCap ? numberFormat.format(totalCap) : '—';
 
     var rem = hasCap ? totalCap - totalPoints : null;
     var remCell = row.insertCell();
-    var remClass = rem == null ? 'text-[#6F7171]' : rem < 0 ? 'text-[#B95319]' : rem > 0 ? 'text-[#008331]' : 'text-[#6F7171]';
+    var remClass = rem == null ? 'text-slate-400' : rem < 0 ? 'text-rose-600' : rem > 0 ? 'text-emerald-600' : 'text-slate-500';
     remCell.className = 'px-3 py-2.5 text-right tabular-nums ' + remClass;
     remCell.textContent = rem == null ? '—' : numberFormat.format(rem);
 
     var wkCell = row.insertCell();
-    wkCell.className = 'px-3 py-2.5 min-w-[180px] text-xs font-normal text-[#6F7171] whitespace-nowrap';
+    wkCell.className = 'px-4 py-2.5 text-xs font-normal text-slate-500';
     if (hasCap && totalCap > 0) {
         var ratio = totalPoints / totalCap;
         var pctSpan = document.createElement('span');
-        pctSpan.className = 'font-medium text-black';
+        pctSpan.className = 'font-semibold tabular-nums ' + (rem < 0 ? 'text-rose-600' : 'text-slate-900');
         pctSpan.textContent = percentFormat.format(ratio);
         wkCell.appendChild(pctSpan);
         if (rem < 0) {
             var badge = document.createElement('span');
-            badge.className = 'ml-2 inline-block rounded-full bg-[#FFF9DE] px-2 py-0.5 text-[#4B3F04] font-medium';
+            badge.className = 'ml-2 inline-flex items-center rounded-full bg-rose-50 ring-1 ring-inset ring-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-700';
             badge.textContent = 'Over capacity';
             wkCell.appendChild(badge);
         }
         var track = document.createElement('div');
-        track.className = 'relative mt-1 h-2 rounded-full bg-white border border-[#D8DADA]';
+        track.className = 'cap-track relative mt-1.5 h-1.5 rounded-full bg-white';
         track.setAttribute('aria-hidden', 'true');
         appendStackedSegments_(track, { completed: completed, inProgress: inProgress, notStarted: notStarted }, Math.max(totalCap, totalPoints));
         if (rem < 0 && totalPoints > 0) {
             var marker = document.createElement('div');
-            marker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-black';
+            marker.className = 'absolute -top-1 -bottom-1 w-0.5 rounded bg-slate-900';
             marker.style.left = ((totalCap / totalPoints) * 100) + '%';
             track.appendChild(marker);
         }
@@ -3060,7 +3060,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var emptyRow = body.insertRow();
         var emptyCell = emptyRow.insertCell();
         emptyCell.colSpan = 6;
-        emptyCell.className = 'px-3 py-8 text-center text-gray-500';
+        emptyCell.className = 'px-4 py-10 text-center text-sm text-slate-500';
         var emptyMsg = 'No developers found.';
         var scopeLabel = isCurrentSprint ? 'the current sprint.' : 'this sprint.';
         if (capacityCurrentFilter_ === 'at_risk') emptyMsg = 'No at-risk developers in ' + scopeLabel;
@@ -3075,14 +3075,14 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
     var renderDeveloperRow = function (developer, index, indent) {
         var row = body.insertRow();
         var isOverCapRow = developer && developer.developer !== 'Unassigned' && developer.remaining != null && developer.remaining < 0;
-        row.className = isOverCapRow ?
-        'border-b border-rose-200/80 border-l-4 border-l-rose-500 bg-rose-50/40 hover:bg-rose-50/70 transition-colors' :
-        'border-b border-slate-100 hover:bg-slate-50/80 transition-colors';
+        row.className = 'cap-dev-row border-b border-slate-100 transition-colors';
+        if (isOverCapRow) row.setAttribute('data-over-capacity', 'true');
         var nameCell = row.insertCell();
-        nameCell.className = (indent ? 'pl-7 pr-4' : 'px-4') + ' py-3.5 text-slate-900 align-top';
+        nameCell.className = 'cap-name-cell ' + (indent ? 'pl-8 pr-4' : 'px-4') + ' py-3 text-slate-900 align-middle';
         var name = document.createElement('span');
-        name.className = 'font-semibold text-sm text-slate-900 mr-2 align-middle';
+        name.className = 'cap-dev-name font-semibold text-sm text-slate-900 align-middle';
         name.textContent = developer.developer;
+        name.setAttribute('data-initials', developer.developer === 'Unassigned' ? '?' : getDeveloperInitials_(developer.developer));
         nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
         var assignments = developer.issues;
@@ -3090,7 +3090,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 align-middle shadow-2xs transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            toggle.className = 'cap-issues-toggle ml-2 inline-flex items-center gap-1 whitespace-nowrap rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500';
             var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
             var isExpanded = Boolean(capacityExpandAllIssues_);
             toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
@@ -3109,10 +3109,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             var detailsRow = body.insertRow();
             detailsRow.id = detailsId;
             detailsRow.hidden = !isExpanded;
-            detailsRow.className = 'border-b border-[#D8DADA] bg-[#F6F6F6]/90';
+            detailsRow.className = 'cap-details-row border-b border-slate-100 bg-slate-50/80';
             var detailsCell = detailsRow.insertCell();
             detailsCell.colSpan = 6;
-            detailsCell.className = 'px-5 py-3.5';
+            detailsCell.className = 'px-5 py-3 pl-14 text-xs text-slate-500';
             if (assignments.length) {
                 renderCapacityAssignments_(detailsCell, assignments, detailsLabel, numberFormat);
             } else {
@@ -3132,16 +3132,16 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             var devMgr = String(developer.manager || '').trim();
             if (devPct || devMgr) {
                 var metaWrap = document.createElement('div');
-                metaWrap.className = 'mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500';
+                metaWrap.className = 'cap-dev-meta mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500';
                 if (devPct) {
                     var pctBadge = document.createElement('span');
-                    pctBadge.className = 'inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700';
+                    pctBadge.className = 'inline-flex items-center rounded bg-indigo-50 px-1.5 py-px text-[10px] font-semibold text-indigo-700';
                     pctBadge.textContent = devPct;
                     metaWrap.appendChild(pctBadge);
                 }
                 if (devMgr) {
                     var mgrBadge = document.createElement('span');
-                    mgrBadge.className = 'inline-flex items-center rounded-md bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-600';
+                    mgrBadge.className = 'inline-flex items-center rounded bg-slate-100 px-1.5 py-px text-[10px] font-medium text-slate-600';
                     mgrBadge.textContent = 'Mgr: ' + devMgr;
                     metaWrap.appendChild(mgrBadge);
                 }
@@ -3149,23 +3149,24 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             }
         }
         var issueCell = row.insertCell();
-        issueCell.className = 'px-3 py-3.5 text-right tabular-nums text-xs font-medium text-[#6F7171] align-top';
+        issueCell.className = 'px-3 py-3 text-right tabular-nums text-sm text-slate-500 align-middle';
         issueCell.textContent = numberFormat.format(developer.issueCount);
         var pointsCell = row.insertCell();
-        pointsCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm font-semibold text-black align-top';
+        pointsCell.className = 'px-3 py-3 text-right tabular-nums text-sm font-semibold text-slate-900 align-middle';
         pointsCell.textContent = numberFormat.format(developer.storyPoints);
         var capCell = row.insertCell();
-        capCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm text-black align-top';
+        capCell.className = 'px-3 py-3 text-right tabular-nums text-sm text-slate-700 align-middle';
         var hasCapAdjustment = developer.ptoDays > 0 || developer.holidayDays > 0 || developer.capacityOverride != null;
         if (!hasCapAdjustment) {
             capCell.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
+            if (developer.capacity == null) capCell.className += ' text-slate-400';
         } else {
             var capPrimary = document.createElement('div');
-            capPrimary.className = 'font-medium text-black';
+            capPrimary.className = 'font-semibold text-slate-900';
             capPrimary.textContent = developer.capacity == null ? '—' : numberFormat.format(developer.capacity);
             capCell.appendChild(capPrimary);
             var capSub = document.createElement('div');
-            capSub.className = 'text-[11px] text-[#006FC1] whitespace-nowrap';
+            capSub.className = 'mt-0.5 text-[10px] leading-tight text-sky-700';
             var adjParts = [];
             if (developer.capacityOverride != null) {
                 adjParts.push('Override');
@@ -3181,10 +3182,10 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             capCell.appendChild(capSub);
         }
         var remCell = row.insertCell();
-        var remClass = developer.remaining == null ? 'text-[#6F7171]' :
-            developer.remaining < 0 ? 'text-[#B95319] font-semibold' :
-                developer.remaining > 0 ? 'text-[#008331] font-medium' : 'text-[#6F7171]';
-        remCell.className = 'px-3 py-3.5 text-right tabular-nums text-sm align-top ' + remClass;
+        var remClass = developer.remaining == null ? 'text-slate-400' :
+            developer.remaining < 0 ? 'cap-rem-neg text-rose-600 font-semibold' :
+                developer.remaining > 0 ? 'cap-rem-pos text-emerald-600 font-semibold' : 'text-slate-500';
+        remCell.className = 'px-3 py-3 text-right tabular-nums text-sm align-middle ' + remClass;
         remCell.textContent = developer.remaining == null ? '—' : numberFormat.format(developer.remaining);
         renderCapacityWorkload_(row.insertCell(), developer, unassigned, percentFormat, numberFormat, isCurrentSprint);
     };
@@ -3236,13 +3237,15 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
 }
 
 function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, numberFormat, isCurrentSprint) {
-    cell.className = 'px-4 py-3.5 min-w-[200px] text-xs text-[#6F7171] whitespace-nowrap align-top';
+    cell.className = 'cap-workload-cell px-4 py-3 text-xs text-slate-500 align-middle';
     if (unassigned) {
         cell.textContent = 'Needs assignee';
+        cell.className += ' italic text-amber-700';
         return;
     }
     if (developer.remaining == null) {
         cell.textContent = developer.capacity == null ? 'Capacity not set' : 'No sprint';
+        cell.className += ' italic text-slate-400';
         return;
     }
 
@@ -3250,20 +3253,22 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
     var ratio = developer.capacity > 0 ? Math.max(0, developer.storyPoints / developer.capacity) : null;
     if (ratio !== null) {
         var percent = document.createElement('span');
-        percent.className = 'font-semibold text-black tabular-nums';
+        percent.className = 'text-sm font-bold tabular-nums align-middle ' + (overCapacity ? 'text-rose-600' : ratio >= 0.85 ? 'text-amber-600' : 'text-slate-900');
         percent.textContent = percentFormat.format(ratio);
         cell.appendChild(percent);
     }
     if (overCapacity || ratio === null) {
         var status = document.createElement('span');
-        status.className = overCapacity ? 'inline-flex items-center rounded-full bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 text-[11px] font-semibold text-[#B95319]' : '';
+        status.className = overCapacity ?
+            'inline-flex items-center rounded-full bg-rose-50 ring-1 ring-inset ring-rose-200 px-2 py-0.5 text-[11px] font-semibold text-rose-700 align-middle' :
+            'inline-flex items-center rounded-full bg-slate-100 ring-1 ring-inset ring-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600 align-middle';
         if (ratio !== null) status.className += ' ml-2';
         status.textContent = overCapacity ? 'Over capacity' : 'Zero capacity';
         cell.appendChild(status);
     }
     if (isCurrentSprint && developer.pace && ['on_track', 'at_risk', 'behind', 'completed'].indexOf(developer.pace.status) !== -1) {
         var pacePill = document.createElement('span');
-        pacePill.className = getCapacityPaceBadgeClass_(developer.pace.status) + ' ml-2';
+        pacePill.className = getCapacityPaceBadgeClass_(developer.pace.status) + ' ml-2 align-middle';
         pacePill.setAttribute('data-pace', developer.pace.status);
         pacePill.textContent = developer.pace.label;
         cell.appendChild(pacePill);
@@ -3272,7 +3277,7 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
         var breakdown = getDeveloperPointBreakdown_(developer);
         var denominator = Math.max(developer.capacity, developer.storyPoints);
         var track = document.createElement('div');
-        track.className = 'relative mt-2 h-2 rounded-full bg-[#EDEDED] border border-[#D8DADA]/60';
+        track.className = 'cap-track relative mt-2 h-1.5 rounded-full bg-slate-100';
         track.setAttribute('aria-hidden', 'true');
         track.title = numberFormat.format(breakdown.completed) + ' completed · ' +
             numberFormat.format(breakdown.inProgress) + ' in progress · ' +
@@ -3280,7 +3285,7 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
         appendStackedSegments_(track, breakdown, denominator);
         if (overCapacity && developer.storyPoints > 0) {
             var limitMarker = document.createElement('div');
-            limitMarker.className = 'absolute -top-0.5 -bottom-0.5 w-0.5 bg-gray-900';
+            limitMarker.className = 'absolute -top-1 -bottom-1 w-0.5 rounded bg-slate-900';
             limitMarker.setAttribute('data-marker', 'capacity-limit');
             limitMarker.style.left = ((developer.capacity / developer.storyPoints) * 100) + '%';
             track.appendChild(limitMarker);
@@ -3295,7 +3300,7 @@ function renderCapacityWorkload_(cell, developer, unassigned, percentFormat, num
             if (developer.unestimatedCount > 0) captionParts.push(numberFormat.format(developer.unestimatedCount) + ' unest.');
             if (captionParts.length) {
                 var caption = document.createElement('div');
-                caption.className = 'mt-1 text-[11px] text-[#6F7171]';
+                caption.className = 'mt-1 text-[11px] text-slate-500';
                 caption.textContent = captionParts.join(' · ');
                 cell.appendChild(caption);
             }
@@ -3307,7 +3312,7 @@ function appendCapacityJiraKeyTrigger_(cell, jiraKey) {
     if (/^[A-Z][A-Z0-9_]*-\d+$/i.test(jiraKey)) {
         var button = document.createElement('button');
         button.type = 'button';
-        button.className = 'text-[#006FC1] hover:underline font-medium bg-transparent border-0 p-0 cursor-pointer text-left';
+        button.className = 'font-semibold text-indigo-600 hover:text-indigo-800 hover:underline bg-transparent border-0 p-0 cursor-pointer text-left';
         button.textContent = jiraKey;
         button.setAttribute('aria-label', 'View details for ' + jiraKey);
         button.setAttribute('data-jira-key', jiraKey);
@@ -3321,7 +3326,7 @@ function appendCapacityJiraKeyTrigger_(cell, jiraKey) {
         extLink.href = 'https://onejira.verizon.com/browse/' + jiraKey;
         extLink.target = '_blank';
         extLink.rel = 'noopener noreferrer';
-        extLink.className = 'ml-1.5 text-[11px] text-[#6F7171] hover:text-black no-underline';
+        extLink.className = 'ml-1.5 text-[11px] text-slate-400 hover:text-indigo-600 no-underline';
         extLink.title = 'Open ' + jiraKey + ' in Jira';
         extLink.setAttribute('aria-label', 'Open ' + jiraKey + ' in Jira');
         extLink.textContent = '↗';
@@ -3376,7 +3381,7 @@ var developerCompanyHolidaysState_ = [];
 function createDeveloperPeopleEditButton_(developerName) {
     var btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'inline-flex items-center justify-center rounded-lg border border-[#D8DADA] bg-white hover:bg-[#F6F6F6] hover:border-black p-1 text-[#6F7171] hover:text-black ml-1.5 align-middle transition-colors';
+    btn.className = 'cap-edit-btn ml-1 inline-flex items-center justify-center rounded-md p-1 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 align-middle transition-colors';
     btn.title = 'Edit capacity, manager & PTO for ' + developerName;
     if (typeof btn.setAttribute === 'function') {
         btn.setAttribute('aria-label', 'Edit capacity, manager and PTO for ' + developerName);

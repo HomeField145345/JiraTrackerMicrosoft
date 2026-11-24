@@ -120,65 +120,107 @@
 #view-capacity [aria-pressed='true'] span { color: inherit; }
 
 /* ---------- Developer table ---------- */
+/* Only visual chrome lives here; padding/alignment come from the row markup so
+   indented group members, detail rows and footers keep their own spacing. */
 #view-capacity #capacity-main-table-col {
   border-radius: var(--cap-radius);
   border: 1px solid var(--cap-border);
   background: var(--cap-card);
   box-shadow: var(--cap-shadow);
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
-#view-capacity #capacity-main-table-col table {
+#view-capacity .cap-dev-table {
   width: 100%;
+  min-width: 760px;
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 0.8125rem;
 }
-#view-capacity #capacity-main-table-col thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+#view-capacity .cap-dev-table thead th {
   background: #f8fafc;
   color: var(--cap-muted);
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  padding: 0.85rem 0.9rem;
   border-bottom: 1px solid var(--cap-border);
   white-space: nowrap;
 }
-#view-capacity #capacity-main-table-col tbody td {
-  padding: 1rem 0.9rem;
-  border-bottom: 1px solid #eef1f6;
-  vertical-align: top;
-}
-#view-capacity #capacity-main-table-col tbody tr:not([hidden]):hover > td { background: #f8faff; }
-#view-capacity #capacity-main-table-col tbody tr:last-child > td { border-bottom: 0; }
-#view-capacity #capacity-main-table-col tbody tr:first-child > td:first-child { border-top-left-radius: 0; }
-#view-capacity #capacity-main-table-col tbody td:first-child { min-width: 220px; }
-#view-capacity #capacity-main-table-col tbody td.tabular-nums { font-variant-numeric: tabular-nums; }
-#view-capacity #capacity-main-table-col tfoot td {
-  background: #f8fafc;
-  border-top: 1px solid var(--cap-border);
-  padding: 0.85rem 0.9rem;
-  font-weight: 700;
-  color: var(--cap-text);
-}
-/* Workload bar */
-#view-capacity #capacity-main-table-col td .rounded-full[aria-hidden='true'] {
-  height: 8px;
-  background: #e8ecf4;
-  border: 0;
+#view-capacity .cap-dev-table tbody td { border-bottom: 1px solid #eef1f6; }
+#view-capacity .cap-dev-table tbody tr:last-child > td { border-bottom: 0; }
+
+/* Developer rows */
+#view-capacity .cap-dev-row > td { transition: background-color 0.12s ease; }
+#view-capacity .cap-dev-row:hover > td { background: #f8faff; }
+#view-capacity .cap-dev-row[data-over-capacity='true'] > td { background: #fff7f8; }
+#view-capacity .cap-dev-row[data-over-capacity='true']:hover > td { background: #fff1f3; }
+#view-capacity .cap-dev-row[data-over-capacity='true'] > td:first-child { box-shadow: inset 3px 0 0 var(--cap-bad); }
+
+/* Name cell: avatar drawn from data-initials so the DOM stays flat */
+#view-capacity .cap-name-cell { overflow: hidden; }
+#view-capacity .cap-dev-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100% - 110px);
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
 }
+#view-capacity .cap-dev-name::before {
+  content: attr(data-initials);
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+  color: #4338ca;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: inset 0 0 0 1px #c7d2fe;
+}
+#view-capacity .cap-dev-row[data-over-capacity='true'] .cap-dev-name::before {
+  background: linear-gradient(135deg, #fff1f2, #ffe4e6);
+  color: #be123c;
+  box-shadow: inset 0 0 0 1px #fecdd3;
+}
+#view-capacity .cap-dev-meta { padding-left: calc(30px + 0.6rem); }
+#view-capacity .cap-edit-btn { opacity: 0; }
+#view-capacity .cap-dev-row:hover .cap-edit-btn,
+#view-capacity .cap-edit-btn:focus-visible { opacity: 1; }
+#view-capacity .cap-issues-toggle[aria-expanded='true'] {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+/* Remaining column as soft signed chips */
+#view-capacity .cap-rem-pos::before { content: '+'; }
+
+/* Workload */
+#view-capacity .cap-track { overflow: visible; }
+#view-capacity .cap-track > div:first-child { border-radius: 9999px; }
+
+/* Group header rows */
+#view-capacity .cap-group-row > td { background: #f5f7ff; border-bottom: 1px solid #e0e7ff; }
+
 /* Expanded issue rows */
-#view-capacity #capacity-main-table-col tr[id^='capacity-issues-'] > td {
+#view-capacity .cap-details-row > td {
   background: #f8fafc;
   box-shadow: inset 3px 0 0 var(--cap-accent);
 }
-/* Over-capacity rows get a calm accent instead of a loud tint */
-#view-capacity #capacity-main-table-col tbody tr.border-l-rose-500 > td:first-child {
-  box-shadow: inset 4px 0 0 var(--cap-bad);
+#view-capacity .cap-details-row table { box-shadow: var(--cap-shadow-xs); }
+
+/* Footer */
+#view-capacity .cap-dev-table tfoot td {
+  background: #f8fafc;
+  border-top: 1px solid var(--cap-border);
 }
 
 /* ---------- Sidebar ---------- */
@@ -206,7 +248,7 @@
 #view-capacity #past-sprint-open-capacity table {
   border-radius: var(--cap-radius);
 }
-#view-capacity [id^='capacity-panel-'] table th {
+#view-capacity :is(#capacity-panel-future, #capacity-panel-nosprint, #capacity-panel-pastopen) table th {
   background: #f8fafc;
   color: var(--cap-muted);
   font-size: 0.6875rem;
@@ -216,7 +258,7 @@
   padding: 0.8rem 0.9rem;
   border-bottom: 1px solid var(--cap-border);
 }
-#view-capacity [id^='capacity-panel-'] table td {
+#view-capacity :is(#capacity-panel-future, #capacity-panel-nosprint, #capacity-panel-pastopen) table td {
   padding: 0.85rem 0.9rem;
   border-bottom: 1px solid #eef1f6;
 }

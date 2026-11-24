@@ -1123,8 +1123,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
             var stageIsEmpty = !item['Project Stage'] || String(item['Project Stage']).trim() === '';
             if (stageIsEmpty) {
                 var tooltip = 'Project Stage is empty - this should be set';
-                var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
-                return '<td class="col-status">' + statusText + dot + '</td>';
+                var dot = '<span class="status-sync-dot" title="' + tooltip.replace(/\"/g, '&quot;') + '"></span>';
+                return '<td class="col-status"><span class="status-with-dot">' + statusText + dot + '</span></td>';
             }
             var s = String(item.Status).toLowerCase().trim();
             var stg = String(item['Project Stage']).toLowerCase().trim();
@@ -1177,8 +1177,8 @@ function createRow(item, type, parentEpicId, validationBadgeCount, hasChildren, 
                 return '<td class="col-status">' + statusText + '</td>';
             }
             var tooltip = 'Status ("' + item.Status + '") and Project Stage ("' + item['Project Stage'] + '") may be out of sync' + (expectedStatuses.length ? ('\nExpected Status: ' + expectedStatuses.join(', ') + (matchedStatus ? ('\nCurrent matches: ' + matchedStatus) : '\nNo match found')) : '\nNo stage-specific mapping configured');
-            var dot = '<span title="' + tooltip.replace(/\"/g, '&quot;') + '" style="display:inline-block;width:6px;height:6px;border-radius:50%;background-color:#f59e0b;margin-left:6px;vertical-align:middle;"></span>';
-            return '<td class="col-status">' + statusText + dot + '</td>';
+            var dot = '<span class="status-sync-dot" title="' + tooltip.replace(/\"/g, '&quot;') + '"></span>';
+            return '<td class="col-status"><span class="status-with-dot">' + statusText + dot + '</span></td>';
         })() +
         (function () {
             var uat = item['UAT Status'] || '';

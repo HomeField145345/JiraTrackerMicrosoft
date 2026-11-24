@@ -2046,24 +2046,24 @@ function syncCapacityFilterButtons_(counts) {
             btnId: 'capacity-filter-at-risk',
             countId: 'capacity-filter-at-risk-count',
             count: c.atRisk,
-            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            highlightCountClass: 'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]'
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs transition-all',
+            highlightCountClass: 'rounded-full bg-orange-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-orange-700'
         },
         {
             key: 'over_capacity',
             btnId: 'capacity-filter-over-capacity',
             countId: 'capacity-filter-over-capacity-count',
             count: c.overCapacity,
-            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#B95319] bg-[#B95319] px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            highlightCountClass: 'rounded-full bg-[#FFECE0] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#B95319]'
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs transition-all',
+            highlightCountClass: 'rounded-full bg-rose-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-rose-700'
         },
         {
             key: 'under_capacity',
             btnId: 'capacity-filter-under-capacity',
             countId: 'capacity-filter-under-capacity-count',
             count: c.underCapacity,
-            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-full border border-[#008331] bg-[#008331] px-3 py-1.5 text-xs font-medium text-white transition-colors',
-            highlightCountClass: 'rounded-full bg-[#DCF5E6] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-[#008331]'
+            activeBtnClass: 'inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs transition-all',
+            highlightCountClass: 'rounded-full bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-emerald-700'
         }
     ];
     configs.forEach(function (cfg) {
@@ -2073,7 +2073,7 @@ function syncCapacityFilterButtons_(counts) {
             btn.hidden = !showFilters;
             btn.setAttribute('aria-pressed', String(isActive));
             var baseClass = isActive ? cfg.activeBtnClass :
-                'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all';
             btn.className = showFilters ? baseClass : (baseClass + ' hidden');
         }
         var countEl = document.getElementById(cfg.countId);
@@ -2083,7 +2083,7 @@ function syncCapacityFilterButtons_(counts) {
                 countEl.className = 'rounded-full bg-white/20 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-white';
             } else {
                 countEl.className = cfg.count > 0 ? cfg.highlightCountClass :
-                    'rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]';
+                'rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600';
             }
         }
     });
@@ -2197,8 +2197,8 @@ function syncCapacityGroupButton_() {
         btn.hidden = !showGrouping;
         btn.setAttribute('aria-pressed', String(capacityGroupByManager_));
         var mgrClass = capacityGroupByManager_ ?
-            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
-            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        'inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-900 shadow-2xs transition-all' :
+        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all';
         btn.className = showGrouping ? mgrClass : (mgrClass + ' hidden');
     }
     var pctBtn = document.getElementById('capacity-group-by-pct');
@@ -2206,8 +2206,8 @@ function syncCapacityGroupButton_() {
         pctBtn.hidden = !showGrouping;
         pctBtn.setAttribute('aria-pressed', String(capacityGroupByPct_));
         var pctClass = capacityGroupByPct_ ?
-            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
-            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+        'inline-flex items-center gap-1.5 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-900 shadow-2xs transition-all' :
+        'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all';
         pctBtn.className = showGrouping ? pctClass : (pctClass + ' hidden');
     }
     var expandBtn = document.getElementById('capacity-expand-all-issues');
@@ -2218,8 +2218,8 @@ function syncCapacityGroupButton_() {
         var text = capacityExpandAllIssues_ ? 'Collapse all issues' : 'Expand all issues';
         if (expLabel) expLabel.textContent = text; else expandBtn.textContent = text;
         var expClass = capacityExpandAllIssues_ ?
-            'inline-flex items-center gap-1.5 rounded-full border border-black bg-black px-3 py-1.5 text-xs font-medium text-white transition-colors' :
-            'inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-[#F6F6F6] px-3 py-1.5 text-xs font-medium text-black hover:border-black transition-colors';
+        'inline-flex items-center gap-1.5 rounded-xl border border-slate-900 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition-all' :
+        'inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-2xs transition-all';
         expandBtn.className = showGrouping ? expClass : (expClass + ' hidden');
     }
 }
@@ -2272,8 +2272,8 @@ function setActiveCapacityTab_(tabKey) {
         if (btn) {
             btn.setAttribute('aria-selected', String(isActive));
             btn.className = isActive ?
-                'inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors' :
-                'inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors';
+            'inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-2xs transition-all' :
+            'inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-all';
         }
         if (panel) {
             panel.className = isActive ? 'px-4 pb-6' : 'px-4 pb-6 hidden';
@@ -2442,12 +2442,12 @@ function renderCapacityPaceSidebar_(capacity, displayedDevs, numberFormat) {
     if (!capacityUiPrefs_.showPaceSidebar) {
         sidebar.hidden = true;
         sidebar.className = 'hidden';
-        if (mainCol) mainCol.className = 'lg:col-span-12 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm';
+        if (mainCol) mainCol.className = 'lg:col-span-12 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm';
         return;
     }
     sidebar.hidden = false;
-    sidebar.className = 'lg:col-span-4 rounded-xl border border-[#D8DADA] bg-white p-4 shadow-sm';
-    if (mainCol) mainCol.className = 'lg:col-span-8 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm';
+    sidebar.className = 'lg:col-span-4 lg:sticky lg:top-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm';
+    if (mainCol) mainCol.className = 'lg:col-span-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm';
 
     var teamNameEl = document.getElementById('capacity-sidebar-team-name');
     var teamBarEl = document.getElementById('capacity-sidebar-team-bar');
@@ -2710,10 +2710,10 @@ function renderCapacityView() {
     }
     if (atRiskTile) {
         atRiskTile.className = capacityCurrentFilter_ === 'at_risk' ?
-            'text-left rounded-xl border-2 border-[#B95319] bg-[#FFECE0]/80 px-3.5 py-3 transition-colors' :
-            atRiskDevs.length > 0 ?
-                'text-left rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/60 px-3.5 py-3 hover:border-[#B95319] transition-colors' :
-                'text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors';
+            'text-left rounded-xl border-2 border-orange-500 bg-orange-50/90 px-4 py-3.5 shadow-2xs transition-all' :
+        atRiskDevs.length > 0 ?
+        'text-left rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/80 to-white px-4 py-3.5 hover:border-orange-400 hover:shadow-xs transition-all' :
+        'text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-slate-300 transition-all';
     }
     var displayedCurrentDevs = filterCapacityDevelopers_(allCurrentDevs);
     syncCapacityFilterBanner_(allCurrentDevs, displayedCurrentDevs, numberFormat);
@@ -2740,8 +2740,8 @@ function renderCapacityView() {
     if (pastOpenSub) pastOpenSub.textContent = numberFormat.format(pastOpen.totalStoryPoints || 0) + ' pts in past sprints';
     if (pastOpenTile) {
         pastOpenTile.className = (pastOpen.totalIssues || 0) > 0 ?
-            'text-left rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/60 px-3.5 py-3 hover:border-[#B95319] transition-colors' :
-            'text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors';
+        'text-left rounded-xl border border-orange-200 bg-gradient-to-br from-orange-50/80 to-white px-4 py-3.5 hover:border-orange-400 hover:shadow-xs transition-all' :
+        'text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-slate-300 transition-all';
     }
 
     var futureCountEl = document.getElementById('capacity-tab-future-count');
@@ -3076,12 +3076,12 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         var row = body.insertRow();
         var isOverCapRow = developer && developer.developer !== 'Unassigned' && developer.remaining != null && developer.remaining < 0;
         row.className = isOverCapRow ?
-        'border-b border-[#F5C6A5] border-l-4 border-l-[#B95319] bg-[#FFECE0]/30 hover:bg-[#FFECE0]/55 transition-colors' :
-        'border-b border-[#D8DADA]/70 hover:bg-[#F6F6F6]/70 transition-colors';
+        'border-b border-rose-200/80 border-l-4 border-l-rose-500 bg-rose-50/40 hover:bg-rose-50/70 transition-colors' :
+        'border-b border-slate-100 hover:bg-slate-50/80 transition-colors';
         var nameCell = row.insertCell();
-        nameCell.className = (indent ? 'pl-7 pr-4' : 'px-4') + ' py-3.5 text-black align-top';
+        nameCell.className = (indent ? 'pl-7 pr-4' : 'px-4') + ' py-3.5 text-slate-900 align-top';
         var name = document.createElement('span');
-        name.className = 'font-semibold text-sm text-black mr-2 align-middle';
+        name.className = 'font-semibold text-sm text-slate-900 mr-2 align-middle';
         name.textContent = developer.developer;
         nameCell.appendChild(name);
         var unassigned = developer.developer === 'Unassigned';
@@ -3090,7 +3090,7 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
         if (!unassigned || assignments.length) {
             var toggle = document.createElement('button');
             toggle.type = 'button';
-            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-[#D8DADA] bg-white px-2.5 py-0.5 text-[11px] font-medium text-black hover:border-black hover:bg-[#F6F6F6] align-middle transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
+            toggle.className = 'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-[11px] font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 align-middle shadow-2xs transition-all focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
             var toggleText = 'Issues (' + numberFormat.format(assignments.length) + ')';
             var isExpanded = Boolean(capacityExpandAllIssues_);
             toggle.setAttribute('aria-label', toggleText + ' — ' + detailsLabel);
@@ -3132,16 +3132,16 @@ function renderCapacityRows_(body, developers, numberFormat, sectionId, isCurren
             var devMgr = String(developer.manager || '').trim();
             if (devPct || devMgr) {
                 var metaWrap = document.createElement('div');
-                metaWrap.className = 'mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-[#6F7171]';
+                metaWrap.className = 'mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500';
                 if (devPct) {
                     var pctBadge = document.createElement('span');
-                    pctBadge.className = 'inline-flex items-center rounded-md bg-[#EBF5FF] border border-[#B8DCFF] px-1.5 py-0.5 text-[10px] font-semibold text-[#006FC1]';
+                    pctBadge.className = 'inline-flex items-center rounded-md bg-indigo-50 border border-indigo-200/80 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700';
                     pctBadge.textContent = devPct;
                     metaWrap.appendChild(pctBadge);
                 }
                 if (devMgr) {
                     var mgrBadge = document.createElement('span');
-                    mgrBadge.className = 'inline-flex items-center rounded-md bg-[#F6F6F6] border border-[#D8DADA] px-1.5 py-0.5 text-[10px] font-medium text-[#6F7171]';
+                    mgrBadge.className = 'inline-flex items-center rounded-md bg-slate-100 border border-slate-200/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-600';
                     mgrBadge.textContent = 'Mgr: ' + devMgr;
                     metaWrap.appendChild(mgrBadge);
                 }
@@ -3333,10 +3333,10 @@ function appendCapacityJiraKeyTrigger_(cell, jiraKey) {
 
 function renderCapacityAssignments_(container, assignments, label, numberFormat) {
     var table = document.createElement('table');
-    table.className = 'w-full text-xs text-black bg-white rounded-xl border border-[#D8DADA] overflow-hidden border-collapse';
+    table.className = 'w-full text-xs text-slate-900 bg-white rounded-xl border border-slate-200/90 overflow-hidden border-collapse shadow-2xs';
     table.setAttribute('aria-label', label);
     var header = table.createTHead().insertRow();
-    header.className = 'bg-[#F6F6F6] border-b border-[#D8DADA] text-[11px] font-semibold uppercase tracking-wider text-[#6F7171]';
+    header.className = 'bg-slate-50 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500';
     var columns = ['Jira key', 'Summary', 'Type', 'Status', 'Story points'];
     columns.forEach(function (label, index) {
         var cell = document.createElement('th');
@@ -3348,7 +3348,7 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
     var body = table.createTBody();
     assignments.forEach(function (issue) {
         var row = body.insertRow();
-        row.className = 'border-b border-[#D8DADA]/60 last:border-b-0 hover:bg-[#F6F6F6]/60 transition-colors';
+        row.className = 'border-b border-slate-100 last:border-b-0 hover:bg-slate-50/70 transition-colors';
         var keyCell = row.insertCell();
         keyCell.className = 'px-3 py-2.5 whitespace-nowrap';
         appendCapacityJiraKeyTrigger_(keyCell, issue.jiraKey);
@@ -3357,10 +3357,10 @@ function renderCapacityAssignments_(container, assignments, label, numberFormat)
             var cell = row.insertCell();
             var extraClass = '';
             if (index === 2) {
-                extraClass = issue.workState === 'completed' ? ' text-[#008331] font-semibold' :
-                    issue.workState === 'inProgress' ? ' text-[#006FC1] font-semibold' : ' text-[#6F7171]';
+                extraClass = issue.workState === 'completed' ? ' text-emerald-700 font-semibold' :
+                    issue.workState === 'inProgress' ? ' text-sky-700 font-semibold' : ' text-slate-500';
             } else if (index === values.length - 1) {
-                extraClass = ' text-right tabular-nums font-semibold text-black';
+                extraClass = ' text-right tabular-nums font-bold text-slate-900';
             }
             cell.className = 'px-3 py-2.5' + extraClass;
             cell.textContent = value;

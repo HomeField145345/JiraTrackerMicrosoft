@@ -685,407 +685,769 @@
                     </button>
                   </div>
                 </div>
-
-                <!-- 5-Tile Summary Strip -->
-                <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-3.5" aria-live="polite">
-                  <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4" aria-live="polite">
-                    <button type="button" id="capacity-tile-committed"
-                      class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
-                      <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Committed vs.
-                        Capacity</div>
-                      <div class="mt-1 flex items-baseline gap-2">
-                        <span class="text-2xl font-semibold tabular-nums text-black" id="capacity-total-points">0</span>
-                        <span class="text-xs text-[#6F7171]">pts · <span id="capacity-total-issues"
-                            class="font-medium text-black">0</span> issues</span>
-                        class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white
-                        px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Committed vs.
-                          Capacity</div>
-                        <div class="mt-1.5 flex items-baseline gap-2">
-                          <span class="text-2xl font-bold tracking-tight tabular-nums text-slate-900"
-                            id="capacity-total-points">0</span>
-                          <span class="text-xs text-slate-500">pts · <span id="capacity-total-issues"
-                              class="font-semibold text-slate-800">0</span> issues</span>
+                <section id="view-capacity" class="view-container bg-slate-50/70 min-h-full pb-8" style="display: none;"
+                  aria-labelledby="capacity-title">
+                  <!-- Unified Sprint Hero Card -->
+                  <div class="mx-4 mt-4 mb-3 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm">
+                    <div class="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-200/80">
+                      <div class="flex flex-wrap items-center gap-2.5">
+                        <div
+                          class="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100"
+                          aria-hidden="true">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                          </svg>
                         </div>
-                        <div id="capacity-team-summary" class="mt-1 text-xs text-[#6F7171] tabular-nums"></div>
-                        <div id="capacity-team-summary" class="mt-1 text-xs text-slate-500 tabular-nums"></div>
-                    </button>
-                    <div class="rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3">
-                      <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Sprint pace</div>
-                      <div id="capacity-pace-summary" class="mt-1 text-sm font-medium text-black"></div>
-                      <div id="capacity-pace-burnrate" class="mt-1 text-xs text-[#6F7171]"></div>
-                      <div
-                        class="rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Sprint pace</div>
-                        <div id="capacity-pace-summary" class="mt-1.5 text-sm font-semibold text-slate-900"></div>
-                        <div id="capacity-pace-burnrate" class="mt-1 text-xs text-slate-500"></div>
+                        <h2 id="capacity-title" class="text-lg font-bold tracking-tight text-slate-900">Capacity
+                          Planning</h2>
+                        <span class="text-slate-300" aria-hidden="true">·</span>
+                        <span id="capacity-sprint-name"
+                          class="inline-flex items-center rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white shadow-2xs">Current
+                          sprint</span>
+                        <span id="capacity-pace-badge" class="hidden"></span>
+                        <span id="capacity-days-left-badge"
+                          class="hidden inline-flex items-center rounded-md bg-sky-50 border border-sky-200 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-sky-700"></span>
+                        <p id="capacity-sprint-dates" class="text-xs font-medium text-slate-500 hidden"></p>
+                        <span
+                          class="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-[11px] font-medium text-slate-500 cursor-help hover:border-slate-300"
+                          title="Remaining is effective capacity minus assigned story points. Actual vs. Expected compares completed points against expected points for elapsed sprint workdays.">?</span>
                       </div>
-                      <button type="button" id="capacity-tile-atrisk"
-                        class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
-                        <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">At risk developers
+                      <div class="flex flex-wrap items-center gap-2">
+                        <label
+                          class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs text-slate-500">
+                          <span class="font-semibold text-slate-700">Team</span>
+                          <select id="capacity-team-scope" aria-label="Filter capacity by team, PCT, or manager"
+                            class="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs font-medium text-slate-900 focus:border-indigo-500 focus:outline-none">
+                            <option value="">All Team Members</option>
+                          </select>
+                        </label>
+                        <div
+                          class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-1 text-xs text-slate-500">
+                          <label class="inline-flex items-center gap-1.5">
+                            <span class="font-semibold text-slate-700">Start</span>
+                            <input type="date" id="capacity-sprint-start"
+                              class="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none">
+                          </label>
+                          <span class="text-slate-300" aria-hidden="true">|</span>
+                          <label class="inline-flex items-center gap-1.5">
+                            <span class="font-semibold text-slate-700">End</span>
+                            <input type="date" id="capacity-sprint-end"
+                              class="rounded-lg border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-900 focus:border-indigo-500 focus:outline-none">
+                          </label>
                         </div>
-                        <div id="capacity-stat-atrisk" class="mt-1 text-2xl font-semibold tabular-nums text-black">0
-                        </div>
-                        <div id="capacity-stat-atrisk-sub" class="mt-1 text-xs text-[#6F7171]">All developers on track
-                        </div>
-                        class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white
-                        px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">At risk
-                          developers</div>
-                        <div id="capacity-stat-atrisk"
-                          class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
-                        <div id="capacity-stat-atrisk-sub" class="mt-1 text-xs text-slate-500">All developers on track
-                        </div>
-                      </button>
-                      <button type="button" id="capacity-tile-nosprint" data-capacity-tab-jump="nosprint"
-                        class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
-                        <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">No sprint assigned
-                        </div>
-                        <div id="capacity-stat-nosprint" class="mt-1 text-2xl font-semibold tabular-nums text-black">0
-                        </div>
-                        <div id="capacity-stat-nosprint-sub" class="mt-1 text-xs text-[#6F7171]">0 pts unscheduled</div>
-                        class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white
-                        px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">No sprint
-                          assigned</div>
-                        <div id="capacity-stat-nosprint"
-                          class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
-                        <div id="capacity-stat-nosprint-sub" class="mt-1 text-xs text-slate-500">0 pts unscheduled</div>
-                      </button>
-                      <button type="button" id="capacity-tile-pastopen" data-capacity-tab-jump="pastopen"
-                        class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
-                        <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Past sprint open
-                        </div>
-                        <div id="capacity-stat-pastopen" class="mt-1 text-2xl font-semibold tabular-nums text-black">0
-                        </div>
-                        <div id="capacity-stat-pastopen-sub" class="mt-1 text-xs text-[#6F7171]">0 pts in past sprints
-                        </div>
-                        class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white
-                        px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
-                        <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Past sprint open
-                        </div>
-                        <div id="capacity-stat-pastopen"
-                          class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
-                        <div id="capacity-stat-pastopen-sub" class="mt-1 text-xs text-slate-500">0 pts in past sprints
-                        </div>
-                      </button>
+                        <button type="button" id="capacity-open-settings-btn"
+                          class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-2xs">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            aria-hidden="true">
+                            <circle cx="12" cy="12" r="3" />
+                            <path
+                              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                          </svg>
+                          <span>Settings</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <!-- Sprint Progress vs Elapsed Time Bar + Planned / Done / Target Pills -->
-                    <div id="capacity-pace-card" class="mt-3.5 pt-3.5 border-t border-[#D8DADA] hidden"
-                      aria-live="polite">
-                      <div id="capacity-pace-card" class="mt-4 pt-3.5 border-t border-slate-200/80 hidden"
-                        aria-live="polite">
-                        <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-                          <div class="flex flex-wrap items-center gap-3 text-xs text-[#6F7171]">
-                            <div class="flex flex-wrap items-center gap-3.5 text-xs text-slate-500">
-                              <span class="inline-flex items-center gap-1.5"><span
-                                  class="inline-block h-2.5 w-2.5 rounded-sm bg-[#008331]"></span>Completed</span>
-                              class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600"></span>Completed</span>
-                              <span class="inline-flex items-center gap-1.5"><span
-                                  class="inline-block h-2.5 w-2.5 rounded-sm bg-[#006FC1]"></span>In progress</span>
-                              class="inline-block h-2.5 w-2.5 rounded-full bg-sky-600"></span>In progress</span>
-                              <span class="inline-flex items-center gap-1.5"><span
-                                  class="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300"></span>Not started</span>
-                              class="inline-block h-2.5 w-2.5 rounded-full bg-slate-300"></span>Not started</span>
-                              <span class="inline-flex items-center gap-1.5"><span
-                                  class="inline-block h-3 w-0.5 bg-black"></span>Today / Expected target</span>
-                              class="inline-block h-3 w-0.5 bg-slate-900"></span>Today / Expected target</span>
+                    <!-- 5-Tile Summary Strip -->
+                    <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-3.5" aria-live="polite">
+                      <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4" aria-live="polite">
+                        <button type="button" id="capacity-tile-committed"
+                          class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
+                          <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Committed vs.
+                            Capacity</div>
+                          <div class="mt-1 flex items-baseline gap-2">
+                            <span class="text-2xl font-semibold tabular-nums text-black"
+                              id="capacity-total-points">0</span>
+                            <span class="text-xs text-[#6F7171]">pts · <span id="capacity-total-issues"
+                                class="font-medium text-black">0</span> issues</span>
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50
+                            to-white
+                            px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Committed vs.
+                              Capacity</div>
+                            <div class="mt-1.5 flex items-baseline gap-2">
+                              <span class="text-2xl font-bold tracking-tight tabular-nums text-slate-900"
+                                id="capacity-total-points">0</span>
+                              <span class="text-xs text-slate-500">pts · <span id="capacity-total-issues"
+                                  class="font-semibold text-slate-800">0</span> issues</span>
                             </div>
-                            <div class="flex flex-wrap items-center gap-2 text-xs">
-                              <span
-                                class="inline-flex items-center gap-1.5 rounded-md bg-[#FFF9DE] border border-[#F5E08E] px-2 py-0.5 font-medium text-[#4B3F04]">
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200
-                                px-2.5 py-0.5 font-medium text-amber-800">
-                                <span>Planned</span>
-                                <span id="capacity-pill-planned" class="font-bold tabular-nums">0</span>
-                              </span>
-                              <span
-                                class="inline-flex items-center gap-1.5 rounded-md bg-[#DCF5E6] border border-[#A3E2B9] px-2 py-0.5 font-medium text-[#008331]">
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border
-                                border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-700">
-                                <span>Done</span>
-                                <span id="capacity-pill-done" class="font-bold tabular-nums">0</span>
-                              </span>
-                              <span
-                                class="inline-flex items-center gap-1.5 rounded-md bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 font-medium text-[#B95319]">
-                                class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 border border-orange-200
-                                px-2.5 py-0.5 font-medium text-orange-700">
-                                <span>Target</span>
-                                <span id="capacity-pill-target" class="font-bold tabular-nums">0</span>
-                              </span>
-                              <span id="capacity-pace-breakdown"
-                                class="tabular-nums font-medium text-[#6F7171] ml-1"></span>
-                              <span id="capacity-pace-breakdown"
-                                class="tabular-nums font-medium text-slate-500 ml-1"></span>
+                            <div id="capacity-team-summary" class="mt-1 text-xs text-[#6F7171] tabular-nums"></div>
+                            <div id="capacity-team-summary" class="mt-1 text-xs text-slate-500 tabular-nums"></div>
+                        </button>
+                        <div class="rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3">
+                          <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Sprint pace</div>
+                          <div id="capacity-pace-summary" class="mt-1 text-sm font-medium text-black"></div>
+                          <div id="capacity-pace-burnrate" class="mt-1 text-xs text-[#6F7171]"></div>
+                          <div
+                            class="rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Sprint pace
+                            </div>
+                            <div id="capacity-pace-summary" class="mt-1.5 text-sm font-semibold text-slate-900"></div>
+                            <div id="capacity-pace-burnrate" class="mt-1 text-xs text-slate-500"></div>
+                          </div>
+                          <button type="button" id="capacity-tile-atrisk"
+                            class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
+                            <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">At risk
+                              developers
+                            </div>
+                            <div id="capacity-stat-atrisk" class="mt-1 text-2xl font-semibold tabular-nums text-black">0
+                            </div>
+                            <div id="capacity-stat-atrisk-sub" class="mt-1 text-xs text-[#6F7171]">All developers on
+                              track
+                            </div>
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50
+                            to-white
+                            px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">At risk
+                              developers</div>
+                            <div id="capacity-stat-atrisk"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
+                            <div id="capacity-stat-atrisk-sub" class="mt-1 text-xs text-slate-500">All developers on
+                              track
+                            </div>
+                          </button>
+                          <button type="button" id="capacity-tile-nosprint" data-capacity-tab-jump="nosprint"
+                            class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
+                            <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">No sprint
+                              assigned
+                            </div>
+                            <div id="capacity-stat-nosprint"
+                              class="mt-1 text-2xl font-semibold tabular-nums text-black">0
+                            </div>
+                            <div id="capacity-stat-nosprint-sub" class="mt-1 text-xs text-[#6F7171]">0 pts unscheduled
+                            </div>
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50
+                            to-white
+                            px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">No sprint
+                              assigned</div>
+                            <div id="capacity-stat-nosprint"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
+                            <div id="capacity-stat-nosprint-sub" class="mt-1 text-xs text-slate-500">0 pts unscheduled
+                            </div>
+                          </button>
+                          <button type="button" id="capacity-tile-pastopen" data-capacity-tab-jump="pastopen"
+                            class="text-left rounded-xl border border-[#D8DADA] bg-[#F6F6F6] px-3.5 py-3 hover:border-black transition-colors">
+                            <div class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Past sprint
+                              open
+                            </div>
+                            <div id="capacity-stat-pastopen"
+                              class="mt-1 text-2xl font-semibold tabular-nums text-black">0
+                            </div>
+                            <div id="capacity-stat-pastopen-sub" class="mt-1 text-xs text-[#6F7171]">0 pts in past
+                              sprints
+                            </div>
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50
+                            to-white
+                            px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Past sprint
+                              open
+                            </div>
+                            <div id="capacity-stat-pastopen"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
+                            <div id="capacity-stat-pastopen-sub" class="mt-1 text-xs text-slate-500">0 pts in past
+                              sprints
+                            </div>
+                          </button>
+                        </div>
+                        <!-- 5-Tile Summary Strip -->
+                        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mt-4" aria-live="polite">
+                          <button type="button" id="capacity-tile-committed"
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Committed vs.
+                              Capacity
+                            </div>
+                            <div class="mt-1.5 flex items-baseline gap-2">
+                              <span class="text-2xl font-bold tracking-tight tabular-nums text-slate-900"
+                                id="capacity-total-points">0</span>
+                              <span class="text-xs text-slate-500">pts · <span id="capacity-total-issues"
+                                  class="font-semibold text-slate-800">0</span> issues</span>
+                            </div>
+                            <div id="capacity-team-summary" class="mt-1 text-xs text-slate-500 tabular-nums"></div>
+                          </button>
+                          <div
+                            class="rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Sprint pace
+                            </div>
+                            <div id="capacity-pace-summary" class="mt-1.5 text-sm font-semibold text-slate-900"></div>
+                            <div id="capacity-pace-burnrate" class="mt-1 text-xs text-slate-500"></div>
+                          </div>
+                          <button type="button" id="capacity-tile-atrisk"
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">At risk
+                              developers</div>
+                            <div id="capacity-stat-atrisk"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">
+                              0</div>
+                            <div id="capacity-stat-atrisk-sub" class="mt-1 text-xs text-slate-500">All developers on
+                              track</div>
+                          </button>
+                          <button type="button" id="capacity-tile-nosprint" data-capacity-tab-jump="nosprint"
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-indigo-300 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">No sprint
+                              assigned</div>
+                            <div id="capacity-stat-nosprint"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
+                            <div id="capacity-stat-nosprint-sub" class="mt-1 text-xs text-slate-500">0 pts unscheduled
+                            </div>
+                          </button>
+                          <button type="button" id="capacity-tile-pastopen" data-capacity-tab-jump="pastopen"
+                            class="text-left rounded-xl border border-slate-200/90 bg-gradient-to-br from-slate-50 to-white px-4 py-3.5 hover:border-amber-400 hover:shadow-xs transition-all">
+                            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Past sprint
+                              open</div>
+                            <div id="capacity-stat-pastopen"
+                              class="mt-1.5 text-2xl font-bold tracking-tight tabular-nums text-slate-900">0</div>
+                            <div id="capacity-stat-pastopen-sub" class="mt-1 text-xs text-slate-500">0 pts in past
+                              sprints</div>
+                          </button>
+                        </div>
+
+                        <!-- Sprint Progress vs Elapsed Time Bar + Planned / Done / Target Pills -->
+                        <div id="capacity-pace-card" class="mt-3.5 pt-3.5 border-t border-[#D8DADA] hidden"
+                          aria-live="polite">
+                          <div id="capacity-pace-card" class="mt-4 pt-3.5 border-t border-slate-200/80 hidden"
+                            aria-live="polite">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                              <div class="flex flex-wrap items-center gap-3 text-xs text-[#6F7171]">
+                                <div class="flex flex-wrap items-center gap-3.5 text-xs text-slate-500">
+                                  <span class="inline-flex items-center gap-1.5"><span
+                                      class="inline-block h-2.5 w-2.5 rounded-sm bg-[#008331]"></span>Completed</span>
+                                  class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600"></span>Completed</span>
+                                  <span class="inline-flex items-center gap-1.5"><span
+                                      class="inline-block h-2.5 w-2.5 rounded-sm bg-[#006FC1]"></span>In progress</span>
+                                  class="inline-block h-2.5 w-2.5 rounded-full bg-sky-600"></span>In progress</span>
+                                  <span class="inline-flex items-center gap-1.5"><span
+                                      class="inline-block h-2.5 w-2.5 rounded-sm bg-slate-300"></span>Not started</span>
+                                  class="inline-block h-2.5 w-2.5 rounded-full bg-slate-300"></span>Not started</span>
+                                  <span class="inline-flex items-center gap-1.5"><span
+                                      class="inline-block h-3 w-0.5 bg-black"></span>Today / Expected target</span>
+                                  class="inline-block h-3 w-0.5 bg-slate-900"></span>Today / Expected target</span>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 text-xs">
+                                  <span
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-[#FFF9DE] border border-[#F5E08E] px-2 py-0.5 font-medium text-[#4B3F04]">
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border
+                                    border-amber-200
+                                    px-2.5 py-0.5 font-medium text-amber-800">
+                                    <span>Planned</span>
+                                    <span id="capacity-pill-planned" class="font-bold tabular-nums">0</span>
+                                  </span>
+                                  <span
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-[#DCF5E6] border border-[#A3E2B9] px-2 py-0.5 font-medium text-[#008331]">
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border
+                                    border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-700">
+                                    <span>Done</span>
+                                    <span id="capacity-pill-done" class="font-bold tabular-nums">0</span>
+                                  </span>
+                                  <span
+                                    class="inline-flex items-center gap-1.5 rounded-md bg-[#FFECE0] border border-[#F5C6A5] px-2 py-0.5 font-medium text-[#B95319]">
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 border
+                                    border-orange-200
+                                    px-2.5 py-0.5 font-medium text-orange-700">
+                                    <span>Target</span>
+                                    <span id="capacity-pill-target" class="font-bold tabular-nums">0</span>
+                                  </span>
+                                  <span id="capacity-pace-breakdown"
+                                    class="tabular-nums font-medium text-[#6F7171] ml-1"></span>
+                                  <span id="capacity-pace-breakdown"
+                                    class="tabular-nums font-medium text-slate-500 ml-1"></span>
+                                </div>
+                              </div>
+                              <div id="capacity-pace-bar"
+                                class="relative h-3 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]"
+                                role="img"
+                                class="relative h-2.5 w-full overflow-visible rounded-full bg-slate-100 border border-slate-200/80"
+                                role="img" aria-label="Sprint progress compared to elapsed time"></div>
                             </div>
                           </div>
-                          <div id="capacity-pace-bar"
-                            class="relative h-3 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]"
-                            role="img"
-                            class="relative h-2.5 w-full overflow-visible rounded-full bg-slate-100 border border-slate-200/80"
-                            role="img" aria-label="Sprint progress compared to elapsed time"></div>
-                        </div>
-                      </div>
-
-                      <!-- Section Sub-Tabs & Step 2 Drill-Down Controls -->
-                      <div class="px-4 mb-3">
-                        <div
-                          class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D8DADA] bg-white px-3.5 py-2.5 shadow-sm">
-                          <div class="flex flex-wrap items-center gap-1.5" role="tablist"
-                            aria-label="Capacity sections">
-                            class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border
-                            border-slate-200/90 bg-white px-3.5 py-2.5 shadow-sm">
-                            <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
-                              role="tablist" aria-label="Capacity sections">
-                              <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab"
-                                aria-selected="true"
-                                class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
-                                class="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs
-                                font-semibold text-slate-900 shadow-2xs transition-all">
-                                <span>Current sprint</span>
-                              </button>
-                              <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
-                                aria-selected="false"
-                                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
-                                text-slate-600 hover:text-slate-900 transition-all">
-                                <span>Future sprints</span>
-                                <span id="capacity-tab-future-count"
-                                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
-                                text-slate-600">0</span>
-                              </button>
-                              <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
-                                aria-selected="false"
-                                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
-                                text-slate-600 hover:text-slate-900 transition-all">
-                                <span>No sprint assigned</span>
-                                <span id="capacity-tab-nosprint-count"
-                                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
-                                text-slate-600">0</span>
-                              </button>
-                              <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
-                                aria-selected="false"
-                                class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
-                                text-slate-600 hover:text-slate-900 transition-all">
-                                <span>Past sprint open</span>
-                                <span id="capacity-tab-pastopen-count"
-                                  class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
-                                text-slate-600">0</span>
-                              </button>
-                            </div>
-                            <div id="capacity-drilldown-toolbar" class="flex flex-wrap items-center gap-2">
-                              <div class="flex flex-wrap items-center gap-1.5" role="group"
-                                aria-label="Capacity risk filters">
+                          <!-- Sprint Progress vs Elapsed Time Bar + Planned / Done / Target Pills -->
+                          <div id="capacity-pace-card" class="mt-4 pt-3.5 border-t border-slate-200/80 hidden"
+                            aria-live="polite">
+                            <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+                              <div class="flex flex-wrap items-center gap-3.5 text-xs text-slate-500">
+                                <span class="inline-flex items-center gap-1.5"><span
+                                    class="inline-block h-2.5 w-2.5 rounded-full bg-emerald-600"></span>Completed</span>
+                                <span class="inline-flex items-center gap-1.5"><span
+                                    class="inline-block h-2.5 w-2.5 rounded-full bg-sky-600"></span>In progress</span>
+                                <span class="inline-flex items-center gap-1.5"><span
+                                    class="inline-block h-2.5 w-2.5 rounded-full bg-slate-300"></span>Not started</span>
+                                <span class="inline-flex items-center gap-1.5"><span
+                                    class="inline-block h-3 w-0.5 bg-slate-900"></span>Today / Expected target</span>
+                              </div>
+                              <div class="flex flex-wrap items-center gap-2 text-xs">
                                 <span
-                                  class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Filter</span>
-                                <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
-                                  role="group" aria-label="Capacity risk filters">
-                                  <span
-                                    class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Filter</span>
-                                  <button type="button" id="capacity-filter-at-risk" aria-pressed="false"
-                                    class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
-                                    text-slate-700 hover:bg-white/70 transition-all">
-                                    <span>At risk only</span>
-                                    <span id="capacity-filter-at-risk-count"
-                                      class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                    class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
-                                    text-slate-600">0</span>
-                                  </button>
-                                  <button type="button" id="capacity-filter-over-capacity" aria-pressed="false"
-                                    class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
-                                    text-slate-700 hover:bg-white/70 transition-all">
-                                    <span>Over capacity</span>
-                                    <span id="capacity-filter-over-capacity-count"
-                                      class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                    class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
-                                    text-slate-600">0</span>
-                                  </button>
-                                  <button type="button" id="capacity-filter-under-capacity" aria-pressed="false"
-                                    class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                    class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
-                                    text-slate-700 hover:bg-white/70 transition-all">
-                                    <span>Under capacity</span>
-                                    <span id="capacity-filter-under-capacity-count"
-                                      class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
-                                    class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
-                                    text-slate-600">0</span>
-                                  </button>
-                                </div>
-                                <span class="hidden sm:inline-block h-4 w-px bg-[#D8DADA]" aria-hidden="true"></span>
+                                  class="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-0.5 font-medium text-amber-800">
+                                  <span>Planned</span>
+                                  <span id="capacity-pill-planned" class="font-bold tabular-nums">0</span>
+                                </span>
+                                <span
+                                  class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 font-medium text-emerald-700">
+                                  <span>Done</span>
+                                  <span id="capacity-pill-done" class="font-bold tabular-nums">0</span>
+                                </span>
+                                <span
+                                  class="inline-flex items-center gap-1.5 rounded-lg bg-orange-50 border border-orange-200 px-2.5 py-0.5 font-medium text-orange-700">
+                                  <span>Target</span>
+                                  <span id="capacity-pill-target" class="font-bold tabular-nums">0</span>
+                                </span>
+                                <span id="capacity-pace-breakdown"
+                                  class="tabular-nums font-medium text-slate-500 ml-1"></span>
+                              </div>
+                            </div>
+                            <div id="capacity-pace-bar"
+                              class="relative h-2.5 w-full overflow-visible rounded-full bg-slate-100 border border-slate-200/80"
+                              role="img" aria-label="Sprint progress compared to elapsed time"></div>
+                          </div>
+                        </div>
+
+                        <!-- Section Sub-Tabs & Step 2 Drill-Down Controls -->
+                        <div class="px-4 mb-3">
+                          <div
+                            class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D8DADA] bg-white px-3.5 py-2.5 shadow-sm">
+                            <div class="flex flex-wrap items-center gap-1.5" role="tablist"
+                              aria-label="Capacity sections">
+                              class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border
+                              border-slate-200/90 bg-white px-3.5 py-2.5 shadow-sm">
+                              <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
+                                role="tablist" aria-label="Capacity sections">
+                                <button type="button" id="capacity-tab-current" data-capacity-tab="current" role="tab"
+                                  aria-selected="true"
+                                  class="inline-flex items-center gap-2 rounded-full border border-black bg-black px-3.5 py-1.5 text-xs font-medium text-white transition-colors">
+                                  class="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs
+                                  font-semibold text-slate-900 shadow-2xs transition-all">
+                                  <span>Current sprint</span>
+                                </button>
+                                <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
+                                  aria-selected="false"
+                                  class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                  class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
+                                  text-slate-600 hover:text-slate-900 transition-all">
+                                  <span>Future sprints</span>
+                                  <span id="capacity-tab-future-count"
+                                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                  class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
+                                  text-slate-600">0</span>
+                                </button>
+                                <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint" role="tab"
+                                  aria-selected="false"
+                                  class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                  class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
+                                  text-slate-600 hover:text-slate-900 transition-all">
+                                  <span>No sprint assigned</span>
+                                  <span id="capacity-tab-nosprint-count"
+                                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                  class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
+                                  text-slate-600">0</span>
+                                </button>
+                                <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen" role="tab"
+                                  aria-selected="false"
+                                  class="inline-flex items-center gap-2 rounded-full border border-[#D8DADA] bg-white px-3.5 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                  class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium
+                                  text-slate-600 hover:text-slate-900 transition-all">
+                                  <span>Past sprint open</span>
+                                  <span id="capacity-tab-pastopen-count"
+                                    class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                  class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums
+                                  text-slate-600">0</span>
+                                </button>
+                              </div>
+                              <div id="capacity-drilldown-toolbar" class="flex flex-wrap items-center gap-2">
                                 <div class="flex flex-wrap items-center gap-1.5" role="group"
-                                  aria-label="Group developers">
+                                  aria-label="Capacity risk filters">
                                   <span
-                                    class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Group</span>
+                                    class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Filter</span>
                                   <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
-                                    role="group" aria-label="Group developers">
+                                    role="group" aria-label="Capacity risk filters">
                                     <span
-                                      class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Group</span>
-                                    <button type="button" id="capacity-group-by-manager" aria-pressed="false"
+                                      class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Filter</span>
+                                    <button type="button" id="capacity-filter-at-risk" aria-pressed="false"
                                       class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
                                       class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
                                       text-slate-700 hover:bg-white/70 transition-all">
-                                      <span>Group by manager</span>
+                                      <span>At risk only</span>
+                                      <span id="capacity-filter-at-risk-count"
+                                        class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                      class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
+                                      text-slate-600">0</span>
                                     </button>
-                                    <button type="button" id="capacity-group-by-pct" aria-pressed="false"
+                                    <button type="button" id="capacity-filter-over-capacity" aria-pressed="false"
                                       class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
                                       class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
                                       text-slate-700 hover:bg-white/70 transition-all">
-                                      <span>Group by PCT</span>
+                                      <span>Over capacity</span>
+                                      <span id="capacity-filter-over-capacity-count"
+                                        class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                      class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
+                                      text-slate-600">0</span>
+                                    </button>
+                                    <button type="button" id="capacity-filter-under-capacity" aria-pressed="false"
+                                      class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                      class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium
+                                      text-slate-700 hover:bg-white/70 transition-all">
+                                      <span>Under capacity</span>
+                                      <span id="capacity-filter-under-capacity-count"
+                                        class="rounded-full bg-[#F6F6F6] px-1.5 py-0.5 text-[11px] tabular-nums text-[#6F7171]">0</span>
+                                      class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums
+                                      text-slate-600">0</span>
                                     </button>
                                   </div>
                                   <span class="hidden sm:inline-block h-4 w-px bg-[#D8DADA]" aria-hidden="true"></span>
-                                  <button type="button" id="capacity-expand-all-issues" aria-pressed="false"
-                                    class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-[#F6F6F6] px-3 py-1.5 text-xs font-medium text-black hover:border-black transition-colors">
-                                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white
-                                    px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300
-                                    hover:bg-slate-50 transition-all shadow-2xs">
-                                    <span>Expand all issues</span>
-                                  </button>
+                                  <div class="flex flex-wrap items-center gap-1.5" role="group"
+                                    aria-label="Group developers">
+                                    <span
+                                      class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171] mr-0.5">Group</span>
+                                    <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
+                                      role="group" aria-label="Group developers">
+                                      <span
+                                        class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Group</span>
+                                      <button type="button" id="capacity-group-by-manager" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs
+                                        font-medium
+                                        text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Group by manager</span>
+                                      </button>
+                                      <button type="button" id="capacity-group-by-pct" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-white px-3 py-1.5 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs
+                                        font-medium
+                                        text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Group by PCT</span>
+                                      </button>
+                                    </div>
+                                    <span class="hidden sm:inline-block h-4 w-px bg-[#D8DADA]"
+                                      aria-hidden="true"></span>
+                                    <button type="button" id="capacity-expand-all-issues" aria-pressed="false"
+                                      class="inline-flex items-center gap-1.5 rounded-full border border-[#D8DADA] bg-[#F6F6F6] px-3 py-1.5 text-xs font-medium text-black hover:border-black transition-colors">
+                                      class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200
+                                      bg-white
+                                      px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300
+                                      hover:bg-slate-50 transition-all shadow-2xs">
+                                      <span>Expand all issues</span>
+                                    </button>
+                                  </div>
+                                </div>
+                                <!-- Active Drill-Down Filter Banner -->
+                                <div id="capacity-filter-banner"
+                                  class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/70 px-4 py-2 text-xs text-black">
+                                  class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border
+                                  border-orange-200 bg-orange-50/90 px-4 py-2 text-xs text-slate-900">
+                                  <div id="capacity-filter-banner-text" class="font-medium"></div>
+                                  <div class="flex items-center gap-2">
+                                    <button type="button" id="capacity-filter-reset"
+                                      class="inline-flex items-center rounded-lg border border-black bg-white px-2.5 py-1 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
+                                      class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5
+                                      py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors">
+                                      Show all developers
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                              <!-- Active Drill-Down Filter Banner -->
-                              <div id="capacity-filter-banner"
-                                class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#F5C6A5] bg-[#FFECE0]/70 px-4 py-2 text-xs text-black">
-                                class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border
-                                border-orange-200 bg-orange-50/90 px-4 py-2 text-xs text-slate-900">
-                                <div id="capacity-filter-banner-text" class="font-medium"></div>
-                                <div class="flex items-center gap-2">
-                                  <button type="button" id="capacity-filter-reset"
-                                    class="inline-flex items-center rounded-lg border border-black bg-white px-2.5 py-1 text-xs font-medium text-black hover:bg-[#F6F6F6] transition-colors">
-                                    class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5
-                                    py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors">
-                                    Show all developers
-                                  </button>
+                              <!-- Section Sub-Tabs & Step 2 Drill-Down Controls -->
+                              <div class="px-4 mb-3">
+                                <div
+                                  class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200/90 bg-white px-3.5 py-2.5 shadow-sm">
+                                  <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
+                                    role="tablist" aria-label="Capacity sections">
+                                    <button type="button" id="capacity-tab-current" data-capacity-tab="current"
+                                      role="tab" aria-selected="true"
+                                      class="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-900 shadow-2xs transition-all">
+                                      <span>Current sprint</span>
+                                    </button>
+                                    <button type="button" id="capacity-tab-future" data-capacity-tab="future" role="tab"
+                                      aria-selected="false"
+                                      class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-all">
+                                      <span>Future sprints</span>
+                                      <span id="capacity-tab-future-count"
+                                        class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                    </button>
+                                    <button type="button" id="capacity-tab-nosprint" data-capacity-tab="nosprint"
+                                      role="tab" aria-selected="false"
+                                      class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-all">
+                                      <span>No sprint assigned</span>
+                                      <span id="capacity-tab-nosprint-count"
+                                        class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                    </button>
+                                    <button type="button" id="capacity-tab-pastopen" data-capacity-tab="pastopen"
+                                      role="tab" aria-selected="false"
+                                      class="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 transition-all">
+                                      <span>Past sprint open</span>
+                                      <span id="capacity-tab-pastopen-count"
+                                        class="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                    </button>
+                                  </div>
+                                  <div id="capacity-drilldown-toolbar" class="flex flex-wrap items-center gap-2">
+                                    <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
+                                      role="group" aria-label="Capacity risk filters">
+                                      <span
+                                        class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Filter</span>
+                                      <button type="button" id="capacity-filter-at-risk" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>At risk only</span>
+                                        <span id="capacity-filter-at-risk-count"
+                                          class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                      </button>
+                                      <button type="button" id="capacity-filter-over-capacity" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Over capacity</span>
+                                        <span id="capacity-filter-over-capacity-count"
+                                          class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                      </button>
+                                      <button type="button" id="capacity-filter-under-capacity" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Under capacity</span>
+                                        <span id="capacity-filter-under-capacity-count"
+                                          class="rounded-full bg-slate-200/80 px-1.5 py-0.5 text-[11px] tabular-nums text-slate-600">0</span>
+                                      </button>
+                                    </div>
+                                    <div class="inline-flex flex-wrap items-center gap-1 rounded-xl bg-slate-100 p-1"
+                                      role="group" aria-label="Group developers">
+                                      <span
+                                        class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1.5">Group</span>
+                                      <button type="button" id="capacity-group-by-manager" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Group by manager</span>
+                                      </button>
+                                      <button type="button" id="capacity-group-by-pct" aria-pressed="false"
+                                        class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white/70 transition-all">
+                                        <span>Group by PCT</span>
+                                      </button>
+                                    </div>
+                                    <button type="button" id="capacity-expand-all-issues" aria-pressed="false"
+                                      class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-slate-300 hover:bg-slate-50 transition-all shadow-2xs">
+                                      <span>Expand all issues</span>
+                                    </button>
+                                  </div>
+                                </div>
+                                <!-- Active Drill-Down Filter Banner -->
+                                <div id="capacity-filter-banner"
+                                  class="hidden mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-orange-200 bg-orange-50/90 px-4 py-2 text-xs text-slate-900">
+                                  <div id="capacity-filter-banner-text" class="font-medium"></div>
+                                  <div class="flex items-center gap-2">
+                                    <button type="button" id="capacity-filter-reset"
+                                      class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-800 hover:bg-slate-50 transition-colors">
+                                      Show all developers
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
 
-                            <!-- Panel: Current Sprint (Split View: Developer Capacity Table + Actual vs. Expected Sidebar) -->
-                            <div id="capacity-panel-current" class="px-4 pb-6">
-                              <div id="capacity-current-grid"
-                                class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
-                                <div id="capacity-main-table-col"
-                                  class="lg:col-span-8 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm">
-                                  class="lg:col-span-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white
-                                  shadow-sm">
-                                  <table class="w-full text-sm border-collapse">
-                                    <thead>
-                                      <tr
-                                        class="bg-[#F6F6F6] border-b border-[#D8DADA] text-left text-[11px] font-semibold uppercase tracking-wider text-[#6F7171]">
-                                        class="bg-slate-50/90 border-b border-slate-200 text-left text-[11px]
-                                        font-semibold uppercase tracking-wider text-slate-500">
-                                        <th scope="col" class="px-4 py-3">Developer</th>
-                                        <th scope="col" class="px-3 py-3 text-right w-16">Issues</th>
-                                        <th scope="col" class="px-3 py-3 text-right w-20">Points</th>
-                                        <th scope="col" class="px-3 py-3 text-right w-24">Capacity</th>
-                                        <th scope="col" class="px-3 py-3 text-right w-24">Remaining</th>
-                                        <th scope="col" class="px-4 py-3 text-left min-w-[200px]">Workload</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody id="capacity-table-body">
-                                      <tr>
-                                        <td colspan="6" class="px-4 py-8 text-center text-[#6F7171]">No developers
-                                          found.</td>
-                                        <td colspan="6" class="px-4 py-8 text-center text-slate-500">No developers
-                                          found.</td>
-                                      </tr>
-                                    </tbody>
-                                    <tfoot id="capacity-table-footer"></tfoot>
-                                  </table>
+                              <!-- Panel: Current Sprint (Split View: Developer Capacity Table + Actual vs. Expected Sidebar) -->
+                              <div id="capacity-panel-current" class="px-4 pb-6">
+                                <div id="capacity-current-grid"
+                                  class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                                  <div id="capacity-main-table-col"
+                                    class="lg:col-span-8 overflow-x-auto rounded-xl border border-[#D8DADA] bg-white shadow-sm">
+                                    class="lg:col-span-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white
+                                    shadow-sm">
+                                    <table class="w-full text-sm border-collapse">
+                                      <thead>
+                                        <tr
+                                          class="bg-[#F6F6F6] border-b border-[#D8DADA] text-left text-[11px] font-semibold uppercase tracking-wider text-[#6F7171]">
+                                          class="bg-slate-50/90 border-b border-slate-200 text-left text-[11px]
+                                          font-semibold uppercase tracking-wider text-slate-500">
+                                          <th scope="col" class="px-4 py-3">Developer</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-16">Issues</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-20">Points</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-24">Capacity</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-24">Remaining</th>
+                                          <th scope="col" class="px-4 py-3 text-left min-w-[200px]">Workload</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody id="capacity-table-body">
+                                        <tr>
+                                          <td colspan="6" class="px-4 py-8 text-center text-[#6F7171]">No developers
+                                            found.</td>
+                                          <td colspan="6" class="px-4 py-8 text-center text-slate-500">No developers
+                                            found.</td>
+                                        </tr>
+                                      </tbody>
+                                      <tfoot id="capacity-table-footer"></tfoot>
+                                    </table>
+                                  </div>
+                                  <!-- Right Sidebar: Actual vs. Expected Tracking -->
+                                  <aside id="capacity-pace-sidebar"
+                                    class="lg:col-span-4 rounded-xl border border-[#D8DADA] bg-white p-4 shadow-sm"
+                                    class="lg:col-span-4 lg:sticky lg:top-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm"
+                                    aria-label="Team and member actual versus expected pace">
+                                    <div class="pb-3.5 border-b border-[#D8DADA]">
+                                      <div class="pb-3.5 border-b border-slate-200">
+                                        <div class="flex items-center justify-between gap-2">
+                                          <h3 id="capacity-sidebar-team-name" class="text-sm font-semibold text-black">
+                                            All
+                                            Team Members</h3>
+                                          <span
+                                            class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Actual
+                                            vs.
+                                            <h3 id="capacity-sidebar-team-name"
+                                              class="text-sm font-bold text-slate-900">
+                                              All Team Members</h3>
+                                            <span
+                                              class="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Actual
+                                              vs.
+                                              Expected</span>
+                                        </div>
+                                        <div id="capacity-sidebar-team-bar"
+                                          class="relative mt-2.5 h-3.5 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]">
+                                          class="relative mt-2.5 h-3 w-full overflow-visible rounded-full bg-slate-100
+                                          border border-slate-200/80">
+                                        </div>
+                                        <div class="mt-1.5 flex items-center justify-between gap-2 text-xs">
+                                          <span id="capacity-sidebar-team-caption"
+                                            class="text-[#6F7171] tabular-nums">0p
+                                            completed of 0p
+                                            <div class="mt-2 flex items-center justify-between gap-2 text-xs">
+                                              <span id="capacity-sidebar-team-caption"
+                                                class="text-slate-500 tabular-nums">0p completed of 0p
+                                                expected</span>
+                                              <span id="capacity-sidebar-team-total"
+                                                class="font-semibold text-black tabular-nums">0p</span>
+                                              <span id="capacity-sidebar-team-total"
+                                                class="font-bold text-slate-900 tabular-nums">0p</span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3">
+                                          <div
+                                            class="flex items-center justify-between rounded-lg bg-[#F6F6F6] px-2.5 py-1.5 text-xs font-semibold text-black mb-2.5">
+                                            class="flex items-center justify-between rounded-xl bg-slate-50 border
+                                            border-slate-200/70 px-3 py-1.5 text-xs font-semibold text-slate-800
+                                            mb-2.5">
+                                            <span>Team Members</span>
+                                            <span id="capacity-sidebar-member-count"
+                                              class="text-[11px] font-normal text-[#6F7171] tabular-nums">0
+                                              <span id="capacity-sidebar-member-count"
+                                                class="text-[11px] font-medium text-slate-500 tabular-nums">0
+                                                devs</span>
+                                          </div>
+                                          <div id="capacity-sidebar-members"
+                                            class="space-y-3 max-h-[540px] overflow-y-auto pr-1"></div>
+                                          <div id="capacity-sidebar-members"
+                                            class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+                                        </div>
+                                  </aside>
                                 </div>
-                                <!-- Right Sidebar: Actual vs. Expected Tracking -->
-                                <aside id="capacity-pace-sidebar"
-                                  class="lg:col-span-4 rounded-xl border border-[#D8DADA] bg-white p-4 shadow-sm"
-                                  class="lg:col-span-4 lg:sticky lg:top-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm"
-                                  aria-label="Team and member actual versus expected pace">
-                                  <div class="pb-3.5 border-b border-[#D8DADA]">
+                              </div>
+                              <!-- Panel: Current Sprint (Split View: Developer Capacity Table + Actual vs. Expected Sidebar) -->
+                              <div id="capacity-panel-current" class="px-4 pb-6">
+                                <div id="capacity-current-grid"
+                                  class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+                                  <div id="capacity-main-table-col"
+                                    class="lg:col-span-8 overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-sm">
+                                    <table class="w-full text-sm border-collapse">
+                                      <thead>
+                                        <tr
+                                          class="bg-slate-50/90 border-b border-slate-200 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                          <th scope="col" class="px-4 py-3">Developer</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-16">Issues</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-20">Points</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-24">Capacity</th>
+                                          <th scope="col" class="px-3 py-3 text-right w-24">Remaining</th>
+                                          <th scope="col" class="px-4 py-3 text-left min-w-[200px]">Workload</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody id="capacity-table-body">
+                                        <tr>
+                                          <td colspan="6" class="px-4 py-8 text-center text-slate-500">No developers
+                                            found.</td>
+                                        </tr>
+                                      </tbody>
+                                      <tfoot id="capacity-table-footer"></tfoot>
+                                    </table>
+                                  </div>
+                                  <!-- Right Sidebar: Actual vs. Expected Tracking -->
+                                  <aside id="capacity-pace-sidebar"
+                                    class="lg:col-span-4 lg:sticky lg:top-4 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm"
+                                    aria-label="Team and member actual versus expected pace">
                                     <div class="pb-3.5 border-b border-slate-200">
                                       <div class="flex items-center justify-between gap-2">
-                                        <h3 id="capacity-sidebar-team-name" class="text-sm font-semibold text-black">All
+                                        <h3 id="capacity-sidebar-team-name" class="text-sm font-bold text-slate-900">All
                                           Team Members</h3>
                                         <span
-                                          class="text-[11px] font-medium uppercase tracking-wider text-[#6F7171]">Actual
-                                          vs.
-                                          <h3 id="capacity-sidebar-team-name" class="text-sm font-bold text-slate-900">
-                                            All Team Members</h3>
-                                          <span
-                                            class="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Actual
-                                            vs.
-                                            Expected</span>
+                                          class="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600">Actual
+                                          vs. Expected</span>
                                       </div>
                                       <div id="capacity-sidebar-team-bar"
-                                        class="relative mt-2.5 h-3.5 w-full overflow-visible rounded-full bg-[#F6F6F6] border border-[#D8DADA]">
-                                        class="relative mt-2.5 h-3 w-full overflow-visible rounded-full bg-slate-100
-                                        border border-slate-200/80">
+                                        class="relative mt-2.5 h-3 w-full overflow-visible rounded-full bg-slate-100 border border-slate-200/80">
                                       </div>
-                                      <div class="mt-1.5 flex items-center justify-between gap-2 text-xs">
-                                        <span id="capacity-sidebar-team-caption" class="text-[#6F7171] tabular-nums">0p
+                                      <div class="mt-2 flex items-center justify-between gap-2 text-xs">
+                                        <span id="capacity-sidebar-team-caption" class="text-slate-500 tabular-nums">0p
                                           completed of 0p
-                                          <div class="mt-2 flex items-center justify-between gap-2 text-xs">
-                                            <span id="capacity-sidebar-team-caption"
-                                              class="text-slate-500 tabular-nums">0p completed of 0p
-                                              expected</span>
-                                            <span id="capacity-sidebar-team-total"
-                                              class="font-semibold text-black tabular-nums">0p</span>
-                                            <span id="capacity-sidebar-team-total"
-                                              class="font-bold text-slate-900 tabular-nums">0p</span>
-                                          </div>
+                                          expected</span>
+                                        <span id="capacity-sidebar-team-total"
+                                          class="font-bold text-slate-900 tabular-nums">0p</span>
                                       </div>
-                                      <div class="mt-3">
-                                        <div
-                                          class="flex items-center justify-between rounded-lg bg-[#F6F6F6] px-2.5 py-1.5 text-xs font-semibold text-black mb-2.5">
-                                          class="flex items-center justify-between rounded-xl bg-slate-50 border
-                                          border-slate-200/70 px-3 py-1.5 text-xs font-semibold text-slate-800 mb-2.5">
-                                          <span>Team Members</span>
-                                          <span id="capacity-sidebar-member-count"
-                                            class="text-[11px] font-normal text-[#6F7171] tabular-nums">0
-                                            <span id="capacity-sidebar-member-count"
-                                              class="text-[11px] font-medium text-slate-500 tabular-nums">0
-                                              devs</span>
-                                        </div>
-                                        <div id="capacity-sidebar-members"
-                                          class="space-y-3 max-h-[540px] overflow-y-auto pr-1"></div>
-                                        <div id="capacity-sidebar-members"
-                                          class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+                                    </div>
+                                    <div class="mt-3">
+                                      <div
+                                        class="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/70 px-3 py-1.5 text-xs font-semibold text-slate-800 mb-2.5">
+                                        <span>Team Members</span>
+                                        <span id="capacity-sidebar-member-count"
+                                          class="text-[11px] font-medium text-slate-500 tabular-nums">0
+                                          devs</span>
                                       </div>
-                                </aside>
+                                      <div id="capacity-sidebar-members"
+                                        class="space-y-2.5 max-h-[540px] overflow-y-auto pr-1"></div>
+                                    </div>
+                                  </aside>
+                                </div>
                               </div>
-                            </div>
 
-                            <!-- Panel: Future Sprints -->
-                            <div id="capacity-panel-future" class="px-4 pb-6 hidden">
-                              <div id="future-sprint-capacities"></div>
-                              <div id="future-sprint-empty"
-                                class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
-                                No future sprints detected in the current workbook.
+                              <!-- Panel: Future Sprints -->
+                              <div id="capacity-panel-future" class="px-4 pb-6 hidden">
+                                <div id="future-sprint-capacities"></div>
+                                <div id="future-sprint-empty"
+                                  class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
+                                  No future sprints detected in the current workbook.
+                                </div>
                               </div>
-                            </div>
+                              <!-- Panel: Future Sprints -->
+                              <div id="capacity-panel-future" class="px-4 pb-6 hidden">
+                                <div id="future-sprint-capacities"></div>
+                                <div id="future-sprint-empty"
+                                  class="hidden rounded-2xl border border-slate-200/90 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
+                                  No future sprints detected in the current workbook.
+                                </div>
+                              </div>
 
-                            <!-- Panel: No Sprint Assigned -->
-                            <div id="capacity-panel-nosprint" class="px-4 pb-6 hidden">
-                              <div id="no-sprint-capacity"></div>
-                              <div id="no-sprint-empty"
-                                class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
-                                All open items are assigned to a sprint.
+                              <!-- Panel: No Sprint Assigned -->
+                              <div id="capacity-panel-nosprint" class="px-4 pb-6 hidden">
+                                <div id="no-sprint-capacity"></div>
+                                <div id="no-sprint-empty"
+                                  class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
+                                  All open items are assigned to a sprint.
+                                </div>
                               </div>
-                            </div>
+                              <!-- Panel: No Sprint Assigned -->
+                              <div id="capacity-panel-nosprint" class="px-4 pb-6 hidden">
+                                <div id="no-sprint-capacity"></div>
+                                <div id="no-sprint-empty"
+                                  class="hidden rounded-2xl border border-slate-200/90 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
+                                  All open items are assigned to a sprint.
+                                </div>
+                              </div>
 
-                            <!-- Panel: Past Sprint Open -->
-                            <div id="capacity-panel-pastopen" class="px-4 pb-6 hidden">
-                              <div id="past-sprint-open-capacity"></div>
-                              <div id="past-sprint-open-empty"
-                                class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
-                                No open items remain in past sprints.
+                              <!-- Panel: Past Sprint Open -->
+                              <div id="capacity-panel-pastopen" class="px-4 pb-6 hidden">
+                                <div id="past-sprint-open-capacity"></div>
+                                <div id="past-sprint-open-empty"
+                                  class="hidden rounded-xl border border-[#D8DADA] bg-white px-4 py-8 text-center text-sm text-[#6F7171]">
+                                  No open items remain in past sprints.
+                                </div>
                               </div>
-                            </div>
+                </section>
+                <!-- Panel: Past Sprint Open -->
+                <div id="capacity-panel-pastopen" class="px-4 pb-6 hidden">
+                  <div id="past-sprint-open-capacity"></div>
+                  <div id="past-sprint-open-empty"
+                    class="hidden rounded-2xl border border-slate-200/90 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
+                    No open items remain in past sprints.
+                  </div>
+                </div>
         </section>
 
         <!-- My Tasks View -->

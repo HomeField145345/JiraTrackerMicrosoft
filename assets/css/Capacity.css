@@ -1,0 +1,226 @@
+/* Capacity Planning page — self-contained polish layer.
+   Scoped to #view-capacity (ID specificity beats Tailwind utilities) so the page
+   still looks right if the Tailwind CDN is slow/blocked or lacks v4-only utilities
+   such as shadow-2xs / shadow-xs. */
+
+#view-capacity {
+  --cap-bg: #f4f6fb;
+  --cap-card: #ffffff;
+  --cap-border: #e4e8f0;
+  --cap-border-strong: #d3d9e6;
+  --cap-text: #0f172a;
+  --cap-muted: #64748b;
+  --cap-accent: #4f46e5;
+  --cap-accent-soft: #eef2ff;
+  --cap-good: #059669;
+  --cap-warn: #d97706;
+  --cap-bad: #e11d48;
+  --cap-radius: 16px;
+  --cap-shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --cap-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 8px 24px -12px rgba(15, 23, 42, 0.12);
+  background:
+    radial-gradient(1200px 320px at 10% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
+    radial-gradient(900px 280px at 100% 0%, rgba(14, 165, 233, 0.08), transparent 60%),
+    var(--cap-bg);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--cap-text);
+  -webkit-font-smoothing: antialiased;
+  padding-bottom: 2rem;
+}
+
+/* v4-only shadow utilities used in markup + JS */
+#view-capacity .shadow-2xs,
+#view-capacity .shadow-xs { box-shadow: var(--cap-shadow-xs); }
+#view-capacity .shadow-sm { box-shadow: var(--cap-shadow); }
+
+/* ---------- Hero card ---------- */
+#view-capacity > div:first-of-type {
+  position: relative;
+  border: 1px solid var(--cap-border);
+  border-radius: 20px;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+  box-shadow: var(--cap-shadow);
+  overflow: hidden;
+}
+#view-capacity > div:first-of-type::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: linear-gradient(90deg, #6366f1, #0ea5e9 55%, #10b981);
+}
+#view-capacity #capacity-title { font-size: 1.25rem; letter-spacing: -0.02em; }
+#view-capacity #capacity-sprint-name {
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  box-shadow: 0 4px 12px -4px rgba(79, 70, 229, 0.55);
+}
+
+/* Inputs / selects */
+#view-capacity select,
+#view-capacity input[type='date'] {
+  border-radius: 10px;
+  border: 1px solid var(--cap-border-strong);
+  background: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#view-capacity select:focus,
+#view-capacity input[type='date']:focus {
+  outline: none;
+  border-color: var(--cap-accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18);
+}
+
+/* ---------- KPI tiles ---------- */
+#view-capacity [aria-live='polite'].grid > * {
+  border-radius: 14px !important;
+  border: 1px solid var(--cap-border) !important;
+  background: #fff !important;
+  box-shadow: var(--cap-shadow-xs);
+  position: relative;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+#view-capacity [aria-live='polite'].grid > button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(79, 70, 229, 0.35);
+  border-color: #c7d2fe !important;
+}
+#view-capacity [aria-live='polite'].grid > *::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 0;
+  width: 28px;
+  height: 3px;
+  border-radius: 0 0 4px 4px;
+  background: var(--cap-accent);
+  opacity: 0.85;
+}
+#view-capacity #capacity-tile-atrisk::after { background: var(--cap-warn); }
+#view-capacity #capacity-tile-pastopen::after { background: var(--cap-bad); }
+#view-capacity #capacity-tile-nosprint::after { background: #0ea5e9; }
+#view-capacity [aria-live='polite'].grid > *:nth-child(2)::after { background: var(--cap-good); }
+#view-capacity [aria-live='polite'].grid .text-2xl { font-size: 1.85rem; line-height: 1.1; }
+
+/* ---------- Tabs + toolbar ---------- */
+#view-capacity [role='tablist'] {
+  background: #eef1f8;
+  border-radius: 12px;
+  padding: 4px;
+}
+#view-capacity [role='tab'][aria-selected='true'] {
+  background: #fff;
+  color: var(--cap-accent);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+#view-capacity [aria-pressed='true'] {
+  background: var(--cap-accent) !important;
+  color: #fff !important;
+  border-color: var(--cap-accent) !important;
+}
+#view-capacity [aria-pressed='true'] span { color: inherit; }
+
+/* ---------- Developer table ---------- */
+#view-capacity #capacity-main-table-col {
+  border-radius: var(--cap-radius);
+  border: 1px solid var(--cap-border);
+  background: var(--cap-card);
+  box-shadow: var(--cap-shadow);
+  overflow: hidden;
+}
+#view-capacity #capacity-main-table-col table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.8125rem;
+}
+#view-capacity #capacity-main-table-col thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f8fafc;
+  color: var(--cap-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid var(--cap-border);
+  white-space: nowrap;
+}
+#view-capacity #capacity-main-table-col tbody td {
+  padding: 1rem 0.9rem;
+  border-bottom: 1px solid #eef1f6;
+  vertical-align: top;
+}
+#view-capacity #capacity-main-table-col tbody tr:not([hidden]):hover > td { background: #f8faff; }
+#view-capacity #capacity-main-table-col tbody tr:last-child > td { border-bottom: 0; }
+#view-capacity #capacity-main-table-col tbody tr:first-child > td:first-child { border-top-left-radius: 0; }
+#view-capacity #capacity-main-table-col tbody td:first-child { min-width: 220px; }
+#view-capacity #capacity-main-table-col tbody td.tabular-nums { font-variant-numeric: tabular-nums; }
+#view-capacity #capacity-main-table-col tfoot td {
+  background: #f8fafc;
+  border-top: 1px solid var(--cap-border);
+  padding: 0.85rem 0.9rem;
+  font-weight: 700;
+  color: var(--cap-text);
+}
+/* Workload bar */
+#view-capacity #capacity-main-table-col td .rounded-full[aria-hidden='true'] {
+  height: 8px;
+  background: #e8ecf4;
+  border: 0;
+  overflow: hidden;
+}
+/* Expanded issue rows */
+#view-capacity #capacity-main-table-col tr[id^='capacity-issues-'] > td {
+  background: #f8fafc;
+  box-shadow: inset 3px 0 0 var(--cap-accent);
+}
+/* Over-capacity rows get a calm accent instead of a loud tint */
+#view-capacity #capacity-main-table-col tbody tr.border-l-rose-500 > td:first-child {
+  box-shadow: inset 4px 0 0 var(--cap-bad);
+}
+
+/* ---------- Sidebar ---------- */
+#view-capacity #capacity-pace-sidebar {
+  border-radius: var(--cap-radius);
+  border: 1px solid var(--cap-border);
+  background: #fff;
+  box-shadow: var(--cap-shadow);
+}
+#view-capacity #capacity-sidebar-members > * {
+  border-radius: 12px;
+  border: 1px solid var(--cap-border);
+  background: #fbfcff;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+#view-capacity #capacity-sidebar-members > *:hover {
+  border-color: #c7d2fe;
+  box-shadow: 0 6px 16px -10px rgba(79, 70, 229, 0.45);
+  transform: translateY(-1px);
+}
+
+/* ---------- Other panels ---------- */
+#view-capacity [id^='capacity-panel-'] section,
+#view-capacity #no-sprint-capacity table,
+#view-capacity #past-sprint-open-capacity table {
+  border-radius: var(--cap-radius);
+}
+#view-capacity [id^='capacity-panel-'] table th {
+  background: #f8fafc;
+  color: var(--cap-muted);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.8rem 0.9rem;
+  border-bottom: 1px solid var(--cap-border);
+}
+#view-capacity [id^='capacity-panel-'] table td {
+  padding: 0.85rem 0.9rem;
+  border-bottom: 1px solid #eef1f6;
+}
+
+@media (max-width: 1023px) {
+  #view-capacity #capacity-pace-sidebar { position: static; }
+}

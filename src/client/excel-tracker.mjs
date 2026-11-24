@@ -68,7 +68,7 @@ function getConfigProblems(value) {
         problems.push('target.folderId must be a non-empty string');
       }
       if (fileName !== undefined && (typeof fileName !== 'string' || fileName !== fileName.trim() ||
-          fileName.length <= '.xlsx'.length || !/\.xlsx$/i.test(fileName) || /[/\\:*?"<>|]/.test(fileName))) {
+        fileName.length <= '.xlsx'.length || !/\.xlsx$/i.test(fileName) || /[/\\:*?"<>|]/.test(fileName))) {
         problems.push('target.fileName must be an .xlsx filename, not a path or link');
       }
       if (folderPath !== undefined) {
@@ -105,7 +105,7 @@ async function run(action, getPayload) {
     stage = 'owner verification';
     const claims = auth.account?.idTokenClaims;
     if (claims?.oid?.toLowerCase() !== config.ownerObjectId.toLowerCase() ||
-        claims?.tid?.toLowerCase() !== config.tenantId.toLowerCase()) {
+      claims?.tid?.toLowerCase() !== config.tenantId.toLowerCase()) {
       throw new Error('Sign in with the Microsoft account configured as the tracker owner.');
     }
     account = auth.account;

@@ -57,7 +57,7 @@ export function createExcelBridge({
         userObjectId, userEmail, ownerObjectId: config.ownerObjectId
       });
     }));
-    queue = task.catch(() => {});
+    queue = task.catch(() => { });
     return task;
   }
 
@@ -113,7 +113,7 @@ export function createExcelBridge({
             workbookLink.href = workbook.href;
             workbookLink.hidden = false;
           }
-        } catch {}
+        } catch { }
       }
       setStatus(error.name === 'BrowserAuthError' && /user_cancelled/.test(error.errorCode || '') ?
         'Sign-in was cancelled.' : error.message);
